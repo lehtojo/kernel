@@ -1,0 +1,170 @@
+pack RegisterState {
+	rdi: u64
+	rsi: u64
+	rbp: u64
+	rsp: u64
+	rbx: u64
+	rdx: u64
+	rcx: u64
+	rax: u64
+	r8: u64
+	r9: u64
+	r10: u64
+	r11: u64
+	r12: u64
+	r13: u64
+	r14: u64
+	r15: u64
+	exception_code: u16
+	isr_number: u16      # TODO: Rename to interrupt number?
+	padding: u32
+	rip: u64
+	cs: u64
+	rflags: u64
+	userspace_rsp: u64
+	userspace_ss: u64
+}
+
+pack TrapFrame {
+	previous_interrupt_request_level: link
+	next_trap: TrapFrame*
+	registers: RegisterState*
+}
+
+namespace interrupts
+
+namespace internal {
+	import 'C' interrupts_enable()
+	import 'C' interrupts_disable()
+
+	import 'C' get_interrupt_handler(): link
+}
+
+constant IDTR_ADDRESS = 0x8000
+constant TABLE_ADDRESS = 0x9000
+constant INTERRUPT_ENTRIES_ADDRESS = 0x10000
+constant INTERRUPT_COUNT = 256
+
+constant PRESENT_BIT = 1 <| 7
+
+constant GATE_TYPE_INTERRUPT = 0xE
+constant GATE_TYPE_TRAP = 0xF
+
+handlers: link
+scheduler: kernel.scheduler.Scheduler
+
+pack InterruptDescriptor {
+	offset_1: u16
+	selector: u16
+	interrupt_stack_table_offset: u8
+	type_attributes: u8
+	offset_2: u16
+	offset_3: u32
+	reserved: u32
+}
+
+export initialize() {
+	(IDTR_ADDRESS).(i16*)[] = 256 * 16 - 1
+	(IDTR_ADDRESS + 2).(link*)[] = TABLE_ADDRESS
+
+	#memory.zero(TABLE_ADDRESS as link, 0x1000)
+
+	entry_address = INTERRUPT_ENTRIES_ADDRESS as link
+
+	loop (i = 0, i < INTERRUPT_COUNT, i++) {
+		if i < 32 {
+			set_interrupt(i, 0, entry_address)
+		} else {
+			set_trap(i, 0, entry_address)
+		}
+
+		entry_address = write_interrupt_entry(entry_address, internal.get_interrupt_handler(), i)
+	}
+}
+
+export enable() {
+	internal.interrupts_enable()
+}
+
+export disable() {
+	internal.interrupts_disable()
+}
+
+# Summary:
+# Writes an interrupt entry to the specified address that pushes the interrupt number to stack and jumps to the handler.
+# Returns the address after writing the entry.
+export write_interrupt_entry(address: link, to: link, interrupt: i32) {
+	# Align the stack to 16 bytes
+	address[0] = 0x68 # push dword 0
+	(address + 1).(i32*)[] = interrupt
+	address += sizeof(i32) + 1
+
+	# Push the interrupt number so that the handler knows which interrupt is being called
+	address[0] = 0x68 # push dword interrupt
+	(address + 1).(i32*)[] = interrupt
+	address += sizeof(i32) + 1
+
+	# Jump to the interrupt handler
+	from = address + sizeof(i32) + 1
+	offset = to - from
+
+	address[0] = 0xe9 # jmp to
+	(address + 1).(i32*)[] = offset
+	address += sizeof(i32) + 1
+
+	return address + 1 # Align to 16 bytes
+}
+
+export set_interrupt(index: u32, privilege: u8, handler: link) {
+	# TODO: Add more checks
+	privilege &= 3 # Take only the first two bits
+
+	descriptor: InterruptDescriptor
+	descriptor.offset_1 = (handler as u64)
+	descriptor.selector = 8
+	descriptor.interrupt_stack_table_offset = 0
+	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_INTERRUPT
+	descriptor.offset_2 = ((handler as u64) |> 16)
+	descriptor.offset_3 = ((handler as u64) |> 32)
+	descriptor.reserved = 0
+
+	TABLE_ADDRESS.(InterruptDescriptor*)[index] = descriptor
+}
+
+export set_trap(index: u32, privilege: u8, handler: link) {
+	# TODO: Add more checks
+	privilege &= 3 # Take only the first two bits
+
+	descriptor: InterruptDescriptor
+	descriptor.offset_1 = (handler as u64)
+	descriptor.selector = 8
+	descriptor.interrupt_stack_table_offset = 0
+	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_TRAP
+	descriptor.offset_2 = ((handler as u64) |> 16)
+	descriptor.offset_3 = ((handler as u64) |> 32)
+	descriptor.reserved = 0
+
+	TABLE_ADDRESS.(InterruptDescriptor*)[index] = descriptor
+}
+
+export process(frame: TrapFrame*) {
+	code = frame[].registers[].exception_code
+
+	if code == 0x21 {
+		kernel.keyboard.process()
+	} else code == 0x24 {
+		scheduler.tick(frame)
+	} else {
+		default_handler()
+	}
+
+	interrupts.end()
+}
+
+export end() {
+	# Send the end-of-interrupt signal
+	# 8259 PIC: ports.write_u8(0x20, 0x20)
+	(apic.local_apic_registers + 0xB0)[] = 0
+}
+
+export default_handler() {}

@@ -18,11 +18,9 @@ Scheduler {
 	allocator: Allocator
 	processes: List<Process>
 
-	shared new(allocator: Allocator): Scheduler {
-		scheduler = allocator.new<Scheduler>()
-		scheduler.allocator = allocator
-		scheduler.processes = Lists.new<Process>(allocator)
-		return scheduler
+	init(allocator: Allocator) {
+		this.allocator = allocator
+		this.processes = List<Process>(allocator) using allocator
 	}
 
 	enter(frame: TrapFrame*, process: Process) {

@@ -51,43 +51,92 @@ pack Timer {
 		(registers + timer_comparator(id))[] = now + period
 		(registers + timer_comparator(id))[] = period
 	}
+
+	reset() {
+		(registers + timer_comparator(id))[] = 0
+	}
 }
 
 TimerManager {
 	timers: List<Timer>
+	registers: u64*
 
-	shared new(allocator: Allocator): TimerManager {
-		manager = allocator.new<TimerManager>()
-		manager.timers = Lists.new<Timer>(allocator)
-		return manager
+	init(allocator: Allocator) {
+		timers = List<Timer>(allocator) using allocator
+	}
+
+	timer_configuration(i: i32): i32 {
+		return 0x100 + 0x20 * i
+	}
+
+	timer_comparator(i: i32): i32 {
+		return 0x108 + 0x20 * i
+	}
+
+	attach(registers: u64*) {
+		this.registers = registers
+
+		debug.write('hpet-registers: ')
+		debug.write_address(registers)
+		debug.write_line()
+
+		capabilities = registers[]
+		require((capabilities & 0x2000) != 0, 'HPET-timers must be 64-bit')
+
+		tick_period = (capabilities |> 32) / 1000000
+		timer_count = ((capabilities |> 8) & 15) + 1
+
+		debug.write('hpet-tick-period=')
+		debug.write(tick_period)
+		debug.write_line('ns')
+		debug.write('hpet-timer-count=')
+		debug.write(timer_count)
+		debug.write_line()
+
+		loop (i = 0, i < timer_count, i++) {
+			configuration = (registers + timer_configuration(i))[]
+			periodic = (configuration & 16) != 0
+
+			timer = Timer.new(i, registers, periodic)
+			timer.reset()
+
+			timers.add(timer)
+		}
+	}
+
+	enable_all() {
+		value = (registers + 0x10)[]
+		(registers + 0x10)[] = (value | 1)
+	}
+
+	reset() {
+		(registers + 0xF0)[] = 0
+	}
+
+	print() {
+		debug.write('hpet-timers: ')
+
+		loop (i = 0, i < timers.size, i++) {
+			timer = timers[i]
+
+			debug.write('timer ')
+			debug.write(timer.id)
+
+			if timer.periodic { debug.write(' (periodic) ') }
+			else { debug.put(` `) }
+		}
+
+		debug.write_line()
 	}
 }
 
-export print_timer(timer: u64) {
-	routes = timer |> 32
-	debug.write(timer)
-}
-
-export timer_configuration(i: i32): i32 {
-	return 0x100 + 0x20 * i
-}
-
-export timer_comparator(i: i32): i32 {
-	return 0x108 + 0x20 * i
-}
-
-export enable_timer(registers: u64*) {
-	value = (registers + 0x10)[]
-	(registers + 0x10)[] = (value | 1)
-}
-
 export initialize(header: HPETHeader*) {
-	debug.write('hpet-registers: ')
 	registers = header[].address.address as u64*
+	require(registers !== none, 'Missing HPET registers')
 
+	debug.write('hpet-registers: ')
 	debug.write_address(registers)
 	debug.write_line()
-	require(registers !== none, 'Missing HPET registers')
 
 	debug.write('hpet-register-offset: ')
 	offset = header[].address.register_bit_offset
@@ -103,37 +152,13 @@ export initialize(header: HPETHeader*) {
 	debug.write('hpet-capabilities: ')
 
 	allocator.map_page(registers, registers)
-	capabilities = registers[]
 
-	tick_period = (capabilities |> 32) / 1000000
-	is_64_bit = (capabilities & 8192) != 0
-	timer_count = ((capabilities |> 8) & 15) + 1
-	minimum_tick = header[].minimum_tick
+	manager = TimerManager(StaticAllocator.instance) using StaticAllocator.instance
+	manager.attach(registers)
+	manager.reset()
+	manager.enable_all()
 
-	debug.write('tick-period=')
-	debug.write(tick_period)
-	debug.write('ns, ')
-	debug.write('is-64-bit=')
-	debug.write(is_64_bit)
-	debug.write(', timer-count=')
-	debug.write(timer_count)
-	debug.write_line()
+	manager.timers[0].periodic(4, 100000000)
 
-	debug.write('timers:')
-	print_timer((registers + 0x100)[])
-	debug.write(', ')
-	print_timer((registers + 0x120)[])
-	debug.write(', ')
-	print_timer((registers + 0x140)[])
-	debug.write_line()
-
-	(registers + timer_comparator(0))[] = 0
-	(registers + timer_comparator(1))[] = 0
-	(registers + timer_comparator(2))[] = 0
-	(registers + 0x0F0)[] = 0
-
-	enable_timer(registers)
-
-	timer = Timer.new(0, registers, true)
-	timer.periodic(4, 100000000)
+	manager.print()
 }

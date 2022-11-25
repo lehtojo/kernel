@@ -1,28 +1,14 @@
-namespace Lists {
-	new<T>(allocator: Allocator): List<T> {
-		list = allocator.new<List<T>>()
-		list.init(allocator)
-		return list
-	}
-
-	new<T>(allocator: Allocator, capacity: u64, fill: bool): List<T> {
-		list = allocator.new<List<T>>()
-		list.init(allocator, capacity, fill)
-		return list
-	}
-}
-
 List<T> {
 	allocator: Allocator
 	elements: T*
 	capacity: u64
 	size: u64
 
-	private init(allocator: Allocator) {
+	init(allocator: Allocator) {
 		this.allocator = allocator
 	}
 
-	private init(allocator: Allocator, capacity: u64, fill: bool) {
+	init(allocator: Allocator, capacity: u64, fill: bool) {
 		this.allocator = allocator
 		this.elements = allocator.allocate(sizeof(T) * capacity)
 		this.capacity = capacity

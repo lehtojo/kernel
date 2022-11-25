@@ -8,7 +8,9 @@ export init() {
 	boot.console.clear()
 	boot.console.write_line('...')
 
-	scheduler = kernel.scheduler.Scheduler.new(none as Allocator)
+	StaticAllocator.initialize()
+
+	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance) using StaticAllocator.instance
 	interrupts.scheduler = scheduler
 
 	kernel.serial.initialize()

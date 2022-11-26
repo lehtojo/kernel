@@ -18,6 +18,8 @@ export init() {
 	interrupts.initialize()
 	kernel.keyboard.initialize()
 
+	kernel.scheduler.test()
+
 	debug.write_line(interrupts.internal.get_interrupt_handler() as u64)
 
 	test_interrupt()

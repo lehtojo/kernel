@@ -15,9 +15,8 @@ pack RegisterState {
 	r13: u64
 	r14: u64
 	r15: u64
-	exception_code: u16
-	isr_number: u16      # TODO: Rename to interrupt number?
-	padding: u32
+	interrupt: u64
+	padding: u64
 	rip: u64
 	cs: u64
 	rflags: u64
@@ -72,7 +71,7 @@ export initialize() {
 	entry_address = INTERRUPT_ENTRIES_ADDRESS as link
 
 	loop (i = 0, i < INTERRUPT_COUNT, i++) {
-		if i < 32 {
+		if i < 0x20 {
 			set_interrupt(i, 0, entry_address)
 		} else {
 			set_trap(i, 0, entry_address)
@@ -148,7 +147,7 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 }
 
 export process(frame: TrapFrame*) {
-	code = frame[].registers[].exception_code
+	code = frame[].registers[].interrupt
 
 	if code == 0x21 {
 		kernel.keyboard.process()

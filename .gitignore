@@ -1,5 +1,7 @@
 archive/
-build/
+build/*
 
 *.bin
 *.o
+
+!build/entry.o

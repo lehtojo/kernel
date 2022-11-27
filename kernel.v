@@ -1,6 +1,13 @@
 constant KiB = 1024
 constant MiB = 1048576
 
+namespace kernel {
+	constant CODE_SEGMENT = 8
+	constant DATA_SEGMENT = 16
+
+	constant PAGE_SIZE = 0x1000
+}
+
 import 'C' test_interrupt()
 
 export init() {

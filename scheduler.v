@@ -1,26 +1,5 @@
 namespace kernel.scheduler
 
-namespace internal {
-	import 'C' scheduler_start(registers: RegisterState*)
-}
-
-Process {
-	constant NORMAL_PRIORITY = 50
-
-	id: u64
-	priority: u16 = NORMAL_PRIORITY
-	registers: RegisterState*
-
-	init(id: u64, registers: RegisterState*) {
-		this.id = id
-		this.registers = registers
-	}
-
-	save(frame: TrapFrame*) {
-		registers[] = frame[].registers[]
-	}
-}
-
 Scheduler {
 	allocator: Allocator
 	current: Process
@@ -57,6 +36,11 @@ Scheduler {
 	}
 
 	tick(frame: TrapFrame*) {
+		registers = frame[].registers
+		require(registers[].cs == CODE_SEGMENT and registers[].userspace_ss == DATA_SEGMENT, 'Illegal segment-register')
+		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
+		# TODO: Verify IOPL
+
 		debug.write('Scheduler tick: ')
 
 		# Save the state of the current process
@@ -118,14 +102,7 @@ test() {
 	start[18] = 0xfb
 
 	process.registers[].rip = start
-	process.registers[].cs = 8
-	process.registers[].rflags = (1 <| 9)
 	process.registers[].userspace_rsp = stack
-	process.registers[].userspace_ss = 16
 
 	interrupts.scheduler.add(process)
-
-	next = interrupts.scheduler.pick()
-	debug.write_line(next as i64)
-	#interrupts.scheduler.current = process
 }

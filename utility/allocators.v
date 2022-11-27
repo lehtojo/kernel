@@ -30,3 +30,25 @@ Allocator StaticAllocator {
 	}
 }
 
+PageAllocatorAvailablePage {
+	next: PageAllocatorAvailablePage
+}
+
+Allocator PageAllocator {
+	start: link
+	end: link
+	available: PageAllocatorAvailablePage
+
+	init(start: link, end: link) {
+		this.start = start
+		this.end = end
+	}
+
+	override allocate(unused: u64) {
+		
+	}
+
+	override deallocate(address: link) {
+		require(((address as u64) & (kernel.PAGE_SIZE - 1)) == 0, 'Illegal page deallocation')
+	}
+}

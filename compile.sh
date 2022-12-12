@@ -1,10 +1,15 @@
 #!/bin/bash
-nasm bootloader.asm -f bin -o ./build/bootloader.bin
+rm -rf build/boot/
+rm -rf build/iso/
+rm build/boot.bin
+rm build/boot.iso
+rm build/cpu.o
+rm build/kernel.bin
 
-if [[ $? != 0 ]]; then
-echo "Failed to compile bootloader"
-exit 1
-fi
+mkdir -p build/boot/
+mkdir -p build/iso/boot/grub/
+
+cp boot/grub.cfg build/iso/boot/grub/grub.cfg
 
 as cpu.asm -o ./build/cpu.o
 
@@ -13,18 +18,23 @@ echo "Failed to compile helper assembly files"
 exit 1
 fi
 
-v1 . ./utility/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin
+v0 . ./utility/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin -base 0x104000 -system -a
 
 if [[ $? != 0 ]]; then
 echo "Failed to compile kernel"
 exit 1
 fi
 
-# Create an empty boot file
-dd if=/dev/zero of=./build/boot.bin bs=1 count=65536 status=none
+nasm -felf64 boot/multiboot_header.asm -o build/boot/multiboot_header.o
+nasm -felf64 boot/boot.asm -o build/boot/boot.o
 
-# Copy the bootloader
-dd if=./build/bootloader.bin of=./build/boot.bin bs=1 status=none conv=notrunc
+ld -n -T boot/linker.ld -o build/boot.bin build/boot/multiboot_header.o build/boot/boot.o
 
-# Copy the kernel
-dd if=./build/kernel.bin of=./build/boot.bin bs=1 seek=512 status=none conv=notrunc
+if [[ $? != 0 ]]; then
+echo "Failed to create the kernel file"
+exit 1
+fi
+
+cp build/boot.bin build/iso/boot/boot.bin
+
+grub-mkrescue -o build/boot.iso build/iso 2> /dev/null

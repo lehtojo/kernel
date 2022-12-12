@@ -12,12 +12,14 @@ internal_is(a: link, b: link) {
 	return false
 }
 
+init() {}
+
 require(condition: bool, error: link) {
 	if not condition panic(error)
 }
 
 panic(error: link) {
-	debug.write('PANIC: ')
+	debug.write('KERNEL PANIC :^( --- ')
 	debug.write_line(error)
 	loop {}
 }

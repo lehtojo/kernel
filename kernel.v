@@ -1,39 +1,48 @@
+constant PAGE_SIZE = 0x1000
+
 constant KiB = 1024
 constant MiB = 1048576
 
 namespace kernel {
 	constant CODE_SEGMENT = 8
 	constant DATA_SEGMENT = 16
-
-	constant PAGE_SIZE = 0x1000
 }
 
 import 'C' test_interrupt()
 
-export init() {
+export start(information: link) {
 	boot.console.initialize()
 	boot.console.clear()
 	boot.console.write_line('...')
 
 	StaticAllocator.initialize()
 
-	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance) using StaticAllocator.instance
+	# TODO: Figure out how to get the memory map from the BIOS
+	# TODO: Once the memory map is here, reserve certain memory regions
+
+	#LayerAllocator.initialize(none as link, 0)
+	#LayerAllocator.instance.allocate(PAGE_SIZE, 0x300000 as link)
+
+	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance)
 	interrupts.scheduler = scheduler
 
 	kernel.serial.initialize()
+
+	regions = List<Segment>(StaticAllocator.instance)
+	kernel.multiboot.initialize(information, regions)
+
+	#LayerAllocator.initialize(regions)
 
 	interrupts.initialize()
 	kernel.keyboard.initialize()
 
 	kernel.scheduler.test()
 
-	debug.write_line(interrupts.internal.get_interrupt_handler() as u64)
-
 	test_interrupt()
 
-	interrupts.enable()
-
 	apic.initialize()
+
+	interrupts.enable()
 
 	loop {}
 }

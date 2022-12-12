@@ -153,6 +153,11 @@ export process(frame: TrapFrame*) {
 		kernel.keyboard.process()
 	} else code == 0x24 {
 		scheduler.tick(frame)
+	} else code == 0x0e {
+		debug.write('Page fault at address ')
+		debug.write_address(frame[].registers[].cs)
+		debug.write_line()
+		panic('Page fault')
 	} else {
 		default_handler()
 	}

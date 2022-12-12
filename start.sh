@@ -1,2 +1,2 @@
 #!/bin/bash
-qemu-system-x86_64 -serial stdio --no-reboot -smp 2 -m 1024 -hda ./build/boot.bin
+qemu-system-x86_64 -s -S -vga std -serial stdio --no-reboot -smp 2 -m 2048 -hda build/boot.iso

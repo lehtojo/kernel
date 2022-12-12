@@ -6,6 +6,9 @@ List<T> {
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
+		this.elements = none as T*
+		this.capacity = 0
+		this.size = 0
 	}
 
 	init(allocator: Allocator, capacity: u64, fill: bool) {

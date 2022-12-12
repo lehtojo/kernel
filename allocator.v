@@ -1,4 +1,4 @@
-constant STATIC_ALLOCATOR_START = 0x100000
+constant STATIC_ALLOCATOR_START = 0x50000
 
 namespace allocator
 

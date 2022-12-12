@@ -225,7 +225,7 @@ export initialize() {
 
 	apic_table = find_table(rsdp, 'APIC') as MADT*
 	debug.write('madt-table: ')
-	debug.write_address(rsdp as u64)
+	debug.write_address(apic_table as u64)
 	debug.write_line()
 
 	debug.write('has-legacy-pic: ')

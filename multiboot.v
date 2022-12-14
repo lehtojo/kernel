@@ -46,7 +46,6 @@ plain SectionHeaderTableTag {
 	section_count: u32
 	section_header_size: u32
 	section_name_entry_index: u32
-	reserved: u16
 }
 
 export process_memory_regions(regions: List<Segment>) {
@@ -118,27 +117,43 @@ export process_framebuffer_tag(tag: FramebufferTag) {
 }
 
 export process_section_header_table_tag(tag: SectionHeaderTableTag) {
-	debug.write('kernel-elf-section-header-table: ')
-	debug.write_address_line(tag as link)
-	debug.write('kernel-elf-section-count=')
+	debug.write('kernel-section-header-table: ')
+	debug.write_address(tag as link)
+	debug.write_line()
+	debug.write('kernel-section-count=')
 	debug.write(tag.section_count)
-	debug.write(', kernel-elf-section-header-size=')
+	debug.write(', kernel-section-header-size=')
 	debug.write(tag.section_header_size)
-	debug.write(', kernel-elf-section-name-entry-index=')
+	debug.write(', kernel-section-name-entry-index=')
 	debug.write(tag.section_name_entry_index)
 	debug.write_line()
 
 	position = capacityof(SectionHeaderTableTag)
+	start = 0xffffffffffffffff
+	end = 0
 
 	loop (position < tag.size) {
-		section_header = (tag as link + position) as kernel.elf32.SectionHeader
-		debug.write('kernel-elf-section: ')
-		debug.write('name=') debug.write(section_header.name)
-		debug.write(', address=') debug.write_address(section_header.virtual_address)
-		debug.write_line()
-
+		section_header = (tag as link + position) as kernel.elf.SectionHeader
 		position += tag.section_header_size
+
+		# Skip the none section
+		if section_header.name == 0 continue
+
+		start = math.min(start, section_header.virtual_address)
+		end = math.max(end, section_header.virtual_address + section_header.section_file_size)
+
+		debug.write('kernel-section: ')
+		debug.write('name=') debug.write_address(section_header.name)
+		debug.write(', address=') debug.write_address(section_header.virtual_address)
+		debug.write(', size=') debug.write(section_header.section_file_size)
+		debug.write_line()
 	}
+
+	debug.write('kernel-region: ')
+	debug.write_address(start)
+	debug.write('-')
+	debug.write_address(end)
+	debug.write_line()
 }
 
 export initialize(information: link, regions: List<Segment>) {

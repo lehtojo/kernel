@@ -3,7 +3,7 @@ sort<T>(elements: T*, count: large) {
 }
 
 sort<T>(list: List<T>) {
-	quicksort.sort<T>(list.elements, 0, list.size - 1)
+	quicksort.sort<T>(list.data, 0, list.size - 1)
 }
 
 sort<T>(elements: T*, count: large, comparator: (T, T) -> large) {
@@ -11,7 +11,7 @@ sort<T>(elements: T*, count: large, comparator: (T, T) -> large) {
 }
 
 sort<T>(list: List<T>, comparator: (T, T) -> large) {
-	quicksort.sort<T>(list.elements, 0, list.size - 1, comparator)
+	quicksort.sort<T>(list.data, 0, list.size - 1, comparator)
 }
 
 namespace quicksort

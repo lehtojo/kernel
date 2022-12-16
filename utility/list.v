@@ -1,37 +1,26 @@
 List<T> {
 	allocator: Allocator
-	elements: T*
+	data: T*
 	capacity: u64
 	size: u64
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
-		this.elements = none as T*
+		this.data = none as T*
 		this.capacity = 0
 		this.size = 0
 	}
 
 	init(allocator: Allocator, capacity: u64, fill: bool) {
 		this.allocator = allocator
-		this.elements = allocator.allocate(sizeof(T) * capacity)
+		this.data = allocator.allocate(sizeof(T) * capacity)
 		this.capacity = capacity
 
 		if fill { this.size = capacity }
 	}
 
 	private extend() {
-		# Allocate more memory for elements
-		new_capacity = math.max(size, 1) * 2
-		new_elements = allocator.allocate(sizeof(T) * new_capacity)
-
-		# Copy the current elements to the allocated memory
-		memory.copy(new_elements, elements, sizeof(T) * size)
-
-		# Deallocate the old memory
-		allocator.deallocate(elements)
-
-		elements = new_elements
-		capacity = new_capacity
+		reserve(math.max(size, 1) * 2)
 	}
 
 	private shrink() {
@@ -40,42 +29,72 @@ List<T> {
 		if size >= half return
 
 		if size == 0 {
-			allocator.deallocate(elements)
-			elements = none
+			allocator.deallocate(data)
+			data = none
 			capacity = 0
 			size = 0
 			return
 		}
 
 		new_capacity = half
-		new_elements = allocator.allocate(sizeof(T) * new_capacity)
+		new_data = allocator.allocate(sizeof(T) * new_capacity)
 
-		# Copy the current elements to the allocated memory
-		memory.copy(new_elements, elements, sizeof(T) * size)
+		# Copy the current data to the allocated memory
+		memory.copy(new_data, data, sizeof(T) * size)
 
 		# Deallocate the old memory
-		allocator.deallocate(elements)
+		allocator.deallocate(data)
 
-		elements = new_elements
+		data = new_data
 		capacity = new_capacity
+	}
+
+	reserve(reservation: u64) {
+		if reservation <= capacity return
+
+		# Allocate more memory for data
+		new_data = allocator.allocate(sizeof(T) * reservation)
+
+		# Copy the current data to the allocated memory
+		memory.copy(new_data, data, sizeof(T) * size)
+
+		# Deallocate the old memory
+		allocator.deallocate(data)
+
+		data = new_data
+		capacity = reservation
 	}
 
 	add(element: T) {
 		if size >= capacity extend()
 
-		elements[size] = element
+		data[size] = element
+		size++
+	}
+
+	insert(i: u64, element: T) {
+		require(i >= 0 and i < size, 'Index out of bounds')
+
+		if size >= capacity extend()
+
+		source = data + sizeof(T) * i
+		destination = source + sizeof(T)
+		bytes = sizeof(T) * (size - i)
+		memory.copy(destination, source, bytes)
+
+		data[i] = element
 		size++
 	}
 
 	remove_at(i: u64) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 
-		destination = elements + sizeof(T) * i
+		destination = data + sizeof(T) * i
 		source = destination + sizeof(T)
 		memory.copy(destination, source, (size - i - 1) * sizeof(T))
 
 		# Zero out the moved last element for safety
-		memory.zero(elements + (size - 1) * sizeof(T), sizeof(T))
+		memory.zero(data + (size - 1) * sizeof(T), sizeof(T))
 
 		size--
 		shrink()
@@ -83,11 +102,11 @@ List<T> {
 
 	get(i: u64): T {
 		require(i >= 0 and i < size, 'Index out of bounds')
-		return elements[i]
+		return data[i]
 	}
 
 	set(i: u64, element: T) {
 		require(i >= 0 and i < size, 'Index out of bounds')
-		elements[i] = element
+		data[i] = element
 	}
 }

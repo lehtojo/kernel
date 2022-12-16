@@ -60,10 +60,21 @@ export reverse(memory: link, size: large) {
 }
 
 copy(destination: link, source: link, size: u64) {
-	loop (i = 0, i < size, i++) {
-		destination[] = source[]
-		destination++
-		source++
+	if destination <= source {
+		loop (i = 0, i < size, i++) {
+			destination[] = source[]
+			destination++
+			source++
+		}
+	} else {
+		destination += size - 1
+		source += size - 1
+
+		loop (i = 0, i < size, i++) {
+			destination[] = source[]
+			destination--
+			source--
+		}
 	}
 }
 

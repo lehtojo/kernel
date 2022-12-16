@@ -4,6 +4,10 @@ constant TAG_TYPE_MEMORY_MAP = 6
 constant TAG_TYPE_FRAMEBUFFER = 8
 constant TAG_TYPE_SECTION_HEADER_TABLE = 9
 
+constant REGION_UNKNOWN = -1
+constant REGION_AVAILABLE = 1
+constant REGION_RESERVED = 2
+
 plain RootHeader {
 	size: u32
 	reserved: u32
@@ -90,18 +94,6 @@ export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>) {
 	}
 
 	process_memory_regions(regions)
-
-	loop (i = 0, i < regions.size, i++) {
-		region = regions[i]
-
-		debug.write('region: ')
-		debug.write_address(region.start)
-		debug.write('-')
-		debug.write_address(region.end)
-		debug.write(', type: ')
-		debug.write(region.type)
-		debug.write_line()
-	}
 }
 
 export process_framebuffer_tag(tag: FramebufferTag) {
@@ -116,7 +108,40 @@ export process_framebuffer_tag(tag: FramebufferTag) {
 	debug.write_line(tag.framebuffer_bits_per_pixel)
 }
 
-export process_section_header_table_tag(tag: SectionHeaderTableTag) {
+export insert_region(regions: List<Segment>, region: Segment) {
+	if region.size <= 0 return
+
+	loop (i = 0, i < regions.size, i++) {
+		current = regions[i]
+
+		# Skip the current region if the specified region is not inside it
+		if region.start < current.start or region.end > current.end continue
+
+		# General idea:
+		# current.start    region.start region.end    current.end 
+		#        v               v            v              v     
+		#    ... [    current    |   region   |   fragment   ] ... 
+		fragment = Segment.new(current.type, region.end, current.end)
+		current.end = region.start
+
+		# Add the fragment if it is not empty
+		if fragment.size > 0 regions.insert(i + 1, fragment)
+
+		# Add the region, because it can not be empty
+		regions.insert(i + 1, region)
+
+		# Remove the current region if it has become empty, update it otherwise
+		if current.size > 0 {
+			regions[i] = current
+		} else {
+			regions.remove_at(i)
+		}
+
+		return
+	}
+}
+
+export process_section_header_table_tag(tag: SectionHeaderTableTag, section_headers: List<kernel.elf.SectionHeader>): Segment {
 	debug.write('kernel-section-header-table: ')
 	debug.write_address(tag as link)
 	debug.write_line()
@@ -128,13 +153,17 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag) {
 	debug.write(tag.section_name_entry_index)
 	debug.write_line()
 
+	section_headers.reserve(tag.section_count)
+
 	position = capacityof(SectionHeaderTableTag)
-	start = 0xffffffffffffffff
-	end = 0
+	start: u64 = 0xffffffffffffffff
+	end: u64 = 0
 
 	loop (position < tag.size) {
 		section_header = (tag as link + position) as kernel.elf.SectionHeader
 		position += tag.section_header_size
+
+		section_headers.add(section_header)
 
 		# Skip the none section
 		if section_header.name == 0 continue
@@ -154,9 +183,11 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag) {
 	debug.write('-')
 	debug.write_address(end)
 	debug.write_line()
+
+	return Segment.new(REGION_RESERVED, start as link, end as link)
 }
 
-export initialize(information: link, regions: List<Segment>) {
+export initialize(information: link, regions: List<Segment>, section_headers: List<kernel.elf.SectionHeader>) {
 	debug.write('multiboot-header: ')
 	debug.write_address(information)
 	debug.write_line()
@@ -166,6 +197,7 @@ export initialize(information: link, regions: List<Segment>) {
 	debug.write_line(header.size)
 
 	position = capacityof(RootHeader)
+	kernel_region = Segment.new(REGION_UNKNOWN)
 
 	loop (position < header.size) {
 		tag = (information + position) as TagHeader
@@ -181,12 +213,27 @@ export initialize(information: link, regions: List<Segment>) {
 		} else tag.type == TAG_TYPE_FRAMEBUFFER {
 			process_framebuffer_tag(tag as FramebufferTag)
 		} else tag.type == TAG_TYPE_SECTION_HEADER_TABLE {
-			process_section_header_table_tag(tag as SectionHeaderTableTag)
+			kernel_region = process_section_header_table_tag(tag as SectionHeaderTableTag, section_headers)
 		}
 
 		position += tag.size
 
 		# Round to the next multiple of 8
 		position = (position + 7) & (-8)
+	}
+
+	require(kernel_region.type !== REGION_UNKNOWN, 'Failed to find kernel region')
+	insert_region(regions, kernel_region)
+
+	loop (i = 0, i < regions.size, i++) {
+		region = regions[i]
+
+		debug.write('region: ')
+		debug.write_address(region.start)
+		debug.write('-')
+		debug.write_address(region.end)
+		debug.write(', type: ')
+		debug.write(region.type)
+		debug.write_line()
 	}
 }

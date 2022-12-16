@@ -29,7 +29,8 @@ export start(information: link) {
 	kernel.serial.initialize()
 
 	regions = List<Segment>(StaticAllocator.instance)
-	kernel.multiboot.initialize(information, regions)
+	section_headers = List<kernel.elf.SectionHeader>(StaticAllocator.instance)
+	kernel.multiboot.initialize(information, regions, section_headers)
 
 	#LayerAllocator.initialize(regions)
 

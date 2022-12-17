@@ -1,12 +1,17 @@
 Allocator {
 	open allocate(bytes: u64): link
 	open deallocate(address: link)
+
+	allocate<T>(): T* {
+		return allocate(capacityof(T))
+	}
 }
 
 Allocator StaticAllocator {
 	shared instance: StaticAllocator
 
 	shared initialize() {
+		#warning dangerous
 		instance = StaticAllocator() using 0x190000
 	}
 
@@ -29,6 +34,8 @@ Allocator StaticAllocator {
 
 		debug.write('Static memory allocated: ')
 		debug.write_line((position - (this as link + capacityof(StaticAllocator))) as u64)
+
+		memory.zero(result, bytes)
 
 		return result
 	}

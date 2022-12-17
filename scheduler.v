@@ -1,5 +1,7 @@
 namespace kernel.scheduler
 
+import 'C' registers_rsp(): u64
+
 Scheduler {
 	allocator: Allocator
 	current: Process
@@ -39,9 +41,12 @@ Scheduler {
 		registers = frame[].registers
 		require(registers[].cs == CODE_SEGMENT and registers[].userspace_ss == DATA_SEGMENT, 'Illegal segment-register')
 		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
-		# TODO: Verify IOPL
+		# TODO: Verify IOPL and RSP
 
 		debug.write('Scheduler tick: ')
+		debug.write('kernel-rsp: ')
+		debug.write_address(registers_rsp())
+		debug.write(', ')
 
 		# Save the state of the current process
 		if current !== none {
@@ -66,9 +71,11 @@ Scheduler {
 	}
 }
 
-test() {
-	registers = StaticAllocator.instance.allocate(capacityof(RegisterState)) as RegisterState*
+test(allocator: Allocator) {
+	registers = allocator.allocate<RegisterState>()
 	process = Process(0, registers) using StaticAllocator.instance
+
+	debug.write('kernel-stack-address: ') debug.write_address(registers_rsp()) debug.write_line()
 
 	# TODO: Create a test process
 	# Instructions:
@@ -76,8 +83,12 @@ test() {
 	# L0:
 	# inc r8
 	# jmp L0
-	start = 0x150000 as link
-	stack = 0x170000 as link
+
+	start = allocator.allocate(0x100)
+	stack = ((start + 0x100) & (-16))
+
+	debug.write('test-process-start: ') debug.write_address(start) debug.write_line()
+	debug.write('test-process-stack: ') debug.write_address(stack) debug.write_line()
 
 	start[0] = 0x49
 	start[1] = 0xc7

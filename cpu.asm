@@ -75,6 +75,10 @@ mov rdx, rdi
 out dx, eax
 ret
 
+.global registers_rsp
+registers_rsp:
+lea rax, [rsp+8]
+ret
 
 .align 32
 .global old_keyboard_handler

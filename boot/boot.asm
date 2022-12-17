@@ -5,6 +5,12 @@ start:
 ; Disable interrupts
 cli
 
+; Verify the boot was done using multiboot protocol
+cmp eax, 0x36d76289
+je L0
+hlt
+L0:
+
 ; Save the boot information provided by the multiboot protocol
 mov dword [multiboot_information], ebx
 
@@ -23,7 +29,7 @@ mov fs, ax
 mov gs, ax
 
 ; Setup the stack
-mov ebp, 0x200000
+mov ebp, kernel_stack_start
 mov esp, ebp
 
 ; Create virtual mapping for the page map:
@@ -50,6 +56,15 @@ VIRTUAL_MAP_L2_BASE equ (VIRTUAL_MAP_BASE + 0x1000)
 VIRTUAL_MAP_L1_BASE equ (VIRTUAL_MAP_BASE + 0x3000)
 
 VIRTUAL_MAP_L2_SIZE equ 0x1000
+
+; VIRTUAL_MAP_BASE      VIRTUAL_MAP_L2_BASE   VIRTUAL_MAP_L1_BASE   PAGE_MAP_BASE     L3_BASE           L2_BASE           L1_BASE           PAGE_MAP_END
+; v                     v                     v                     v                 v                 v                 v                 v
+; -------------------------------------------------------------------------------------------------------------------------------------------
+; | VIRTUAL_MAP_L3_BASE | VIRTUAL_MAP_L2_BASE | VIRTUAL_MAP_L1_BASE |     L4_BASE  [ ]|     L3_BASE     |     L2_BASE     |     L1_BASE     |
+; -------------------------------------------------------------------------------------------------------------------------------------------
+;           ^ |-------------------^ |-------------------^ |-------------------------|----------------------------------------------^
+;           |                                                                       |
+;           -------------------------------------------------------------------------
 
 mov edi, VIRTUAL_MAP_BASE
 xor eax, eax
@@ -87,12 +102,14 @@ dec ecx
 jnz page_map_virtual_mapping_L1
 
 ; Point the last entry of the page map to the virtual mapping, so that we can edit the page map later using virtual addresses
-mov dword [abs (PAGE_MAP_BASE + 511 * 8)], (VIRTUAL_MAP_BASE + 3)
+mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
 
 ; Map the first 4MB
 mov dword [abs L4_BASE], (L3_BASE + 3)
 mov dword [abs L3_BASE], (L2_BASE + 3)
+
 mov dword [abs L2_BASE], (L1_BASE + 3)
+;mov dword [abs (L2_BASE + 8)], (L1_BASE + 0x1000 + 3)
 
 ; Flag the pages present, readable and writable (111b)
 mov edi, L1_BASE
@@ -127,8 +144,17 @@ mov eax, cr0
 or eax, (1 << 31) | (1 << 0)
 mov cr0, eax
 
+; Insert address of TSS into GDT before loading it
+lea eax, [tss64]
+mov word [gdt64_tss_address_0], ax
+shr eax, 16
+mov byte [gdt64_tss_address_1], al
+shr eax, 8
+mov byte [gdt64_tss_address_2], al
+
 ; Load the 64-bit global descriptor table
 lgdt [gdt64_descriptor]
+
 jmp CODE_SEGMENT_64:enter_kernel
 
 [bits 64]
@@ -139,6 +165,10 @@ mov ss, ax
 mov es, ax
 mov fs, ax
 mov gs, ax
+
+; Register TSS from GDT
+mov ax, TSS_SELECTOR
+ltr ax
 
 mov edi, dword [multiboot_information]
 jmp kernel_entry
@@ -185,7 +215,7 @@ db      0x00
 db      0x00
 db      0x00
 
-; kernel: code segment descriptor (selector = 0x10)
+; kernel: code segment descriptor (selector = 0x8)
 gdt64_code:
 dw      0x0000
 dw      0x0000
@@ -194,7 +224,7 @@ db      10011010b
 db      00100000b
 db      0x00
 
-; kernel: data segment descriptor (selector = 0x08)
+; kernel: data segment descriptor (selector = 0x10)
 gdt64_data:
 dw      0x0000
 dw      0x0000
@@ -203,7 +233,7 @@ db      10010010b
 db      00000000b
 db      0x00
 
-; user: code segment descriptor (selector = 0x20)
+; user: code segment descriptor (selector = 0x18)
 dw      0x0000
 dw      0x0000
 db      0x00
@@ -211,7 +241,7 @@ db      11111010b
 db      00100000b
 db      0x00
 
-; user: data segment descriptor (selector = 0x18)
+; user: data segment descriptor (selector = 0x20)
 dw      0x0000
 dw      0x0000
 db      0x00
@@ -219,8 +249,17 @@ db      11110010b
 db      00000000b
 db      0x00
 
-dd 0x00000068
-dd 0x00CF8900
+; TSS (selector = 0x28)
+dw      0x0068
+gdt64_tss_address_0:
+dw      0x0000    ; tss-address (bits 0-16)
+gdt64_tss_address_1:
+db      0x00      ; tss-address (bits 16-24)
+db      10001001b ; present
+db      00000000b
+gdt64_tss_address_2:
+db      0x00      ; tss-address (bits 24-32)
+dq      0x00      ; tss-address (bits 32-64)
 
 gdt64_end:
 
@@ -229,6 +268,23 @@ align 8
 gdt64_descriptor:
 dw gdt64_end - gdt64_start - 1
 dd gdt64_start
+
+tss64:
+dd 0 ; reserved
+dq interrupt_stack_start ; rsp0
+dq 0 ; rsp1
+dq 0 ; rsp2
+dq 0 ; reserved
+dq interrupt_stack_start ; ist1
+dq 0 ; ist2
+dq 0 ; ist3
+dq 0 ; ist4
+dq 0 ; ist5
+dq 0 ; ist6
+dq 0 ; ist7
+dq 0   ; reserved
+dw 0   ; reserved
+dw 104 ; iopb
 
 ; ########################################################################################
 
@@ -241,7 +297,8 @@ DATA_SEGMENT_32    equ gdt32_data - gdt32_start
 CODE_SEGMENT_64    equ gdt64_code - gdt64_start
 DATA_SEGMENT_64    equ gdt64_data - gdt64_start
 
-MAX_MEMORY equ 2000000000 ; 2 GB
+TSS_SELECTOR equ 0x28
+
 L1_COUNT   equ 488448
 L2_COUNT   equ 1024
 L3_COUNT   equ 512
@@ -252,4 +309,9 @@ kernel_entry:
 
 incbin "build/kernel.bin"
 
-kernel_end:
+section .bss
+align 0x1000
+resb 0x25000
+interrupt_stack_start:
+resb 0x25000
+kernel_stack_start:

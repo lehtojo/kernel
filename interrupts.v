@@ -121,7 +121,7 @@ export set_interrupt(index: u32, privilege: u8, handler: link) {
 	descriptor: InterruptDescriptor
 	descriptor.offset_1 = (handler as u64)
 	descriptor.selector = 8
-	descriptor.interrupt_stack_table_offset = 0
+	descriptor.interrupt_stack_table_offset = 1
 	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_INTERRUPT
 	descriptor.offset_2 = ((handler as u64) |> 16)
 	descriptor.offset_3 = ((handler as u64) |> 32)
@@ -137,7 +137,7 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 	descriptor: InterruptDescriptor
 	descriptor.offset_1 = (handler as u64)
 	descriptor.selector = 8
-	descriptor.interrupt_stack_table_offset = 0
+	descriptor.interrupt_stack_table_offset = 1
 	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_TRAP
 	descriptor.offset_2 = ((handler as u64) |> 16)
 	descriptor.offset_3 = ((handler as u64) |> 32)

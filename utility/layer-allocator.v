@@ -243,8 +243,8 @@ pack Layer {
 LayerAllocator {
 	shared instance: LayerAllocator
 
-	shared initialize(reserved_segments: Segment*, reserved_segment_count: u32) {
-		instance = LayerAllocator(reserved_segments, reserved_segment_count) using 0x200000
+	shared initialize(reservations: List<Segment>) {
+		instance = LayerAllocator(reservations) using 0x200000
 	}
 
 	constant MAX_MEMORY = 512000000000 # 512 GB

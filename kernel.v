@@ -29,15 +29,19 @@ export start(information: link) {
 	kernel.serial.initialize()
 
 	regions = List<Segment>(StaticAllocator.instance)
+	reservations = List<Segment>(StaticAllocator.instance)
 	section_headers = List<kernel.elf.SectionHeader>(StaticAllocator.instance)
-	kernel.multiboot.initialize(information, regions, section_headers)
 
-	#LayerAllocator.initialize(regions)
+	kernel.multiboot.initialize(information, regions, reservations, section_headers)
+
+	# TODO: Reserve GDT and other similar tables, use insert_segment()?
+
+	#LayerAllocator.initialize(reservations)
 
 	interrupts.initialize()
 	kernel.keyboard.initialize()
 
-	kernel.scheduler.test()
+	kernel.scheduler.test(StaticAllocator.instance)
 
 	test_interrupt()
 

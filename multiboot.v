@@ -74,7 +74,17 @@ export process_memory_regions(regions: List<Segment>) {
 	}
 }
 
-export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>) {
+# Summary: Returns the size of the physical memory based on the specified memory regions. Panics upon failure.
+export find_physical_memory_size(regions: List<Segment>): u64 {
+	loop (i = regions.size - 1, i >= 0, i--) {
+		region = regions[i]
+		if region.type == REGION_AVAILABLE return region.end as u64
+	}
+
+	panic('Failed to find the physical memory size')
+}
+
+export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>): u64 {
 	debug.write_line('memory-map-regions: ')
 
 	position = capacityof(MemoryMapTag)
@@ -94,6 +104,8 @@ export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>) {
 	}
 
 	process_memory_regions(regions)
+
+	return find_physical_memory_size(regions)
 }
 
 export process_framebuffer_tag(tag: FramebufferTag) {
@@ -187,7 +199,29 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 	return Segment.new(REGION_RESERVED, start as link, end as link)
 }
 
-export initialize(information: link, regions: List<Segment>, section_headers: List<kernel.elf.SectionHeader>) {
+export find_reserved_physical_regions(regions: List<Segment>, physical_memory_size: u64, reservations: List<Segment>) {
+	start = none as link
+
+	loop (i = 0, i < regions.size, i++) {
+		region = regions[i]
+		if region.type != REGION_AVAILABLE continue
+
+		# Stop after passing the physical memory regions.
+		# It seems that some regions are virtual (memory-mapped devices?)
+		if region.start >= physical_memory_size return
+
+		end = region.start
+		reservation = Segment.new(REGION_RESERVED, start, end)
+
+		# Add the reserved region if it is not empty
+		if reservation.size > 0 reservations.add(reservation)
+
+		# Start the next reserved region after the available region
+		start = region.end
+	}
+}
+
+export initialize(information: link, regions: List<Segment>, reservations: List<Segment>, section_headers: List<kernel.elf.SectionHeader>) {
 	debug.write('multiboot-header: ')
 	debug.write_address(information)
 	debug.write_line()
@@ -198,6 +232,7 @@ export initialize(information: link, regions: List<Segment>, section_headers: Li
 
 	position = capacityof(RootHeader)
 	kernel_region = Segment.new(REGION_UNKNOWN)
+	physical_memory_size = 0 as u64
 
 	loop (position < header.size) {
 		tag = (information + position) as TagHeader
@@ -209,7 +244,7 @@ export initialize(information: link, regions: List<Segment>, section_headers: Li
 		debug.write_line(tag.size)
 
 		if tag.type == TAG_TYPE_MEMORY_MAP {
-			process_memory_map_tag(tag as MemoryMapTag, regions)
+			physical_memory_size = process_memory_map_tag(tag as MemoryMapTag, regions)
 		} else tag.type == TAG_TYPE_FRAMEBUFFER {
 			process_framebuffer_tag(tag as FramebufferTag)
 		} else tag.type == TAG_TYPE_SECTION_HEADER_TABLE {
@@ -225,6 +260,12 @@ export initialize(information: link, regions: List<Segment>, section_headers: Li
 	require(kernel_region.type !== REGION_UNKNOWN, 'Failed to find kernel region')
 	insert_region(regions, kernel_region)
 
+	find_reserved_physical_regions(regions, physical_memory_size, reservations)
+
+	debug.write('physical-memory-size: ')
+	debug.write(physical_memory_size / MiB)
+	debug.write_line(' MiB')
+
 	loop (i = 0, i < regions.size, i++) {
 		region = regions[i]
 
@@ -234,6 +275,16 @@ export initialize(information: link, regions: List<Segment>, section_headers: Li
 		debug.write_address(region.end)
 		debug.write(', type: ')
 		debug.write(region.type)
+		debug.write_line()
+	}
+
+	loop (i = 0, i < reservations.size, i++) {
+		region = reservations[i]
+
+		debug.write('reserved: ')
+		debug.write_address(region.start)
+		debug.write('-')
+		debug.write_address(region.end)
 		debug.write_line()
 	}
 }

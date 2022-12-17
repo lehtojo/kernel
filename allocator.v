@@ -1,5 +1,3 @@
-constant STATIC_ALLOCATOR_START = 0x50000
-
 namespace allocator
 
 import 'C' flush_tlb()

@@ -7,9 +7,9 @@ cli
 
 ; Verify the boot was done using the multiboot protocol
 cmp eax, 0x36d76289
-je L0
+je multiboot_verified
 hlt
-L0:
+multiboot_verified:
 
 ; Save the boot information provided by the multiboot protocol
 mov dword [multiboot_information], ebx
@@ -17,10 +17,7 @@ mov dword [multiboot_information], ebx
 ; Register the global descriptor table
 lgdt [gdt32_descriptor]
 
-mov eax, cr0
-or eax, 1
-mov cr0, eax
-
+; Initialize segments
 mov ax, DATA_SEGMENT_32
 mov ds, ax
 mov ss, ax
@@ -31,9 +28,6 @@ mov gs, ax
 ; Setup the stack
 mov ebp, kernel_stack_start
 mov esp, ebp
-
-; Create virtual mapping for the page map:
-; Physical address: 0xF000000
 
 ; Disable the old paging
 mov eax, cr0
@@ -66,6 +60,7 @@ VIRTUAL_MAP_L2_SIZE equ 0x1000
 ;           |                                                                       |
 ;           -------------------------------------------------------------------------
 
+; Zero out the page tables
 mov edi, VIRTUAL_MAP_BASE
 xor eax, eax
 mov ecx, (PAGE_MAP_END - VIRTUAL_MAP_BASE)
@@ -138,7 +133,7 @@ mov cr3, edi
 
 ; Enable PAE-paging
 mov eax, cr4
-or eax, 1 << 5
+or eax, (1 << 5)
 mov cr4, eax
 
 ; Enable long mode
@@ -167,6 +162,7 @@ jmp CODE_SEGMENT_64:enter_kernel
 
 [bits 64]
 enter_kernel:
+; Initialize segments
 mov ax, DATA_SEGMENT_64
 mov ds, ax
 mov ss, ax
@@ -183,7 +179,7 @@ mov edi, dword [multiboot_information]
 lea rsi, [abs interrupt_tables]
 jmp kernel_entry
 
-; ########################################################################################
+; --- GDT (32-bit) ---
 
 gdt32_start:
 dq 0x0 ; None segment descriptor
@@ -208,11 +204,12 @@ db 0x0       ; Segment base, bits 24-31
 
 gdt32_end:
 
+align 8
 gdt32_descriptor:
 dw gdt32_end - gdt32_start - 1
 dd gdt32_start
 
-; ########################################################################################
+; --- GDT (64-bit) ---
 
 align 8
 gdt64_start:
@@ -225,7 +222,7 @@ db      0x00
 db      0x00
 db      0x00
 
-; kernel: code segment descriptor (selector = 0x8)
+; Kernel code segment (selector = 0x8)
 gdt64_code:
 dw      0x0000
 dw      0x0000
@@ -234,7 +231,7 @@ db      10011010b
 db      00100000b
 db      0x00
 
-; kernel: data segment descriptor (selector = 0x10)
+; Kernel data segment (selector = 0x10)
 gdt64_data:
 dw      0x0000
 dw      0x0000
@@ -243,7 +240,7 @@ db      10010010b
 db      00000000b
 db      0x00
 
-; user: code segment descriptor (selector = 0x18)
+; User code segment (selector = 0x18)
 dw      0x0000
 dw      0x0000
 db      0x00
@@ -251,7 +248,7 @@ db      11111010b
 db      00100000b
 db      0x00
 
-; user: data segment descriptor (selector = 0x20)
+; User data segment (selector = 0x20)
 dw      0x0000
 dw      0x0000
 db      0x00
@@ -259,26 +256,29 @@ db      11110010b
 db      00000000b
 db      0x00
 
-; TSS (selector = 0x28)
+; TSS segment (selector = 0x28)
+gdt64_tss:
 dw      0x0068
 gdt64_tss_address_0:
-dw      0x0000    ; tss-address (bits 0-16)
+dw      0x0000    ; TSS address (bits 0-16)
 gdt64_tss_address_1:
-db      0x00      ; tss-address (bits 16-24)
-db      10001001b ; present
+db      0x00      ; TSS address (bits 16-24)
+db      10001001b ; Present | 64-bit TSS (Available)
 db      00000000b
 gdt64_tss_address_2:
-db      0x00      ; tss-address (bits 24-32)
-dq      0x00      ; tss-address (bits 32-64)
+db      0x00      ; TSS address (bits 24-32)
+dq      0x00      ; TSS address (bits 32-64)
 
 gdt64_end:
 
 align 8
-
 gdt64_descriptor:
 dw gdt64_end - gdt64_start - 1
 dd gdt64_start
 
+; --- TSS (64-bit) ---
+
+align 8
 tss64:
 dd 0 ; reserved
 dq interrupt_stack_start ; rsp0
@@ -292,28 +292,32 @@ dq 0 ; ist4
 dq 0 ; ist5
 dq 0 ; ist6
 dq 0 ; ist7
-dq 0   ; reserved
-dw 0   ; reserved
+dq 0 ; reserved
+dw 0 ; reserved
 dw 104 ; iopb
 
-; ########################################################################################
+; --- Multiboot information ---
 
 multiboot_information:
 dd 0
 
-CODE_SEGMENT_32    equ gdt32_code - gdt32_start
-DATA_SEGMENT_32    equ gdt32_data - gdt32_start
+; --- Configuration ---
 
-CODE_SEGMENT_64    equ gdt64_code - gdt64_start
-DATA_SEGMENT_64    equ gdt64_data - gdt64_start
+CODE_SEGMENT_32 equ gdt32_code - gdt32_start
+DATA_SEGMENT_32 equ gdt32_data - gdt32_start
 
-TSS_SELECTOR equ 0x28
+CODE_SEGMENT_64 equ gdt64_code - gdt64_start
+DATA_SEGMENT_64 equ gdt64_data - gdt64_start
+
+TSS_SELECTOR equ gdt64_tss - gdt64_start
 
 MAX_MEMORY equ 0x2000000000 ; 128 GB
-L1_COUNT   equ (MAX_MEMORY / 0x1000)
-L2_COUNT   equ (MAX_MEMORY / (0x1000 * 512))
-L3_COUNT   equ 512
-L4_COUNT   equ 512
+L1_COUNT equ (MAX_MEMORY / 0x1000)
+L2_COUNT equ (MAX_MEMORY / (0x1000 * 512))
+L3_COUNT equ 512
+L4_COUNT equ 512
+
+; --- Kernel ---
 
 align 0x2000
 kernel_entry:

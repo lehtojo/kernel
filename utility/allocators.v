@@ -7,33 +7,20 @@ Allocator {
 	}
 }
 
-Allocator StaticAllocator {
-	shared instance: StaticAllocator
-
-	shared initialize() {
-		#warning dangerous
-		instance = StaticAllocator() using 0x190000
-	}
-
+Allocator BufferAllocator {
 	position: link
 	end: link
 
-	init() {
-		position = this as link + capacityof(StaticAllocator)
-		end = position + 1000000
+	init(buffer: link, size: u64) {
+		position = buffer
+		end = buffer + size
 	}
 
 	override allocate(bytes: u64) {
-		debug.write('Allocating static memory ')
-		debug.write(bytes)
-		debug.write_line(' bytes')
+		if position + bytes > end return none as link
 
-		require(position + bytes <= end, 'Out of static memory')
 		result = position
 		position += bytes
-
-		debug.write('Static memory allocated: ')
-		debug.write_line((position - (this as link + capacityof(StaticAllocator))) as u64)
 
 		memory.zero(result, bytes)
 
@@ -41,7 +28,7 @@ Allocator StaticAllocator {
 	}
 
 	override deallocate(address: link) {
-		# Static allocator can not deallocate
+		# Deallocation is not supported
 	}
 }
 

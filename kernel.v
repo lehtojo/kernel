@@ -9,21 +9,21 @@ namespace kernel {
 }
 
 export start(multiboot_information: link, interrupt_tables: link) {
+	allocator = BufferAllocator(buffer: u8[0x2000], 0x2000)
+
 	boot.console.initialize()
 	boot.console.clear()
 	boot.console.write_line('...')
 
-	StaticAllocator.initialize()
-
-	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance)
+	scheduler = kernel.scheduler.Scheduler(allocator)
 	kernel.interrupts.tables = interrupt_tables
 	kernel.interrupts.scheduler = scheduler
 
 	kernel.serial.initialize()
 
-	regions = List<Segment>(StaticAllocator.instance)
-	reservations = List<Segment>(StaticAllocator.instance)
-	section_headers = List<kernel.elf.SectionHeader>(StaticAllocator.instance)
+	regions = List<Segment>(allocator)
+	reservations = List<Segment>(allocator)
+	section_headers = List<kernel.elf.SectionHeader>(allocator)
 
 	kernel.multiboot.initialize(multiboot_information, regions, reservations, section_headers)
 
@@ -32,11 +32,11 @@ export start(multiboot_information: link, interrupt_tables: link) {
 	#LayerAllocator.initialize(reservations)
 
 	kernel.interrupts.initialize()
-	kernel.keyboard.initialize(StaticAllocator.instance)
+	kernel.keyboard.initialize(allocator)
 
-	kernel.scheduler.test(StaticAllocator.instance)
+	kernel.scheduler.test(allocator)
 
-	kernel.apic.initialize(StaticAllocator.instance)
+	kernel.apic.initialize(allocator)
 
 	kernel.interrupts.enable()
 

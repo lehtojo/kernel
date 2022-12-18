@@ -5,7 +5,7 @@ start:
 ; Disable interrupts
 cli
 
-; Verify the boot was done using multiboot protocol
+; Verify the boot was done using the multiboot protocol
 cmp eax, 0x36d76289
 je L0
 hlt
@@ -170,7 +170,9 @@ mov gs, ax
 mov ax, TSS_SELECTOR
 ltr ax
 
+; Pass the multiboot information to the kernel
 mov edi, dword [multiboot_information]
+lea rsi, [abs interrupt_tables]
 jmp kernel_entry
 
 ; ########################################################################################
@@ -311,7 +313,14 @@ incbin "build/kernel.bin"
 
 section .bss
 align 0x1000
+
+interrupt_tables:
+resb 0x1000 ; interrupt descriptor table descriptor (idtr)
+resb 0x1000 ; interrupt descriptor table (idt)
+resb 0x1000 ; interrupt entries
+
 resb 0x25000
 interrupt_stack_start:
+
 resb 0x25000
 kernel_stack_start:

@@ -8,22 +8,15 @@ namespace kernel {
 	constant DATA_SEGMENT = 16
 }
 
-import 'C' test_interrupt()
-
-export start(information: link) {
+export start(multiboot_information: link, interrupt_tables: link) {
 	boot.console.initialize()
 	boot.console.clear()
 	boot.console.write_line('...')
 
 	StaticAllocator.initialize()
 
-	# TODO: Figure out how to get the memory map from the BIOS
-	# TODO: Once the memory map is here, reserve certain memory regions
-
-	#LayerAllocator.initialize(none as link, 0)
-	#LayerAllocator.instance.allocate(PAGE_SIZE, 0x300000 as link)
-
 	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance)
+	interrupts.tables = interrupt_tables
 	interrupts.scheduler = scheduler
 
 	kernel.serial.initialize()
@@ -32,7 +25,7 @@ export start(information: link) {
 	reservations = List<Segment>(StaticAllocator.instance)
 	section_headers = List<kernel.elf.SectionHeader>(StaticAllocator.instance)
 
-	kernel.multiboot.initialize(information, regions, reservations, section_headers)
+	kernel.multiboot.initialize(multiboot_information, regions, reservations, section_headers)
 
 	# TODO: Reserve GDT and other similar tables, use insert_segment()?
 
@@ -42,8 +35,6 @@ export start(information: link) {
 	kernel.keyboard.initialize(StaticAllocator.instance)
 
 	kernel.scheduler.test(StaticAllocator.instance)
-
-	test_interrupt()
 
 	apic.initialize()
 

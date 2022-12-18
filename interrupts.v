@@ -33,15 +33,16 @@ pack TrapFrame {
 namespace interrupts
 
 namespace internal {
+	import 'C' interrupts_set_idtr(idtr: link)
 	import 'C' interrupts_enable()
 	import 'C' interrupts_disable()
 
 	import 'C' get_interrupt_handler(): link
 }
 
-constant IDTR_ADDRESS = 0x8000
-constant TABLE_ADDRESS = 0x9000
-constant INTERRUPT_ENTRIES_ADDRESS = 0x10000
+constant IDTR_OFFSET = 0
+constant IDT_OFFSET = 0x1000
+constant INTERRUPT_ENTRIES_OFFSET = 0x2000
 constant INTERRUPT_COUNT = 256
 
 constant PRESENT_BIT = 1 <| 7
@@ -49,7 +50,7 @@ constant PRESENT_BIT = 1 <| 7
 constant GATE_TYPE_INTERRUPT = 0xE
 constant GATE_TYPE_TRAP = 0xF
 
-handlers: link
+tables: link
 scheduler: kernel.scheduler.Scheduler
 
 pack InterruptDescriptor {
@@ -63,12 +64,12 @@ pack InterruptDescriptor {
 }
 
 export initialize() {
-	(IDTR_ADDRESS).(i16*)[] = 256 * 16 - 1
-	(IDTR_ADDRESS + 2).(link*)[] = TABLE_ADDRESS
+	(tables + IDTR_OFFSET).(i16*)[] = INTERRUPT_COUNT * 16 - 1
+	(tables + IDTR_OFFSET + 2).(link*)[] = tables + IDT_OFFSET
 
-	#memory.zero(TABLE_ADDRESS as link, 0x1000)
+	memory.zero(tables + IDT_OFFSET as link, 0x1000)
 
-	entry_address = INTERRUPT_ENTRIES_ADDRESS as link
+	entry_address = tables + INTERRUPT_ENTRIES_OFFSET
 
 	loop (i = 0, i < INTERRUPT_COUNT, i++) {
 		if i < 0x20 {
@@ -79,6 +80,8 @@ export initialize() {
 
 		entry_address = write_interrupt_entry(entry_address, internal.get_interrupt_handler(), i)
 	}
+
+	internal.interrupts_set_idtr(tables + IDTR_OFFSET)
 }
 
 export enable() {
@@ -127,7 +130,7 @@ export set_interrupt(index: u32, privilege: u8, handler: link) {
 	descriptor.offset_3 = ((handler as u64) |> 32)
 	descriptor.reserved = 0
 
-	TABLE_ADDRESS.(InterruptDescriptor*)[index] = descriptor
+	(tables + IDT_OFFSET).(InterruptDescriptor*)[index] = descriptor
 }
 
 export set_trap(index: u32, privilege: u8, handler: link) {
@@ -143,7 +146,7 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 	descriptor.offset_3 = ((handler as u64) |> 32)
 	descriptor.reserved = 0
 
-	TABLE_ADDRESS.(InterruptDescriptor*)[index] = descriptor
+	(tables + IDT_OFFSET).(InterruptDescriptor*)[index] = descriptor
 }
 
 export process(frame: TrapFrame*) {

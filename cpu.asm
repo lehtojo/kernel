@@ -32,6 +32,11 @@ interrupts_disable:
 sti
 ret
 
+.global interrupts_set_idtr
+interrupts_set_idtr:
+lidt [rdi]
+ret
+
 .global ports_read_u8
 ports_read_u8:
 xor rax, rax
@@ -140,13 +145,4 @@ iretq
 .global get_interrupt_handler
 get_interrupt_handler:
 lea rax, [interrupt_entry]
-ret
-
-# idt = 0x9000
-# idtr = 0x8000
-
-.global test_interrupt
-test_interrupt:
-# Register an empty interrupt descriptor table
-lidt [0x8000]
 ret

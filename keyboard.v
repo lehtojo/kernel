@@ -1,13 +1,16 @@
 namespace kernel.keyboard
 
+constant KEYCODE_COUNT = 128
+
 layout: u8*
 states: u8*
 
-export initialize() {
-	layout = 0x80000
-	states = layout + 0x80
-	memory.zero(layout, 128)
-	memory.zero(states, 128)
+export initialize(allocator: Allocator) {
+	layout = allocator.allocate(KEYCODE_COUNT * 2)
+	states = layout + KEYCODE_COUNT
+
+	memory.zero(layout, KEYCODE_COUNT)
+	memory.zero(states, KEYCODE_COUNT)
 
 	layout[2] = `1`
 	layout[3] = `2`

@@ -81,18 +81,6 @@ lea rax, [rsp+8]
 ret
 
 .align 32
-.global old_keyboard_handler
-old_keyboard_handler:
-push rax
-mov byte ptr [0xB8000], 48
-mov byte ptr [0xB8001], 48
-mov byte ptr [0xB8002], 48
-mov al, 0x20
-out 0x20, al
-pop rax
-iretq
-
-.align 32
 .global interrupt_entry
 interrupt_entry:
 # Save all the registers
@@ -148,11 +136,6 @@ iretq
 .global get_interrupt_handler
 get_interrupt_handler:
 lea rax, [interrupt_entry]
-ret
-
-.global keyboard_handler
-keyboard_handler:
-lea rax, [_VN6kernel8keyboard7processEv]
 ret
 
 irq_enable:

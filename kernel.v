@@ -39,7 +39,7 @@ export start(information: link) {
 	#LayerAllocator.initialize(reservations)
 
 	interrupts.initialize()
-	kernel.keyboard.initialize()
+	kernel.keyboard.initialize(StaticAllocator.instance)
 
 	kernel.scheduler.test(StaticAllocator.instance)
 

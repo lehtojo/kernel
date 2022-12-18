@@ -195,6 +195,28 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 	return Segment.new(REGION_RESERVED, start as link, end as link)
 }
 
+export allocate_layer_allocator(regions: List<Segment>): link {
+	size = capacityof(LayerAllocator) + LayerAllocator.LAYER_STATE_MEMORY_SIZE
+
+	loop (i = 0, i < regions.size, i++) {
+		# Find the first available region that can store the layer allocator
+		region = regions[i]
+		if region.type != REGION_AVAILABLE or region.size < size continue
+
+		debug.write('layer-allocator-address: ') debug.write_address(region.start) debug.write_line()
+
+		reservation = Segment.new(REGION_RESERVED, region.start, region.start + size)
+		insert_region(regions, reservation)
+
+		# Map the memory region for the layer allocator
+		mapper.map_region(region.start, region.start, region.size)
+
+		return region.start
+	}
+
+	panic('Failed to allocate memory for the layer allocator')
+}
+
 export find_reserved_physical_regions(regions: List<Segment>, physical_memory_size: u64, reservations: List<Segment>) {
 	start = none as link
 
@@ -217,7 +239,7 @@ export find_reserved_physical_regions(regions: List<Segment>, physical_memory_si
 	}
 }
 
-export initialize(information: link, memory_information: SystemMemoryInformation) {
+export initialize(information: link, memory_information: SystemMemoryInformation): link {
 	regions = memory_information.regions
 	reserved = memory_information.reserved
 	sections = memory_information.sections
@@ -262,6 +284,8 @@ export initialize(information: link, memory_information: SystemMemoryInformation
 	insert_region(regions, kernel_region)
 	insert_region(regions, page_table_region)
 
+	layer_allocator_address = allocate_layer_allocator(regions)
+
 	find_reserved_physical_regions(regions, memory_information.physical_memory_size, reserved)
 
 	debug.write('physical-memory-size: ')
@@ -289,4 +313,6 @@ export initialize(information: link, memory_information: SystemMemoryInformation
 		debug.write_address(region.end)
 		debug.write_line()
 	}
+
+	return layer_allocator_address
 }

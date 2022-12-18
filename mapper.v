@@ -7,15 +7,10 @@ constant INVALID_PHYSICAL_ADDRESS = -1
 constant ERROR_INVALID_VIRTUAL_ADDRESS = -1
 constant ERROR_OCCUPIED = -2
 
-constant MAX_MEMORY = 2000000000 # 2 GB
+constant MAX_MEMORY = 0x2000000000 # 128 GB
 
-#constant L1_COUNT = 1 + (MAX_MEMORY - 1) / 4096
-#constant L2_COUNT = 1 + (MAX_MEMORY - 1) / 4096 / 512
-#constant L3_COUNT = 1 + (MAX_MEMORY - 1) / 4096 / (512 * 512)
-#constant L4_COUNT = 512
-
-constant L1_COUNT = 488448
-constant L2_COUNT = 1024
+constant L1_COUNT = MAX_MEMORY / 0x1000
+constant L2_COUNT = MAX_MEMORY / (0x1000 * 512)
 constant L3_COUNT = 512
 constant L4_COUNT = 512
 
@@ -120,7 +115,7 @@ to_physical_address(virtual_address: link): link {
 	return address_from_page_entry(l1_entry) + offset
 }
 
-map_page(virtual_address: link, physical_address: link) {
+map_page(virtual_address: link, physical_address: link, flush: bool) {
 	# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 	l1: u32 = ((virtual_address as u64) |> 12) & 0x1FF
 	l2: u32 = ((virtual_address as u64) |> 21) & 0x1FF
@@ -159,6 +154,32 @@ map_page(virtual_address: link, physical_address: link) {
 	set_address(l1_address, physical_address)
 	set_writable(l1_address)
 	set_present(l1_address)
+
+	if flush flush_tlb()
+}
+
+map_page(virtual_address: link, physical_address: link) {
+	map_page(virtual_address, physical_address, true)
+}
+
+map_region(virtual_address_start: link, physical_address_start: link, size: u64) {
+	physical_page = physical_address_start & (-PAGE_SIZE)
+	virtual_page = virtual_address_start & (-PAGE_SIZE)
+	last_physical_page = (physical_address_start + size) & (-PAGE_SIZE)
+	last_virtual_page = (physical_address_start + size) & (-PAGE_SIZE)
+
+	debug.write('Mapping region ')
+	debug.write_address(physical_page) debug.put(`-`) debug.write_address(last_physical_page + PAGE_SIZE)
+	debug.write(' to ')
+	debug.write_address(virtual_page) debug.put(`-`) debug.write_address(last_virtual_page + PAGE_SIZE)
+	debug.write_line()
+
+	loop (physical_page <= last_physical_page) {
+		map_page(virtual_page, physical_page, false)
+
+		physical_page += PAGE_SIZE
+		virtual_page += PAGE_SIZE
+	}
 
 	flush_tlb()
 }

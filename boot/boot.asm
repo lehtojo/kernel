@@ -104,23 +104,31 @@ jnz page_map_virtual_mapping_L1
 ; Point the last entry of the page map to the virtual mapping, so that we can edit the page map later using virtual addresses
 mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
 
-; Map the first 4MB
+; Identity map the first 1 GiB
 mov dword [abs L4_BASE], (L3_BASE + 3)
 mov dword [abs L3_BASE], (L2_BASE + 3)
 
-mov dword [abs L2_BASE], (L1_BASE + 3)
-;mov dword [abs (L2_BASE + 8)], (L1_BASE + 0x1000 + 3)
-
-; Flag the pages present, readable and writable (111b)
-mov edi, L1_BASE
-mov ebx, 3
+; Initialize L2
+mov edi, L2_BASE
+mov ebx, (L1_BASE + 3) ; Present | Writable
 mov ecx, 512
-initial_map_L0:
+l2_mapper:
 mov dword [edi], ebx
 add ebx, 0x1000
 add edi, 8
 dec ecx
-jnz initial_map_L0
+jnz l2_mapper
+
+; Initialize L1
+mov edi, L1_BASE
+mov ebx, 3 ; Present | Writable
+mov ecx, (512*512)
+l1_mapper:
+mov dword [edi], ebx
+add ebx, 0x1000
+add edi, 8
+dec ecx
+jnz l1_mapper
 
 ; Start enabling the long mode:
 
@@ -301,8 +309,9 @@ DATA_SEGMENT_64    equ gdt64_data - gdt64_start
 
 TSS_SELECTOR equ 0x28
 
-L1_COUNT   equ 488448
-L2_COUNT   equ 1024
+MAX_MEMORY equ 0x2000000000 ; 128 GB
+L1_COUNT   equ (MAX_MEMORY / 0x1000)
+L2_COUNT   equ (MAX_MEMORY / (0x1000 * 512))
 L3_COUNT   equ 512
 L4_COUNT   equ 512
 

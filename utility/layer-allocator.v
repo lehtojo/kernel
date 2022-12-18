@@ -243,8 +243,8 @@ pack Layer {
 LayerAllocator {
 	shared instance: LayerAllocator
 
-	shared initialize(reservations: List<Segment>) {
-		instance = LayerAllocator(reservations) using 0x200000
+	shared initialize(address: link, memory_information: kernel.SystemMemoryInformation) {
+		instance = LayerAllocator(memory_information) using address
 	}
 
 	constant MAX_MEMORY = 512000000000 # 512 GB
@@ -272,8 +272,8 @@ LayerAllocator {
 
 	layers: Layer[LAYER_COUNT]
 
-	init(reservations: List<Segment>) {
-		extent = 0
+	init(memory_information: kernel.SystemMemoryInformation) {
+		reserved = memory_information.reserved
 
 		states = this as link + capacityof(LayerAllocator)
 		upper = layers as Layer*
@@ -299,9 +299,11 @@ LayerAllocator {
 		layers[0].upper = none as Layer*
 		layers[LAYER_COUNT - 1].lower = none as Layer*
 
+		return
+
 		# Set all the reserved segments unavailable
-		loop (i = 0, i < reservations.size, i++) {
-			reserve_without_adding_available_slabs(reservations[i])
+		loop (i = 0, i < reserved.size, i++) {
+			reserve_without_adding_available_slabs(reserved[i])
 		}
 
 		# TODO: Generate the correct number of L0 entries here

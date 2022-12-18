@@ -33,9 +33,9 @@ export start(multiboot_information: link, interrupt_tables: link) {
 	memory_information.reserved = List<Segment>(allocator)
 	memory_information.sections = List<kernel.elf.SectionHeader>(allocator)
 
-	kernel.multiboot.initialize(multiboot_information, memory_information)
+	layer_allocator_address = kernel.multiboot.initialize(multiboot_information, memory_information)
 
-	#LayerAllocator.initialize(reservations)
+	LayerAllocator.initialize(layer_allocator_address, memory_information)
 
 	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(allocator)

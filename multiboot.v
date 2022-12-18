@@ -4,10 +4,6 @@ constant TAG_TYPE_MEMORY_MAP = 6
 constant TAG_TYPE_FRAMEBUFFER = 8
 constant TAG_TYPE_SECTION_HEADER_TABLE = 9
 
-constant REGION_UNKNOWN = -1
-constant REGION_AVAILABLE = 1
-constant REGION_RESERVED = 2
-
 plain RootHeader {
 	size: u32
 	reserved: u32
@@ -232,6 +228,7 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 
 	position = capacityof(RootHeader)
 	kernel_region = Segment.new(REGION_UNKNOWN)
+	page_table_region = mapper.region()
 	physical_memory_size = 0 as u64
 
 	loop (position < header.size) {
@@ -258,7 +255,9 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 	}
 
 	require(kernel_region.type !== REGION_UNKNOWN, 'Failed to find kernel region')
+
 	insert_region(regions, kernel_region)
+	insert_region(regions, page_table_region)
 
 	find_reserved_physical_regions(regions, physical_memory_size, reservations)
 

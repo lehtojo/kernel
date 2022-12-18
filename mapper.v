@@ -63,6 +63,13 @@ constant ENTRIES = 512
 # Number of L3 entries = 1 + (M - 1) / 4096 / 512^2
 # Number of L4 entries = 512 # Use the maximum amount so that we can use the last entry to edit the pages
 
+# Summary: Returns the memory region that the mapper uses
+region(): Segment {
+	start: link = PAGE_MAP_VIRTUAL_MAP_PHYSICAL_ADDRESS
+	end: link = PAGE_MAP_PHYSICAL_ADDRESS + PAGE_MAP_BYTES
+	return Segment.new(REGION_RESERVED, start, end)
+}
+
 # Summary: Returns whether the specified page entry is present
 is_present(entry: u64): bool {
 	return entry & 1

@@ -130,7 +130,7 @@ TimerManager {
 	}
 }
 
-export initialize(header: HPETHeader*) {
+export initialize(allocator: Allocator, header: HPETHeader*) {
 	registers = header[].address.address as u64*
 	require(registers !== none, 'Missing HPET registers')
 
@@ -151,9 +151,9 @@ export initialize(header: HPETHeader*) {
 
 	debug.write('hpet-capabilities: ')
 
-	allocator.map_page(registers, registers)
+	mapper.map_page(registers, registers)
 
-	manager = TimerManager(StaticAllocator.instance) using StaticAllocator.instance
+	manager = TimerManager(allocator) using allocator
 	manager.attach(registers)
 	manager.reset()
 	manager.enable_all()

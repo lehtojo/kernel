@@ -30,7 +30,7 @@ pack TrapFrame {
 	registers: RegisterState*
 }
 
-namespace interrupts
+namespace kernel.interrupts
 
 namespace internal {
 	import 'C' interrupts_set_idtr(idtr: link)

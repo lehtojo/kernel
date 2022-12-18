@@ -73,7 +73,7 @@ Scheduler {
 
 test(allocator: Allocator) {
 	registers = allocator.allocate<RegisterState>()
-	process = Process(0, registers) using StaticAllocator.instance
+	process = Process(0, registers) using allocator
 
 	debug.write('kernel-stack-address: ') debug.write_address(registers_rsp()) debug.write_line()
 

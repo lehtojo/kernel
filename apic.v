@@ -26,7 +26,7 @@ pack SDTHeader {
 	creator_revision: u32
 }
 
-namespace apic
+namespace kernel.apic
 
 local_apic_registers: u32*
 
@@ -73,8 +73,8 @@ export find_chunk_with_signature(address: link, size: u32, signature: link, chun
 }
 
 export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): link {
-	allocator.map_page(header, header)
-	allocator.map_page(header + 0x1000, header + 0x1000)
+	mapper.map_page(header, header)
+	mapper.map_page(header + 0x1000, header + 0x1000)
 
 	debug.write('rsdt: ')
 	debug.write_address(header)
@@ -92,7 +92,7 @@ export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): 
 
 	loop (i = 0, i < table_count, i++) {
 		table = tables[i] as link
-		allocator.map_page(table, table)
+		mapper.map_page(table, table)
 
 		if memory.compare(table, signature, signature_length) {
 			result = table
@@ -191,7 +191,7 @@ export enable() {
 	ports.write_u8(0x21, 0xff)
 
 	base = get_apic_base()
-	allocator.map_page(base as link, base as link)
+	mapper.map_page(base as link, base as link)
 	set_apic_base(base)
 }
 
@@ -215,7 +215,7 @@ export max_redirection(registers: u32*) {
 	return result |> 16
 }
 
-export initialize() {
+export initialize(allocator: Allocator) {
 	rsdp = apic.find_root_system_descriptor_table()
 	debug.write('rsdp: ')
 	debug.write_address(rsdp as u64)
@@ -246,7 +246,7 @@ export initialize() {
 	debug.write_line()
 
 	debug.write('max-redirections: ')
-	allocator.map_page(information[].ioapic_registers, information[].ioapic_registers)
+	mapper.map_page(information[].ioapic_registers, information[].ioapic_registers)
 	debug.write_line(max_redirection(information[].ioapic_registers))
 
 	debug.write('processors: ')
@@ -272,6 +272,6 @@ export initialize() {
 	debug.write_line()
 
 	if hpet_table !== none {
-		kernel.hpet.initialize(hpet_table)
+		kernel.hpet.initialize(allocator, hpet_table)
 	}
 }

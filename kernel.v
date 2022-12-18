@@ -16,8 +16,8 @@ export start(multiboot_information: link, interrupt_tables: link) {
 	StaticAllocator.initialize()
 
 	scheduler = kernel.scheduler.Scheduler(StaticAllocator.instance)
-	interrupts.tables = interrupt_tables
-	interrupts.scheduler = scheduler
+	kernel.interrupts.tables = interrupt_tables
+	kernel.interrupts.scheduler = scheduler
 
 	kernel.serial.initialize()
 
@@ -31,14 +31,14 @@ export start(multiboot_information: link, interrupt_tables: link) {
 
 	#LayerAllocator.initialize(reservations)
 
-	interrupts.initialize()
+	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(StaticAllocator.instance)
 
 	kernel.scheduler.test(StaticAllocator.instance)
 
-	apic.initialize()
+	kernel.apic.initialize(StaticAllocator.instance)
 
-	interrupts.enable()
+	kernel.interrupts.enable()
 
 	loop {}
 }

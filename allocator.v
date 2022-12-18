@@ -1,4 +1,4 @@
-namespace allocator
+namespace kernel.mapper
 
 import 'C' flush_tlb()
 

@@ -50,7 +50,7 @@ pack MADTEntryHeader {
 	length: u8
 }
 
-pack SystemInformation {
+ApicInformation {
 	local_apic_ids: u8[256]
 	local_apic_count: u8
 	local_apic_registers: link
@@ -149,7 +149,7 @@ export find_root_system_descriptor_table() {
 	return none as link
 }
 
-export process_madt_entries(madt: MADT*, information: SystemInformation*) {
+export process_madt_entries(madt: MADT*, information: ApicInformation) {
 	end = madt + madt[].header.length
 	entry = (madt + capacityof(MADT)) as MADTEntryHeader*
 
@@ -158,14 +158,14 @@ export process_madt_entries(madt: MADT*, information: SystemInformation*) {
 
 		if type == 0 {
 			# Single logical processor with a local apic
-			information[].local_apic_ids[information[].local_apic_count] = entry.(u8*)[3]
-			information[].local_apic_count++
+			information.local_apic_ids[information.local_apic_count] = entry.(u8*)[3]
+			information.local_apic_count++
 		} else type == 1 {
 			# Address of ioapic
-			information[].ioapic_registers = (entry + 4).(u32*)[]
+			information.ioapic_registers = (entry + 4).(u32*)[]
 		} else type == 5 {
 			# Address of the local apic (64-bit system version)
-			information[].local_apic_registers = (entry + 4).(u64*)[]
+			information.local_apic_registers = (entry + 4).(u64*)[]
 		}
 
 		entry += entry[].length
@@ -231,37 +231,37 @@ export initialize(allocator: Allocator) {
 	debug.write('has-legacy-pic: ')
 	debug.write_line((apic_table[].flags & 1) != 0)
 
-	information: SystemInformation[1]
-	information[].local_apic_registers = apic_table[].local_apic_address
+	information = ApicInformation()
+	information.local_apic_registers = apic_table[].local_apic_address
 	process_madt_entries(apic_table, information)
 
-	local_apic_registers = information[].local_apic_registers
+	local_apic_registers = information.local_apic_registers
 
 	debug.write('local-apic-registers: ')
-	debug.write_address(information[].local_apic_registers)
+	debug.write_address(information.local_apic_registers)
 	debug.write_line()
 
 	debug.write('ioapic-registers: ')
-	debug.write_address(information[].ioapic_registers)
+	debug.write_address(information.ioapic_registers)
 	debug.write_line()
 
 	debug.write('max-redirections: ')
-	mapper.map_page(information[].ioapic_registers, information[].ioapic_registers)
-	debug.write_line(max_redirection(information[].ioapic_registers))
+	mapper.map_page(information.ioapic_registers, information.ioapic_registers)
+	debug.write_line(max_redirection(information.ioapic_registers))
 
 	debug.write('processors: ')
 
-	loop (i = 0, i < information[].local_apic_count, i++) {
-		debug.write(information[].local_apic_ids[i])
+	loop (i = 0, i < information.local_apic_count, i++) {
+		debug.write(information.local_apic_ids[i])
 		debug.put(` `)
 	}
 
 	debug.write_line()
 
 	enable()
-	enable_interrupts(information[].local_apic_registers)
+	enable_interrupts(information.local_apic_registers)
 
-	kernel.ioapic.initialize(information[].ioapic_registers)
+	kernel.ioapic.initialize(information.ioapic_registers)
 	kernel.ioapic.redirect(1, 83)
 	kernel.ioapic.redirect(3, 83)
 	kernel.ioapic.redirect(4, 83)

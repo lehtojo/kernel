@@ -6,6 +6,13 @@ constant MiB = 1048576
 namespace kernel {
 	constant CODE_SEGMENT = 8
 	constant DATA_SEGMENT = 16
+
+	plain SystemMemoryInformation {
+		regions: List<Segment>
+		reserved: List<Segment>
+		sections: List<elf.SectionHeader>
+		physical_memory_size: u64
+	}
 }
 
 export start(multiboot_information: link, interrupt_tables: link) {
@@ -21,13 +28,12 @@ export start(multiboot_information: link, interrupt_tables: link) {
 
 	kernel.serial.initialize()
 
-	regions = List<Segment>(allocator)
-	reservations = List<Segment>(allocator)
-	section_headers = List<kernel.elf.SectionHeader>(allocator)
+	memory_information = kernel.SystemMemoryInformation()
+	memory_information.regions = List<Segment>(allocator)
+	memory_information.reserved = List<Segment>(allocator)
+	memory_information.sections = List<kernel.elf.SectionHeader>(allocator)
 
-	kernel.multiboot.initialize(multiboot_information, regions, reservations, section_headers)
-
-	# TODO: Reserve GDT and other similar tables, use insert_segment()?
+	kernel.multiboot.initialize(multiboot_information, memory_information)
 
 	#LayerAllocator.initialize(reservations)
 

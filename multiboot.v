@@ -217,7 +217,11 @@ export find_reserved_physical_regions(regions: List<Segment>, physical_memory_si
 	}
 }
 
-export initialize(information: link, regions: List<Segment>, reservations: List<Segment>, section_headers: List<kernel.elf.SectionHeader>) {
+export initialize(information: link, memory_information: SystemMemoryInformation) {
+	regions = memory_information.regions
+	reserved = memory_information.reserved
+	sections = memory_information.sections
+
 	debug.write('multiboot-header: ')
 	debug.write_address(information)
 	debug.write_line()
@@ -229,7 +233,6 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 	position = capacityof(RootHeader)
 	kernel_region = Segment.new(REGION_UNKNOWN)
 	page_table_region = mapper.region()
-	physical_memory_size = 0 as u64
 
 	loop (position < header.size) {
 		tag = (information + position) as TagHeader
@@ -241,11 +244,11 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 		debug.write_line(tag.size)
 
 		if tag.type == TAG_TYPE_MEMORY_MAP {
-			physical_memory_size = process_memory_map_tag(tag as MemoryMapTag, regions)
+			memory_information.physical_memory_size = process_memory_map_tag(tag as MemoryMapTag, regions)
 		} else tag.type == TAG_TYPE_FRAMEBUFFER {
 			process_framebuffer_tag(tag as FramebufferTag)
 		} else tag.type == TAG_TYPE_SECTION_HEADER_TABLE {
-			kernel_region = process_section_header_table_tag(tag as SectionHeaderTableTag, section_headers)
+			kernel_region = process_section_header_table_tag(tag as SectionHeaderTableTag, sections)
 		}
 
 		position += tag.size
@@ -259,10 +262,10 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 	insert_region(regions, kernel_region)
 	insert_region(regions, page_table_region)
 
-	find_reserved_physical_regions(regions, physical_memory_size, reservations)
+	find_reserved_physical_regions(regions, memory_information.physical_memory_size, reserved)
 
 	debug.write('physical-memory-size: ')
-	debug.write(physical_memory_size / MiB)
+	debug.write(memory_information.physical_memory_size / MiB)
 	debug.write_line(' MiB')
 
 	loop (i = 0, i < regions.size, i++) {
@@ -277,8 +280,8 @@ export initialize(information: link, regions: List<Segment>, reservations: List<
 		debug.write_line()
 	}
 
-	loop (i = 0, i < reservations.size, i++) {
-		region = reservations[i]
+	loop (i = 0, i < reserved.size, i++) {
+		region = reserved[i]
 
 		debug.write('reserved: ')
 		debug.write_address(region.start)

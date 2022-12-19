@@ -72,8 +72,8 @@ Scheduler {
 }
 
 test(allocator: Allocator) {
-	registers = allocator.allocate<RegisterState>()
-	process = Process(0, registers) using allocator
+	registers = KernelHeap.allocate<RegisterState>()
+	process = Process(0, registers) using KernelHeap
 
 	debug.write('kernel-stack-address: ') debug.write_address(registers_rsp()) debug.write_line()
 
@@ -84,7 +84,7 @@ test(allocator: Allocator) {
 	# inc r8
 	# jmp L0
 
-	start = allocator.allocate(0x100)
+	start = KernelHeap.allocate(0x100)
 	stack = ((start + 0x100) & (-16))
 
 	debug.write('test-process-start: ') debug.write_address(start) debug.write_line()

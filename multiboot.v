@@ -196,7 +196,7 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 }
 
 export allocate_layer_allocator(regions: List<Segment>): link {
-	size = capacityof(LayerAllocator) + LayerAllocator.LAYER_COUNT * capacityof(Layer) + LayerAllocator.LAYER_STATE_MEMORY_SIZE
+	size = capacityof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * capacityof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
 
 	loop (i = 0, i < regions.size, i++) {
 		# Find the first available region that can store the layer allocator

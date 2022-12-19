@@ -1,31 +1,31 @@
-LayerAvailableElement {
-	next: LayerAvailableElement
-	previous: LayerAvailableElement
+PhysicalMemoryManagerAvailableLayerElement {
+	next: PhysicalMemoryManagerAvailableLayerElement
+	previous: PhysicalMemoryManagerAvailableLayerElement
 }
 
-Layer {
+PhysicalMemoryManagerLayer {
 	depth: u32
-	upper: Layer
-	lower: Layer
+	upper: PhysicalMemoryManagerLayer
+	lower: PhysicalMemoryManagerLayer
 
 	states: link
 	size: u64
 
-	next: LayerAvailableElement
-	last: LayerAvailableElement
+	next: PhysicalMemoryManagerAvailableLayerElement
+	last: PhysicalMemoryManagerAvailableLayerElement
 
 	# Summary:
 	# Splits slabs towards the specified physical address down to the specified depth.
 	# Allocates the lowest slab containing the specified physical address.
 	split(physical_address: link, to: u32): link {
+		slab: link = (physical_address as u64) & (-size)
+
 		# Stop when the target depth is reached
 		if depth == to {
 			index = (slab as u64) / size
 			set_unavailable(index)
 			return slab
 		}
-
-		slab: link = (physical_address as u64) & (-size)
 
 		if is_split(slab) {
 			# Since the slab on the current layer is already split, continue lower
@@ -36,7 +36,7 @@ Layer {
 		require(is_available(index), 'Can not split an unavailable slab')
 
 		# Since we are splitting the specified slab, it must be set unavailable
-		remove(slab as LayerAvailableElement)
+		remove(slab as PhysicalMemoryManagerAvailableLayerElement)
 		set_unavailable(index)
 
 		# Compute the addresses of the two lower layer slabs
@@ -122,8 +122,8 @@ Layer {
 		# Map the slab so that we can write into it
 		kernel.mapper.map_page(physical_address, physical_address)
 
-		element = physical_address as LayerAvailableElement
-		element.next = none as LayerAvailableElement
+		element = physical_address as PhysicalMemoryManagerAvailableLayerElement
+		element.next = none as PhysicalMemoryManagerAvailableLayerElement
 		element.previous = last
 
 		# Connect the currently last element to this new element
@@ -141,7 +141,7 @@ Layer {
 	}
 
 	# Summary: Removes the specified entry from the available entries
-	remove(element: LayerAvailableElement) {
+	remove(element: PhysicalMemoryManagerAvailableLayerElement) {
 		if element.previous !== none { element.previous.next = element.next }
 
 		if element.next !== none { element.next.previous = element.previous }
@@ -155,11 +155,11 @@ Layer {
 	# Takes the next available entry.
 	# Returns the physical address of the taken entry.
 	take(): link {
-		if next === none return none as LayerAvailableElement
+		if next === none return none as PhysicalMemoryManagerAvailableLayerElement
 
 		result = next
 		next = result.next
-		next.previous = none as LayerAvailableElement
+		next.previous = none as PhysicalMemoryManagerAvailableLayerElement
 
 		# Update the last available page to none if we have used all the pages
 		if next === none { last = none as link }
@@ -195,13 +195,13 @@ Layer {
 		# Compute the address of the buddy slab.
 		# If the just deallocated slab is the left slab, the address should correspond to the right slab.
 		# Otherwise, it should correspond to the left slab.
-		buddy = (physical_address ¤ size) as LayerAvailableElement
+		buddy = (physical_address ¤ size) as PhysicalMemoryManagerAvailableLayerElement
 
 		# If the buddy slab is available as well, we can merge the deallocated slab with its buddy slab.
 		if upper !== none and is_available((buddy as u64) / size) {
 			remove(buddy)
 
-			left = math.min(physical_address, buddy)
+			left = math.min(physical_address as u64, buddy as u64) as link
 			upper.add(left)
 		}
 
@@ -209,11 +209,11 @@ Layer {
 	}
 }
 
-LayerAllocator {
-	shared instance: LayerAllocator
+PhysicalMemoryManager {
+	shared instance: PhysicalMemoryManager
 
 	shared initialize(address: link, memory_information: kernel.SystemMemoryInformation) {
-		instance = LayerAllocator(memory_information) using address
+		instance = PhysicalMemoryManager(memory_information) using address
 	}
 
 	constant LAYER_COUNT = 8
@@ -238,19 +238,19 @@ LayerAllocator {
 
 	constant LAYER_STATE_MEMORY_SIZE = (L0_COUNT + L1_COUNT + L2_COUNT + L3_COUNT + L4_COUNT + L5_COUNT + L6_COUNT + L7_COUNT) / 8
 
-	layers: Layer[LAYER_COUNT]
+	layers: PhysicalMemoryManagerLayer[LAYER_COUNT]
 
 	init(memory_information: kernel.SystemMemoryInformation) {
 		reserved = memory_information.reserved
 
 		# Setup the layers
 		loop (i = 0, i < LAYER_COUNT, i++) {
-			layers[i] = this as link + capacityof(LayerAllocator) + i * capacityof(Layer)
+			layers[i] = this as link + capacityof(PhysicalMemoryManager) + i * capacityof(PhysicalMemoryManagerLayer)
 		}
 
-		states = this as link + capacityof(LayerAllocator) + LAYER_COUNT * capacityof(Layer)
-		upper = (this as link + capacityof(LayerAllocator)) as Layer
-		lower = (this as link + capacityof(LayerAllocator) + capacityof(Layer)) as Layer
+		states = this as link + capacityof(PhysicalMemoryManager) + LAYER_COUNT * capacityof(PhysicalMemoryManagerLayer)
+		upper = (this as link + capacityof(PhysicalMemoryManager)) as PhysicalMemoryManagerLayer
+		lower = (this as link + capacityof(PhysicalMemoryManager) + capacityof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
 		count = L0_COUNT
 		size = L0_SIZE
 
@@ -264,13 +264,13 @@ LayerAllocator {
 			states += count / 8 # TODO: Can the result be uneven and break things?
 			count *= 2
 			size /= 2
-			upper += capacityof(Layer)
-			lower += capacityof(Layer)
+			upper += capacityof(PhysicalMemoryManagerLayer)
+			lower += capacityof(PhysicalMemoryManagerLayer)
 		}
 
 		# Fix the first and last layer
-		layers[0].upper = none as Layer
-		layers[LAYER_COUNT - 1].lower = none as Layer
+		layers[0].upper = none as PhysicalMemoryManagerLayer
+		layers[LAYER_COUNT - 1].lower = none as PhysicalMemoryManagerLayer
 
 		# Set all the reserved segments unavailable
 		loop (i = 0, i < reserved.size, i++) {
@@ -406,15 +406,24 @@ LayerAllocator {
 	# Summary:
 	# Allocates the specified amount of bytes and maps it to the specified virtual address.
 	# Returns the physical address of the allocated memory.
-	allocate(bytes: u64, virtual_address: link): link {
-		require(((virtual_address as u64) & (L7_SIZE - 1)) == 0, 'Virtual address was not aligned correctly')
-
+	allocate_unmapped(bytes: u64): link {
 		# Find the layer where we want to allocate the specified amount of bytes
 		layer = layer_index(bytes)
 
 		# Try allocating the memory directly from chosen layer
 		physical_address = layers[layer].allocate()
-		if physical_address !== none return physical_address
+
+		if physical_address !== none {
+			debug.write('Found available slab ')
+			debug.write_address(physical_address as link)
+			debug.write(' at layer ')
+			debug.write(layer)
+			debug.write(' for ')
+			debug.write(bytes)
+			debug.write_line(' bytes')
+
+			return physical_address
+		}
 
 		# If this point is reached, it means we could not find a suitable slab for the specified amount of bytes.
 		# We should look for available memory from the upper layers.
@@ -423,6 +432,14 @@ LayerAllocator {
 			if layers[i].next === none continue
 
 			slab = layers[i].take()
+			debug.write('Splitting slab ')
+			debug.write_address(slab as link)
+			debug.write(' at layer ')
+			debug.write(i)
+			debug.write(' for ')
+			debug.write(bytes)
+			debug.write_line(' bytes')
+
 			return layers[i].split(slab, layer)
 		}
 
@@ -433,13 +450,23 @@ LayerAllocator {
 	}
 
 	# Summary:
+	# Allocates the specified amount of bytes and maps it to the same virtual address.
+	# Returns the physical address of the allocated memory.
+	allocate(bytes: u64): link {
+		physical_address = allocate_unmapped(bytes)
+		kernel.mapper.map_region(physical_address, physical_address, bytes)
+
+		return physical_address
+	}
+
+	# Summary:
 	# Allocates the specified amount of bytes and maps it to the specified virtual address.
 	# Returns the physical address of the allocated memory.
 	allocate(bytes: u64, virtual_address: link): link {
 		require((virtual_address & (PAGE_SIZE - 1)) == 0, 'Virtual address was not aligned correctly')
 
-		physical_address = allocate(bytes)
-		mapper.map_region(virtual_address, physical_address, bytes)
+		physical_address = allocate_unmapped(bytes)
+		kernel.mapper.map_region(virtual_address, physical_address, bytes)
 
 		return physical_address
 	}
@@ -462,10 +489,10 @@ LayerAllocator {
 
 	# Summary: Deallocates the specified memory and unmaps it from the specified virtual address.
 	deallocate(address: link, virtual_address: link) {
-		physical_address = mapper.to_physical_address(virtual_address)
+		physical_address = kernel.mapper.to_physical_address(virtual_address)
 		if physical_address == INVALID_PHYSICAL_ADDRESS panic('Virtual addresses was not mapped upon deallocation')
 
 		size = deallocate(physical_address)
-		mapper.unmap_region(virtual_address, size)
+		kernel.mapper.unmap_region(virtual_address, size)
 	}
 }

@@ -35,7 +35,8 @@ export start(multiboot_information: link, interrupt_tables: link) {
 
 	layer_allocator_address = kernel.multiboot.initialize(multiboot_information, memory_information)
 
-	LayerAllocator.initialize(layer_allocator_address, memory_information)
+	PhysicalMemoryManager.initialize(layer_allocator_address, memory_information)
+	kernel.KernelHeap.initialize()
 
 	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(allocator)

@@ -3,14 +3,6 @@ namespace kernel.hpet
 
 constant MAIN_COUNTER_REGISTER = 0xF0
 
-pack AddressStructure {
-	address_space_id: u8 # 0: System memory, 1: System I/O
-	register_bit_width: u8
-	register_bit_offset: u8
-	reserved: u8
-	address: u64
-}
-
 pack HPETHeader {
 	header: SDTHeader
 	hardware_revision_id: u8

@@ -1,3 +1,11 @@
+pack AddressStructure {
+	address_space_id: u8 # 0: System memory, 1: System I/O
+	register_bit_width: u8
+	register_bit_offset: u8
+	reserved: u8
+	address: u64
+}
+
 pack RSDPDescriptor {
 	signature: u64
 	checksum: u8
@@ -274,4 +282,14 @@ export initialize(allocator: Allocator) {
 	if hpet_table !== none {
 		kernel.hpet.initialize(allocator, hpet_table)
 	}
+
+	fadt_table = find_table(rsdp, 'FACP') as kernel.acpi.FADT
+	debug.write('fadt-table: ') debug.write_address(fadt_table as u64) debug.write_line()
+	require(fadt_table !== none, 'Failed to initialize ACPI')
+
+	mcfg_table = find_table(rsdp, 'MCFG') as kernel.acpi.MCFG
+	debug.write('mcfg-table: ') debug.write_address(mcfg_table as u64) debug.write_line()
+	require(mcfg_table !== none, 'Failed to initialize MCFG')
+
+	kernel.acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
 }

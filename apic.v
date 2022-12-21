@@ -292,4 +292,6 @@ export initialize(allocator: Allocator) {
 	require(mcfg_table !== none, 'Failed to initialize MCFG')
 
 	kernel.acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
+
+	kernel.ahci.initialize(kernel.acpi.Parser.instance)
 }

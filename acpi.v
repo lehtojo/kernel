@@ -137,41 +137,39 @@ pack Capability {
 
 plain DeviceIdentifier {
 	address: link
-	hardware_id: HardwareId
+	id: HardwareId
 	revision_id: u8
 	class_code: u8
 	subclass_code: u8
 	programming_interface: u8
+	bar0: u32
+	bar1: u32
+	bar2: u32
+	bar3: u32
+	bar4: u32
+	bar5: u32
 	subsystem_id: u16
 	subsystem_vendor_id: u16
-	interrupt_line: u8
 	interrupt_pin: u8
-	capabilities: List<Capability>
+	interrupt_line: u8
 
-	init(
-		address: link,
-		hardware_id: HardwareId,
-		revision_id: u8,
-		class_code: u8,
-		subclass_code: u8,
-		programming_interface: u8,
-		subsystem_id: u16,
-		subsystem_vendor_id: u16,
-		interrupt_line: u8,
-		interrupt_pin: u8,
-		capabilities: List<Capability>
-	) {
+	init(address: link, id: HardwareId, revision_id: u8, class_code: u8, subclass_code: u8, programming_interface: u8, bar0: u32, bar1: u32, bar2: u32, bar3: u32, bar4: u32, bar5: u32, subsystem_id: u16, subsystem_vendor_id: u16, interrupt_pin: u8, interrupt_line: u8) {
 		this.address = address
-		this.hardware_id = hardware_id
+		this.id = id
 		this.revision_id = revision_id
 		this.class_code = class_code
 		this.subclass_code = subclass_code
 		this.programming_interface = programming_interface
+		this.bar0 = bar0
+		this.bar1 = bar1
+		this.bar2 = bar2
+		this.bar3 = bar3
+		this.bar4 = bar4
+		this.bar5 = bar5
 		this.subsystem_id = subsystem_id
 		this.subsystem_vendor_id = subsystem_vendor_id
-		this.interrupt_line = interrupt_line
 		this.interrupt_pin = interrupt_pin
-		this.capabilities = capabilities
+		this.interrupt_line = interrupt_line
 	}
 }
 
@@ -211,6 +209,10 @@ plain HostController {
 
 	read_u16(bus: u8, device: u8, function: u8, register: u8): u16 {
 		return compute_function_address(bus, device, function, register).(u16*)[]
+	}
+
+	read_u32(bus: u8, device: u8, function: u8, register: u8): u32 {
+		return compute_function_address(bus, device, function, register).(u32*)[]
 	}
 
 	print_device(id: HardwareId, class: u8, subclass: u8) {
@@ -285,9 +287,29 @@ plain HostController {
 
 	scan_function(bus: u8, device: u8, function: u8, devices: List<DeviceIdentifier>) {
 		id = HardwareId.new(read_u16(bus, device, function, REGISTER_VENDOR_ID), read_u16(bus, device, function, REGISTER_DEVICE_ID))
+		revision_id = read_u8(bus, device, function, REGISTER_REVISION_ID)
 		class_code = read_u8(bus, device, function, REGISTER_CLASS)
 		subclass_code = read_u8(bus, device, function, REGISTER_SUBCLASS)
 		programming_interface = read_u8(bus, device, function, REGISTER_PROGRAMMING_INTERFACE)
+		bar0 = read_u32(bus, device, function, REGISTER_BAR0)
+		bar1 = read_u32(bus, device, function, REGISTER_BAR1)
+		bar2 = read_u32(bus, device, function, REGISTER_BAR2)
+		bar3 = read_u32(bus, device, function, REGISTER_BAR3)
+		bar4 = read_u32(bus, device, function, REGISTER_BAR4)
+		bar5 = read_u32(bus, device, function, REGISTER_BAR5)
+		subsystem_id = read_u16(bus, device, function, REGISTER_SUBSYSTEM_ID)
+		subsystem_vendor_id = read_u16(bus, device, function, REGISTER_SUBSYSTEM_VENDOR_ID)
+		interrupt_pin = read_u8(bus, device, function, REGISTER_INTERRUPT_PIN)
+		interrupt_line = read_u8(bus, device, function, REGISTER_INTERRUPT_LINE)
+
+		devices.add(DeviceIdentifier(
+			none as link, id, revision_id,
+			class_code, subclass_code,
+			programming_interface,
+			bar0, bar1, bar2, bar3, bar4, bar5,
+			subsystem_id, subsystem_vendor_id,
+			interrupt_pin, interrupt_line
+		) using devices.allocator)
 
 		print_device(id, class_code, subclass_code)
 	}

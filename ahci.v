@@ -9,16 +9,16 @@ constant SATA_SIGNATURE_ATAPI = 0xEB140101 # SATAPI drive
 constant SATA_SIGNATURE_ENCLOSURE_MANAGEMENT_BRIDGE = 0xC33C0101 # Enclosure management bridge (SEMB)
 constant SATA_SIGNATURE_PORT_MULTIPLIER = 0x96690101 # Port multiplier
 
-constant ACHI_DEVICE_NONE = 0
-constant ACHI_DEVICE_SATA = 1
-constant ACHI_DEVICE_SATAPI = 2
-constant ACHI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE = 3
-constant ACHI_DEVICE_PORT_MULTIPLIER = 4
+constant AHCI_DEVICE_NONE = 0
+constant AHCI_DEVICE_SATA = 1
+constant AHCI_DEVICE_SATAPI = 2
+constant AHCI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE = 3
+constant AHCI_DEVICE_PORT_MULTIPLIER = 4
 
-constant ACHI_STATUS_FIS_RECEIVE_ENABLE = 0x0010   # FRE
-constant ACHI_STATUS_FID_RECEIVE_RUNNING = 0x4000  # FR
-constant ACHI_STATUS_COMMAND_LIST_START = 0x0001   # ST
-constant ACHI_STATUS_COMMAND_LIST_RUNNING = 0x8000 # CR
+constant AHCI_STATUS_FIS_RECEIVE_ENABLE = 0x0010   # FRE
+constant AHCI_STATUS_FID_RECEIVE_RUNNING = 0x4000  # FR
+constant AHCI_STATUS_COMMAND_LIST_START = 0x0001   # ST
+constant AHCI_STATUS_COMMAND_LIST_RUNNING = 0x8000 # CR
 
 constant PHYSICAL_REGION_DESCRIPTORS_PER_COMMAND_TABLE = 0x8
 constant MAX_PHYSICAL_REGION_DESCRIPTORS_PER_COMMAND_TABLE = 0xffff
@@ -212,39 +212,39 @@ get_device_type(ports: ControllerPort*, port: u32) {
 	detection = status & 0x0F
 	interface_power_management = (status |> 8) & 0x0F
 
-	if detection != PORT_DETECTION_PRESENT or interface_power_management != PORT_INTERFACE_POWER_MANAGEMENT_ACTIVE return ACHI_DEVICE_NONE
+	if detection != PORT_DETECTION_PRESENT or interface_power_management != PORT_INTERFACE_POWER_MANAGEMENT_ACTIVE return AHCI_DEVICE_NONE
 
 	return when(ports[port].signature) {
-		SATA_SIGNATURE_ATA => ACHI_DEVICE_SATA,
-		SATA_SIGNATURE_ATAPI => ACHI_DEVICE_SATAPI,
-		SATA_SIGNATURE_ENCLOSURE_MANAGEMENT_BRIDGE => ACHI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE,
-		SATA_SIGNATURE_PORT_MULTIPLIER => ACHI_DEVICE_PORT_MULTIPLIER,
-		else => ACHI_DEVICE_NONE
+		SATA_SIGNATURE_ATA => AHCI_DEVICE_SATA,
+		SATA_SIGNATURE_ATAPI => AHCI_DEVICE_SATAPI,
+		SATA_SIGNATURE_ENCLOSURE_MANAGEMENT_BRIDGE => AHCI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE,
+		SATA_SIGNATURE_PORT_MULTIPLIER => AHCI_DEVICE_PORT_MULTIPLIER,
+		else => AHCI_DEVICE_NONE
 	}
 }
 
 # Summary: Enables command processing on the specified port
 start_commands(port: ControllerPort*) {
 	# Wait until command lists are not being processed
-	loop ((port[].command_and_status & ACHI_STATUS_COMMAND_LIST_RUNNING) != 0) {}
+	loop ((port[].command_and_status & AHCI_STATUS_COMMAND_LIST_RUNNING) != 0) {}
 
 	# Enable command list processing and receiving of FIS packets
-	port[].command_and_status |= ACHI_STATUS_COMMAND_LIST_START
-	port[].command_and_status |= ACHI_STATUS_FIS_RECEIVE_ENABLE
+	port[].command_and_status |= AHCI_STATUS_COMMAND_LIST_START
+	port[].command_and_status |= AHCI_STATUS_FIS_RECEIVE_ENABLE
 }
 
 # Summary: Disables command processing on the specified port
 stop_commands(port: ControllerPort*) {
 	# Stop command list processing
-	port[].command_and_status &= !ACHI_STATUS_COMMAND_LIST_START
+	port[].command_and_status &= !AHCI_STATUS_COMMAND_LIST_START
 
 	# Stop receiving FIS packets
-	port[].command_and_status &= !ACHI_STATUS_FIS_RECEIVE_ENABLE
+	port[].command_and_status &= !AHCI_STATUS_FIS_RECEIVE_ENABLE
 
 	# Wait until both operations stop running
 	loop {
-		if (port[].command_and_status & ACHI_STATUS_COMMAND_LIST_RUNNING) != 0 continue
-		if (port[].command_and_status & ACHI_STATUS_FID_RECEIVE_RUNNING) != 0 continue
+		if (port[].command_and_status & AHCI_STATUS_COMMAND_LIST_RUNNING) != 0 continue
+		if (port[].command_and_status & AHCI_STATUS_FID_RECEIVE_RUNNING) != 0 continue
 		stop
 	}
 }
@@ -284,14 +284,14 @@ scan_ports(interface: ControllerInterface) {
 	# Map the controller so it can be accessed
 	mapper.map_region(interface as link, interface as link, capacityof(interface))
 
-	debug.write('ACHI: Scanning ports: Interface=')
+	debug.write('AHCI: Scanning ports: Interface=')
 	debug.write_address(interface)
 	debug.write(', Capabilities=')
 	debug.write_address(interface.host_capability)
 	debug.write_line()
 
 	# Allocate the configuration structures
-	debug.write_line('ACHI: Allocating primary configuration')
+	debug.write_line('AHCI: Allocating primary configuration')
 	configuration = Configuration() using KernelHeap
 
 	# Enter AHCI aware mode
@@ -299,9 +299,10 @@ scan_ports(interface: ControllerInterface) {
 
 	# Enable PCI interrupt line
 
-	# Enable bus mastering
+	# Enable bus mastering, so in other words the controller can initiate direct memory access (DMA) transactions.
+	# This means that the controller can access the main memory independently from CPU.
 
-	# Enable global interrupts
+	# Enable global interrupts, so that we can receive interrupts from the controller?
 	interface.global_host_control = interface.global_host_control | 2
 
 	ports = interface.ports_implemented
@@ -313,16 +314,16 @@ scan_ports(interface: ControllerInterface) {
 			type = get_device_type(interface.ports, i)
 
 			message = when(type) {
-				ACHI_DEVICE_SATA => 'SATA',
-				ACHI_DEVICE_SATAPI => 'SATAPI',
-				ACHI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE => 'Enclosure management bridge',
-				ACHI_DEVICE_PORT_MULTIPLIER => 'Port multiplier',
-				ACHI_DEVICE_NONE => 'Nothing',
+				AHCI_DEVICE_SATA => 'SATA',
+				AHCI_DEVICE_SATAPI => 'SATAPI',
+				AHCI_DEVICE_ENCLOSURE_MANAGEMENT_BRIDGE => 'Enclosure management bridge',
+				AHCI_DEVICE_PORT_MULTIPLIER => 'Port multiplier',
+				else => 'Nothing'
 			}
 
 			debug.write('AHCI: Port ') debug.write(i) debug.write(': ') debug.write_line(message)
 
-			if type == ACHI_DEVICE_SATA {
+			if type == AHCI_DEVICE_SATA {
 				# Configure the port
 				# configure_port((interface.ports + i * capacityof(ControllerPort)) as ControllerPort*)
 			}

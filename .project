@@ -1,0 +1,14 @@
+{
+	"configurations": [
+		{
+			"name": "Kernel",
+			"output": "kernel",
+			"default": true,
+			"debug": true,
+			"include": [
+				"./",
+				"./utility/"
+			]
+		}
+	]
+}

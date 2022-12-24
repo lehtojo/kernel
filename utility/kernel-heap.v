@@ -180,8 +180,8 @@ export plain Allocators<T, S> {
 			memory.copy(new_deallocators, deallocators, size * strideof(T))
 
 			# Deallocate the old allocator and deallocator lists
-			PhysicalMemoryManager.deallocate(allocators)
-			PhysicalMemoryManager.deallocate(deallocators)
+			PhysicalMemoryManager.instance.deallocate(allocators)
+			PhysicalMemoryManager.instance.deallocate(deallocators)
 
 			capacity = new_capacity
 			allocators = new_allocators

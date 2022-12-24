@@ -255,24 +255,24 @@ configure_port(configuration: Configuration, port: ControllerPort*, i: u32) {
 	stop_commands(port)
 
 	# Register a command list for the specified port
-	port[].command_list_base_address = configuration.lists + i * capacityof(CommandList)
-	memory.zero(port[].command_list_base_address, capacityof(CommandList))
+	port[].command_list_base_address = configuration.lists + i * sizeof(CommandList)
+	memory.zero(port[].command_list_base_address, sizeof(CommandList))
 
 	# Register a FIS packet for the specified port
-	port[].fis_base_address = configuration.fis + i * capacityof(FIS)
-	memory.zero(port[].fis_base_address, capacityof(FIS))
+	port[].fis_base_address = configuration.fis + i * sizeof(FIS)
+	memory.zero(port[].fis_base_address, sizeof(FIS))
 
 	# Register the command tables
 	headers: CommandHeader* = configuration.lists[i].headers
-	tables: CommandTable* = configuration.tables + i * COMMAND_TABLES_PER_COMMAND_LIST * capacityof(CommandTable)
+	tables: CommandTable* = configuration.tables + i * COMMAND_TABLES_PER_COMMAND_LIST * sizeof(CommandTable)
 
 	loop (i = 0, i < COMMAND_TABLES_PER_COMMAND_LIST, i++) {
 		# Register how many physical region descriptors there are in this table
 		headers[i].physical_region_descriptor_table_entry_count = PHYSICAL_REGION_DESCRIPTORS_PER_COMMAND_TABLE
 
 		# Register the command table
-		headers[i].command_table_descriptor_base_address = tables + i * capacityof(CommandTable)
-		memory.zero(headers[i].command_table_descriptor_base_address, capacityof(CommandTable))
+		headers[i].command_table_descriptor_base_address = tables + i * sizeof(CommandTable)
+		memory.zero(headers[i].command_table_descriptor_base_address, sizeof(CommandTable))
 	}
 
 	# Enable commands, because we are done configuring
@@ -282,7 +282,7 @@ configure_port(configuration: Configuration, port: ControllerPort*, i: u32) {
 # Summary: Scans the ports of the specified interface and finds attached devices
 scan_ports(interface: ControllerInterface) {
 	# Map the controller so it can be accessed
-	mapper.map_region(interface as link, interface as link, capacityof(interface))
+	mapper.map_region(interface as link, interface as link, sizeof(interface))
 
 	debug.write('AHCI: Scanning ports: Interface=')
 	debug.write_address(interface)
@@ -325,7 +325,7 @@ scan_ports(interface: ControllerInterface) {
 
 			if type == AHCI_DEVICE_SATA {
 				# Configure the port
-				# configure_port((interface.ports + i * capacityof(ControllerPort)) as ControllerPort*)
+				# configure_port((interface.ports + i * sizeof(ControllerPort)) as ControllerPort*)
 			}
 		}
 

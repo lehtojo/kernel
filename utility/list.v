@@ -13,7 +13,7 @@ List<T> {
 
 	init(allocator: Allocator, capacity: u64, fill: bool) {
 		this.allocator = allocator
-		this.data = allocator.allocate(sizeof(T) * capacity)
+		this.data = allocator.allocate(strideof(T) * capacity)
 		this.capacity = capacity
 
 		if fill { this.size = capacity }
@@ -37,10 +37,10 @@ List<T> {
 		}
 
 		new_capacity = half
-		new_data = allocator.allocate(sizeof(T) * new_capacity)
+		new_data = allocator.allocate(strideof(T) * new_capacity)
 
 		# Copy the current data to the allocated memory
-		memory.copy(new_data, data, sizeof(T) * size)
+		memory.copy(new_data, data, strideof(T) * size)
 
 		# Deallocate the old memory
 		allocator.deallocate(data)
@@ -53,10 +53,10 @@ List<T> {
 		if reservation <= capacity return
 
 		# Allocate more memory for data
-		new_data = allocator.allocate(sizeof(T) * reservation)
+		new_data = allocator.allocate(strideof(T) * reservation)
 
 		# Copy the current data to the allocated memory
-		memory.copy(new_data, data, sizeof(T) * size)
+		memory.copy(new_data, data, strideof(T) * size)
 
 		# Deallocate the old memory
 		allocator.deallocate(data)
@@ -77,9 +77,9 @@ List<T> {
 
 		if size >= capacity extend()
 
-		source = data + sizeof(T) * i
-		destination = source + sizeof(T)
-		bytes = sizeof(T) * (size - i)
+		source = data + strideof(T) * i
+		destination = source + strideof(T)
+		bytes = strideof(T) * (size - i)
 		memory.copy(destination, source, bytes)
 
 		data[i] = element
@@ -89,12 +89,12 @@ List<T> {
 	remove_at(i: u64) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 
-		destination = data + sizeof(T) * i
-		source = destination + sizeof(T)
-		memory.copy(destination, source, (size - i - 1) * sizeof(T))
+		destination = data + strideof(T) * i
+		source = destination + strideof(T)
+		memory.copy(destination, source, (size - i - 1) * strideof(T))
 
 		# Zero out the moved last element for safety
-		memory.zero(data + (size - 1) * sizeof(T), sizeof(T))
+		memory.zero(data + (size - 1) * strideof(T), strideof(T))
 
 		size--
 		shrink()

@@ -245,12 +245,12 @@ PhysicalMemoryManager {
 
 		# Setup the layers
 		loop (i = 0, i < LAYER_COUNT, i++) {
-			layers[i] = this as link + capacityof(PhysicalMemoryManager) + i * capacityof(PhysicalMemoryManagerLayer)
+			layers[i] = this as link + sizeof(PhysicalMemoryManager) + i * sizeof(PhysicalMemoryManagerLayer)
 		}
 
-		states = this as link + capacityof(PhysicalMemoryManager) + LAYER_COUNT * capacityof(PhysicalMemoryManagerLayer)
-		upper = (this as link + capacityof(PhysicalMemoryManager)) as PhysicalMemoryManagerLayer
-		lower = (this as link + capacityof(PhysicalMemoryManager) + capacityof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
+		states = this as link + sizeof(PhysicalMemoryManager) + LAYER_COUNT * sizeof(PhysicalMemoryManagerLayer)
+		upper = (this as link + sizeof(PhysicalMemoryManager)) as PhysicalMemoryManagerLayer
+		lower = (this as link + sizeof(PhysicalMemoryManager) + sizeof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
 		count = L0_COUNT
 		size = L0_SIZE
 
@@ -264,8 +264,8 @@ PhysicalMemoryManager {
 			states += count / 8 # TODO: Can the result be uneven and break things?
 			count *= 2
 			size /= 2
-			upper += capacityof(PhysicalMemoryManagerLayer)
-			lower += capacityof(PhysicalMemoryManagerLayer)
+			upper += sizeof(PhysicalMemoryManagerLayer)
+			lower += sizeof(PhysicalMemoryManagerLayer)
 		}
 
 		# Fix the first and last layer

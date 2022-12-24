@@ -83,7 +83,7 @@ export find_physical_memory_size(regions: List<Segment>): u64 {
 export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>): u64 {
 	debug.write_line('memory-map-regions: ')
 
-	position = capacityof(MemoryMapTag)
+	position = sizeof(MemoryMapTag)
 
 	loop (position < tag.size) {
 		entry = (tag as link + position) as MemoryMapEntry
@@ -163,7 +163,7 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 
 	section_headers.reserve(tag.section_count)
 
-	position = capacityof(SectionHeaderTableTag)
+	position = sizeof(SectionHeaderTableTag)
 	start: u64 = 0xffffffffffffffff
 	end: u64 = 0
 
@@ -196,7 +196,7 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 }
 
 export allocate_layer_allocator(regions: List<Segment>): link {
-	size = capacityof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * capacityof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
+	size = sizeof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * sizeof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
 
 	loop (i = 0, i < regions.size, i++) {
 		# Find the first available region that can store the layer allocator
@@ -252,7 +252,7 @@ export initialize(information: link, memory_information: SystemMemoryInformation
 	debug.write('multiboot-header-size: ')
 	debug.write_line(header.size)
 
-	position = capacityof(RootHeader)
+	position = sizeof(RootHeader)
 	kernel_region = Segment.new(REGION_UNKNOWN)
 	page_table_region = mapper.region()
 

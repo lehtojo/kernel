@@ -522,8 +522,8 @@ plain Parser {
 		mapper.map_region(mcfg as link, mcfg as link, mcfg.header.length)
 
 		# Compute how many memory map descriptors there are
-		descriptor_count = (mcfg.header.length - capacityof(MCFG)) / capacityof(MemoryMapDescriptor)
-		descriptors = (mcfg as link + capacityof(MCFG)) as MemoryMapDescriptor*
+		descriptor_count = (mcfg.header.length - sizeof(MCFG)) / sizeof(MemoryMapDescriptor)
+		descriptors = (mcfg as link + sizeof(MCFG)) as MemoryMapDescriptor*
 	
 		# Register all of the memory mapped IOs
 		loop (i = 0, i < descriptor_count, i++) {

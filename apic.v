@@ -88,7 +88,7 @@ export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): 
 	debug.write_address(header)
 	debug.write_line()
 
-	table_count = (header[].length - capacityof(SDTHeader)) / sizeof(u32)
+	table_count = (header[].length - sizeof(SDTHeader)) / strideof(u32)
 	signature_length = length_of(signature)
 
 	debug.write('rsdt-table-count: ')
@@ -106,7 +106,7 @@ export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): 
 			result = table
 		}
 
-		debug.write(table, sizeof(i32))
+		debug.write(table, strideof(i32))
 		debug.put(` `)
 	}
 
@@ -123,7 +123,7 @@ export find_table(rsdp: RSDPDescriptor20*, signature: link): link {
 
 	if revision === 0 {
 		rsdt: SDTHeader* = rsdp[].base.rsdt_address
-		tables: u32* = rsdt + capacityof(SDTHeader)
+		tables: u32* = rsdt + sizeof(SDTHeader)
 
 		return find_table_from_rsdt(rsdt, tables, signature)
 	}
@@ -159,7 +159,7 @@ export find_root_system_descriptor_table() {
 
 export process_madt_entries(madt: MADT*, information: ApicInformation) {
 	end = madt + madt[].header.length
-	entry = (madt + capacityof(MADT)) as MADTEntryHeader*
+	entry = (madt + sizeof(MADT)) as MADTEntryHeader*
 
 	loop (entry < end) {
 		type = entry[].type

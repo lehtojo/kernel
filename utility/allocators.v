@@ -3,7 +3,7 @@ Allocator {
 	open deallocate(address: link)
 
 	allocate<T>(): T* {
-		return allocate(capacityof(T))
+		return allocate(sizeof(T))
 	}
 }
 

@@ -99,20 +99,20 @@ export write_interrupt_entry(address: link, to: link, interrupt: i32) {
 	# Align the stack to 16 bytes
 	address[0] = 0x68 # push dword 0
 	(address + 1).(i32*)[] = interrupt
-	address += sizeof(i32) + 1
+	address += strideof(i32) + 1
 
 	# Push the interrupt number so that the handler knows which interrupt is being called
 	address[0] = 0x68 # push dword interrupt
 	(address + 1).(i32*)[] = interrupt
-	address += sizeof(i32) + 1
+	address += strideof(i32) + 1
 
 	# Jump to the interrupt handler
-	from = address + sizeof(i32) + 1
+	from = address + strideof(i32) + 1
 	offset = to - from
 
 	address[0] = 0xe9 # jmp to
 	(address + 1).(i32*)[] = offset
-	address += sizeof(i32) + 1
+	address += strideof(i32) + 1
 
 	return address + 1 # Align to 16 bytes
 }

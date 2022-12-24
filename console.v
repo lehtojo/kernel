@@ -8,7 +8,7 @@ next_line_address: link
 
 export initialize() {
 	address = 0xB8000
-	next_line_address = address + WIDTH * sizeof(u16)
+	next_line_address = address + WIDTH * strideof(u16)
 }
 
 export clear() {
@@ -32,7 +32,7 @@ export write_bytes(memory: link, size: u64) {
 
 export next_line() {
 	address = next_line_address
-	next_line_address = address + WIDTH * sizeof(u16)
+	next_line_address = address + WIDTH * strideof(u16)
 }
 
 # Summary: Writes the specified string to the console

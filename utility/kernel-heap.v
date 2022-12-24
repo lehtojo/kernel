@@ -14,13 +14,13 @@ KernelHeap {
 		if bytes <= 128 return heap.s128.allocate()
 		if bytes <= 256 return heap.s256.allocate()
 
-		bytes += sizeof(u64)
+		bytes += strideof(u64)
 		address = PhysicalMemoryManager.instance.allocate(bytes)
 		if address == none panic('Out of memory')
 
 		# Store the size of the allocation at the beginning of the allocated memory
 		address.(u64*)[] = bytes
-		return address + sizeof(u64)
+		return address + strideof(u64)
 	}
 
 	shared deallocate(address: link): link {
@@ -31,13 +31,13 @@ KernelHeap {
 		if heap.s256.deallocate(address) return
 
 		# Load the size of the allocation and deallocate the memory
-		address -= sizeof(u64)
+		address -= strideof(u64)
 		bytes = address.(u64*)[]
 		PhysicalMemoryManager.deallocate(address, bytes)
 	}
 
 	shared allocate<T>(): T* {
-		return allocate(capacityof(T))
+		return allocate(sizeof(T))
 	}
 }
 
@@ -55,7 +55,7 @@ s256: Allocators<SlabAllocator<u8[256]>, u8[256]>
 export plain SlabAllocator<T> {
 	slabs: u32
 	start: link
-	end => start + slabs * capacityof(T)
+	end => start + slabs * sizeof(T)
 
 	# Stores the states of all the slabs as bits. This should only be used for debugging.
 	states: link
@@ -79,7 +79,7 @@ export plain SlabAllocator<T> {
 
 	allocate() {
 		debug.write('Used slab allocator of ')
-		debug.write(capacityof(T))
+		debug.write(sizeof(T))
 		debug.write_line(' bytes')
 
 		if available != none {
@@ -87,7 +87,7 @@ export plain SlabAllocator<T> {
 
 			# NOTE: Debug mode only
 			# Set the bit for this slab
-			index = (result - start) as u64 / capacityof(T)
+			index = (result - start) as u64 / sizeof(T)
 			states[index / 8] |= 1 <| (index % 8)
 
 			next = result.(link*)[]
@@ -96,12 +96,12 @@ export plain SlabAllocator<T> {
 			allocations++
 			used++
 
-			memory.zero(result, capacityof(T))
+			memory.zero(result, sizeof(T))
 			return result
 		}
 
 		if position < slabs {
-			result = start + position * capacityof(T)
+			result = start + position * sizeof(T)
 
 			# NOTE: Debug mode only
 			# Set the bit for this slab
@@ -112,7 +112,7 @@ export plain SlabAllocator<T> {
 			allocations++
 			used++
 
-			memory.zero(result, capacityof(T))
+			memory.zero(result, sizeof(T))
 			return result
 		}
 
@@ -131,8 +131,8 @@ export plain SlabAllocator<T> {
 
 	deallocate(address: link) {
 		offset = (address - start) as u64
-		index = offset / capacityof(T)
-		require(offset - index * capacityof(T) == 0, 'Address did not point to the start of an allocated area')
+		index = offset / sizeof(T)
+		require(offset - index * sizeof(T) == 0, 'Address did not point to the start of an allocated area')
 
 		# NOTE: Debug mode only
 		# Ensure the slab is not already deallocated
@@ -145,7 +145,7 @@ export plain SlabAllocator<T> {
 	}
 
 	dispose() {
-		PhysicalMemoryManager.deallocate(start, slabs * capacityof(T))
+		PhysicalMemoryManager.deallocate(start, slabs * sizeof(T))
 		PhysicalMemoryManager.deallocate(states, slabs / 8)
 	}
 }
@@ -159,8 +159,8 @@ export plain Allocators<T, S> {
 	slabs: u32
 
 	init(slabs: u32) {
-		this.allocators = PhysicalMemoryManager.instance.allocate(ESTIMATED_MAX_ALLOCATORS * sizeof(T))
-		this.deallocators = PhysicalMemoryManager.instance.allocate(ESTIMATED_MAX_ALLOCATORS * sizeof(T))
+		this.allocators = PhysicalMemoryManager.instance.allocate(ESTIMATED_MAX_ALLOCATORS * strideof(T))
+		this.deallocators = PhysicalMemoryManager.instance.allocate(ESTIMATED_MAX_ALLOCATORS * strideof(T))
 		this.slabs = slabs
 	}
 
@@ -172,12 +172,12 @@ export plain Allocators<T, S> {
 		if size >= capacity {
 			# Allocate new allocator and deallocator lists
 			new_capacity = size * 2
-			new_allocators = PhysicalMemoryManager.instance.allocate(new_capacity * sizeof(T))
-			new_deallocators = PhysicalMemoryManager.instance.allocate(new_capacity * sizeof(T))
+			new_allocators = PhysicalMemoryManager.instance.allocate(new_capacity * strideof(T))
+			new_deallocators = PhysicalMemoryManager.instance.allocate(new_capacity * strideof(T))
 
 			# Copy the contents of the old allocator and deallocator lists to the new ones
-			memory.copy(new_allocators, allocators, size * sizeof(T))
-			memory.copy(new_deallocators, deallocators, size * sizeof(T))
+			memory.copy(new_allocators, allocators, size * strideof(T))
+			memory.copy(new_deallocators, deallocators, size * strideof(T))
 
 			# Deallocate the old allocator and deallocator lists
 			PhysicalMemoryManager.deallocate(allocators)
@@ -189,9 +189,9 @@ export plain Allocators<T, S> {
 		}
 
 		# Create a new allocator with its own memory
-		states = PhysicalMemoryManager.instance.allocate(slabs * capacityof(S))
+		states = PhysicalMemoryManager.instance.allocate(slabs * sizeof(S))
 
-		allocator = PhysicalMemoryManager.instance.allocate(capacityof(T)) as T
+		allocator = PhysicalMemoryManager.instance.allocate(sizeof(T)) as T
 		allocator.init(states, slabs)
 
 		# Add the new allocator
@@ -220,16 +220,16 @@ export plain Allocators<T, S> {
 		deallocator.dispose()
 
 		# Remove deallocator from the list
-		memory.copy(deallocators + i * sizeof(T), deallocators + (i + 1) * sizeof(T), (size - i - 1) * sizeof(T))
-		memory.zero(deallocators + (size - 1) * sizeof(T), sizeof(T))
+		memory.copy(deallocators + i * strideof(T), deallocators + (i + 1) * strideof(T), (size - i - 1) * strideof(T))
+		memory.zero(deallocators + (size - 1) * strideof(T), strideof(T))
 
 		# Find the corresponding allocator from the allocator list linearly, because we can not assume the list is sorted in any way
 		loop (j = 0, j < size, j++) {
 			if allocators[j] != deallocator continue
 
 			# Remove allocator from the list
-			memory.copy(allocators + j * sizeof(T), allocators + (j + 1) * sizeof(T), (size - j - 1) * sizeof(T))
-			memory.zero(allocators + (size - 1) * sizeof(T), sizeof(T))
+			memory.copy(allocators + j * strideof(T), allocators + (j + 1) * strideof(T), (size - j - 1) * strideof(T))
+			memory.zero(allocators + (size - 1) * strideof(T), strideof(T))
 			stop
 		}
 
@@ -256,11 +256,11 @@ export plain Allocators<T, S> {
 }
 
 initialize() {
-	s16 = PhysicalMemoryManager.instance.allocate(capacityof(Allocators<SlabAllocator<u8[16]>, u8[16]>)) as Allocators<SlabAllocator<u8[16]>, u8[16]>
-	s32 = PhysicalMemoryManager.instance.allocate(capacityof(Allocators<SlabAllocator<u8[32]>, u8[32]>)) as Allocators<SlabAllocator<u8[32]>, u8[32]>
-	s64 = PhysicalMemoryManager.instance.allocate(capacityof(Allocators<SlabAllocator<u8[64]>, u8[64]>)) as Allocators<SlabAllocator<u8[64]>, u8[64]>
-	s128 = PhysicalMemoryManager.instance.allocate(capacityof(Allocators<SlabAllocator<u8[128]>, u8[128]>)) as Allocators<SlabAllocator<u8[128]>, u8[128]>
-	s256 = PhysicalMemoryManager.instance.allocate(capacityof(Allocators<SlabAllocator<u8[256]>, u8[256]>)) as Allocators<SlabAllocator<u8[256]>, u8[256]>
+	s16 = PhysicalMemoryManager.instance.allocate(sizeof(Allocators<SlabAllocator<u8[16]>, u8[16]>)) as Allocators<SlabAllocator<u8[16]>, u8[16]>
+	s32 = PhysicalMemoryManager.instance.allocate(sizeof(Allocators<SlabAllocator<u8[32]>, u8[32]>)) as Allocators<SlabAllocator<u8[32]>, u8[32]>
+	s64 = PhysicalMemoryManager.instance.allocate(sizeof(Allocators<SlabAllocator<u8[64]>, u8[64]>)) as Allocators<SlabAllocator<u8[64]>, u8[64]>
+	s128 = PhysicalMemoryManager.instance.allocate(sizeof(Allocators<SlabAllocator<u8[128]>, u8[128]>)) as Allocators<SlabAllocator<u8[128]>, u8[128]>
+	s256 = PhysicalMemoryManager.instance.allocate(sizeof(Allocators<SlabAllocator<u8[256]>, u8[256]>)) as Allocators<SlabAllocator<u8[256]>, u8[256]>
 
 	s16.init(PhysicalMemoryManager.L0_SIZE / 16)
 	s32.init(PhysicalMemoryManager.L0_SIZE / 32)

@@ -495,4 +495,8 @@ PhysicalMemoryManager {
 		size = deallocate(physical_address)
 		kernel.mapper.unmap_region(virtual_address, size)
 	}
+
+	deallocate(address: link, bytes: u64) {
+		deallocate(address)
+	}
 }

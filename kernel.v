@@ -48,4 +48,8 @@ export start(multiboot_information: link, interrupt_tables: link) {
 	kernel.interrupts.enable()
 
 	loop {}
+
+	# TODO: Remove these. These are used to force compilation of some function.
+	kernel.elf.loader.load_executable(none as Array<u8>, none as List<kernel.scheduler.MemoryMapping>)
+	(none as kernel.scheduler.ProcessMemoryManager).allocate_region_anywhere(PAGE_SIZE, PAGE_SIZE)
 }

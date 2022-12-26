@@ -23,7 +23,7 @@ KernelHeap {
 		return address + strideof(u64)
 	}
 
-	shared deallocate(address: link): link {
+	shared deallocate(address: link) {
 		if heap.s16.deallocate(address) return
 		if heap.s32.deallocate(address) return
 		if heap.s64.deallocate(address) return
@@ -33,11 +33,15 @@ KernelHeap {
 		# Load the size of the allocation and deallocate the memory
 		address -= strideof(u64)
 		bytes = address.(u64*)[]
-		PhysicalMemoryManager.deallocate(address, bytes)
+		PhysicalMemoryManager.instance.deallocate(address, bytes)
 	}
 
 	shared allocate<T>(): T* {
 		return allocate(sizeof(T))
+	}
+
+	shared allocate<T>(count: u64): T* {
+		return allocate(count * sizeof(T))
 	}
 }
 
@@ -145,8 +149,8 @@ export plain SlabAllocator<T> {
 	}
 
 	dispose() {
-		PhysicalMemoryManager.deallocate(start, slabs * sizeof(T))
-		PhysicalMemoryManager.deallocate(states, slabs / 8)
+		PhysicalMemoryManager.instance.deallocate(start, slabs * sizeof(T))
+		PhysicalMemoryManager.instance.deallocate(states, slabs / 8)
 	}
 }
 

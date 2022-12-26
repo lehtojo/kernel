@@ -83,3 +83,7 @@ zero(address: link, size: u64) {
 		address[i] = 0
 	}
 }
+
+align(address, alignment) {
+	return (address + alignment - 1) & (-alignment)
+}

@@ -117,3 +117,36 @@ test(allocator: Allocator) {
 
 	interrupts.scheduler.add(process)
 }
+
+export test2(allocator: Allocator, memory_information: SystemMemoryInformation) {
+	symbols = memory_information.symbols
+	application_start = none as link
+	application_end = none as link
+
+	debug.write_line('Scheduler: Searching for the test application...')
+
+	loop (i = 0, i < symbols.size, i++) {
+		symbol = symbols[i]
+
+		if symbol.name == 'application_start' {
+			application_start = symbol.address
+			debug.write('Scheduler (test 2): Found start of application data at ')
+			debug.write_address(application_start)
+			debug.write_line()
+		} else symbol.name == 'application_end' {
+			application_end = symbol.address
+			debug.write('Scheduler (test 2): Found end of application data at ')
+			debug.write_address(application_end)
+			debug.write_line()
+		}
+	}
+
+	if application_start === none or application_end === none return
+
+	application_size = (application_end - application_start) as u64
+	application_data = Array<u8>(application_start, application_size)
+
+	process = kernel.scheduler.Process.from_executable(allocator, application_data)
+
+	#interrupts.scheduler.add(process)
+}

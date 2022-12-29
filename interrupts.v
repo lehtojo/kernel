@@ -161,6 +161,8 @@ export process(frame: TrapFrame*) {
 		debug.write_address(frame[].registers[].cs)
 		debug.write_line()
 		panic('Page fault')
+	} else code == 0x80 {
+		system_calls.process(frame)
 	} else {
 		default_handler()
 	}

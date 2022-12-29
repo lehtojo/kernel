@@ -18,7 +18,7 @@ echo "Failed to compile helper assembly files"
 exit 1
 fi
 
-v1 . ./utility/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin -base 0x104000 -system -a
+v1 . ./utility/ ./system-calls/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin -base 0x104000 -system -a
 
 if [[ $? != 0 ]]; then
 echo "Failed to compile kernel"

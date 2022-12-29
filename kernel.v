@@ -7,10 +7,20 @@ namespace kernel {
 	constant CODE_SEGMENT = 8
 	constant DATA_SEGMENT = 16
 
+	pack SymbolInformation {
+		name: String
+		address: link
+
+		shared new(name: String, address: link): SymbolInformation {
+			return pack { name: name, address: address } as SymbolInformation
+		}
+	}
+
 	plain SystemMemoryInformation {
 		regions: List<Segment>
 		reserved: List<Segment>
 		sections: List<elf.SectionHeader>
+		symbols: List<SymbolInformation>
 		physical_memory_size: u64
 	}
 }
@@ -32,24 +42,23 @@ export start(multiboot_information: link, interrupt_tables: link) {
 	memory_information.regions = List<Segment>(allocator)
 	memory_information.reserved = List<Segment>(allocator)
 	memory_information.sections = List<kernel.elf.SectionHeader>(allocator)
+	memory_information.symbols = List<kernel.SymbolInformation>(allocator)
 
 	layer_allocator_address = kernel.multiboot.initialize(multiboot_information, memory_information)
 
 	PhysicalMemoryManager.initialize(layer_allocator_address, memory_information)
 	kernel.KernelHeap.initialize()
+	kernel.HeapAllocator.initialize(allocator)
 
 	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(allocator)
 
 	kernel.scheduler.test(allocator)
+	kernel.scheduler.test2(kernel.HeapAllocator.instance, memory_information)
 
 	kernel.apic.initialize(allocator)
 
 	kernel.interrupts.enable()
 
 	loop {}
-
-	# TODO: Remove these. These are used to force compilation of some function.
-	kernel.elf.loader.load_executable(none as Array<u8>, none as List<kernel.scheduler.MemoryMapping>)
-	(none as kernel.scheduler.ProcessMemoryManager).allocate_region_anywhere(PAGE_SIZE, PAGE_SIZE)
 }

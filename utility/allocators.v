@@ -17,7 +17,10 @@ Allocator BufferAllocator {
 	}
 
 	override allocate(bytes: u64) {
-		if position + bytes > end return none as link
+		if position + bytes > end {
+			panic('Buffer allocator out of memory')
+			return none as link
+		}
 
 		result = position
 		position += bytes

@@ -14,13 +14,10 @@ KernelHeap {
 		if bytes <= 128 return heap.s128.allocate()
 		if bytes <= 256 return heap.s256.allocate()
 
-		bytes += strideof(u64)
 		address = PhysicalMemoryManager.instance.allocate(bytes)
 		if address == none panic('Out of memory')
 
-		# Store the size of the allocation at the beginning of the allocated memory
-		address.(u64*)[] = bytes
-		return address + strideof(u64)
+		return address
 	}
 
 	shared deallocate(address: link) {
@@ -30,10 +27,7 @@ KernelHeap {
 		if heap.s128.deallocate(address) return
 		if heap.s256.deallocate(address) return
 
-		# Load the size of the allocation and deallocate the memory
-		address -= strideof(u64)
-		bytes = address.(u64*)[]
-		PhysicalMemoryManager.instance.deallocate(address, bytes)
+		PhysicalMemoryManager.instance.deallocate(address)
 	}
 
 	shared allocate<T>(): T* {
@@ -42,6 +36,22 @@ KernelHeap {
 
 	shared allocate<T>(count: u64): T* {
 		return allocate(count * sizeof(T))
+	}
+}
+
+Allocator HeapAllocator {
+	shared instance: HeapAllocator
+
+	shared initialize(allocator: Allocator) {
+		instance = HeapAllocator() using allocator
+	}
+
+	override allocate(bytes: u64) {
+		return KernelHeap.allocate(bytes)
+	}
+
+	override deallocate(address: link) {
+		KernelHeap.deallocate(address)
 	}
 }
 
@@ -149,8 +159,8 @@ export plain SlabAllocator<T> {
 	}
 
 	dispose() {
-		PhysicalMemoryManager.instance.deallocate(start, slabs * sizeof(T))
-		PhysicalMemoryManager.instance.deallocate(states, slabs / 8)
+		PhysicalMemoryManager.instance.deallocate(start)
+		PhysicalMemoryManager.instance.deallocate(states)
 	}
 }
 

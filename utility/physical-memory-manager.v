@@ -471,7 +471,7 @@ PhysicalMemoryManager {
 		return physical_address
 	}
 
-	# Summary: Deallocates the specified memory.
+	# Summary: Deallocates the specified physical memory.
 	deallocate(address: link) {
 		require((address & (L7_SIZE - 1)) == 0, 'Physical address was not aligned correctly')
 
@@ -485,18 +485,5 @@ PhysicalMemoryManager {
 		if layers[0].owns(address) return layers[0].deallocate(address)
 
 		panic('Can not deallocate memory that has not been allocated')
-	}
-
-	# Summary: Deallocates the specified memory and unmaps it from the specified virtual address.
-	deallocate(address: link, virtual_address: link) {
-		physical_address = kernel.mapper.to_physical_address(virtual_address)
-		if physical_address == INVALID_PHYSICAL_ADDRESS panic('Virtual addresses was not mapped upon deallocation')
-
-		size = deallocate(physical_address)
-		kernel.mapper.unmap_region(virtual_address, size)
-	}
-
-	deallocate(address: link, bytes: u64) {
-		deallocate(address)
 	}
 }

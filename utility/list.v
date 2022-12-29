@@ -43,7 +43,9 @@ List<T> {
 		memory.copy(new_data, data, strideof(T) * size)
 
 		# Deallocate the old memory
-		allocator.deallocate(data)
+		if data !== none {
+			allocator.deallocate(data)
+		}
 
 		data = new_data
 		capacity = new_capacity
@@ -59,7 +61,9 @@ List<T> {
 		memory.copy(new_data, data, strideof(T) * size)
 
 		# Deallocate the old memory
-		allocator.deallocate(data)
+		if data !== none {
+			allocator.deallocate(data)
+		}
 
 		data = new_data
 		capacity = reservation
@@ -108,5 +112,15 @@ List<T> {
 	set(i: u64, element: T) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 		data[i] = element
+	}
+
+	clear() {
+		if data !== none {
+			allocator.deallocate(data)
+		}
+
+		data = none as T*
+		capacity = 0
+		size = 0
 	}
 }

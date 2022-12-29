@@ -324,6 +324,10 @@ kernel_entry:
 
 incbin "build/kernel.bin"
 
+application_start:
+incbin "hello"
+application_end:
+
 section .bss
 align 0x1000
 

@@ -1,27 +1,20 @@
 namespace kernel.scheduler
 
-pack MemoryMapping {
-	unaligned_virtual_address_start: u64
-	virtual_address_start: u64
-	physical_address_start: u64
-	size: u64
-
-	shared new(virtual_address_start: u64, physical_address_start: u64, size: u64): MemoryMapping {
-		return pack {
-			unaligned_virtual_address_start: virtual_address_start,
-			virtual_address_start: virtual_address_start,
-			physical_address_start: physical_address_start,
-			size: size
-		} as MemoryMapping
-	}
-}
-
-ProcessMemoryManager {
+plain ProcessMemory {
 	# Summary: Sorted list of virtual memory mappings (smallest to largest).
-	mappings: List<MemoryMapping>
+	allocations: List<MemoryMapping>
 
 	# Summary: Sorted list of available virtual memory regions (smallest to largest).
 	available_regions: List<Segment>
+
+	# Summary: Stores the paging table used for configuring the virtual memory of the process.
+	paging_table: PagingTable
+
+	init(allocator: Allocator) {
+		this.allocations = List<MemoryMapping>(allocator) using allocator
+		this.available_regions = List<Segment>(allocator) using allocator
+		this.paging_table = PagingTable() using allocator
+	}
 
 	allocate_region_anywhere(size: u64, alignment: u32): Optional<MemoryMapping> {
 		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
@@ -80,5 +73,15 @@ ProcessMemoryManager {
 
 		# TODO: Add the shrunken region back and keep the list sorted
 		return Optionals.new<MemoryMapping>(mapping)
+	}
+
+	dispose() {
+		# Deallocate all the memory
+		loop (i = 0, i < allocations.size, i++) {
+			mapping = allocations[i]
+
+			# Deallocate the physical allocation
+			KernelHeap.deallocate(mapping.physical_address_start)
+		}
 	}
 }

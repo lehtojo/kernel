@@ -195,6 +195,51 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 	return Segment.new(REGION_RESERVED, start as link, end as link)
 }
 
+export load_symbols(sections: List<elf.SectionHeader>, symbols: List<SymbolInformation>) {
+	# Find the symbol table section
+	symbol_table_section = none as elf.SectionHeader
+
+	loop (i = 0, i < sections.size, i++) {
+		section = sections[i]
+		if section.type != elf.ELF_SECTION_TYPE_SYMBOL_TABLE continue
+
+		symbol_table_section = section
+		stop
+	}
+
+	if symbol_table_section === none panic('Failed to find kernel symbol table')
+
+	# Load all the symbols inside the symbol table
+	symbol_count = symbol_table_section.info
+
+	# Load the string table that contains the symbol names
+	symbol_entry = symbol_table_section.virtual_address as elf.SymbolEntry
+	string_table = sections[symbol_table_section.link].virtual_address as link
+
+	debug.write('Multiboot: Loading symbols from ')
+	debug.write_address(symbols)
+	debug.write(' using string table at ')
+	debug.write_address(string_table)
+	debug.write_line()
+
+	loop (i = 0, i < symbol_count, i++) {
+		symbol_entry += sizeof(elf.SymbolEntry)
+
+		# Register the symbol
+		name = String.new(string_table + symbol_entry.name)
+		address = symbol_entry.value as link
+		symbols.add(SymbolInformation.new(name, address))
+
+		debug.write('Kernel symbol: ')
+		debug.put(`"`)
+		debug.write(name)
+		debug.put(`"`)
+		debug.put(`=`)
+		debug.write_address(address)
+		debug.write_line()
+	}
+}
+
 export allocate_layer_allocator(regions: List<Segment>): link {
 	size = sizeof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * sizeof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
 
@@ -243,6 +288,7 @@ export initialize(information: link, memory_information: SystemMemoryInformation
 	regions = memory_information.regions
 	reserved = memory_information.reserved
 	sections = memory_information.sections
+	symbols = memory_information.symbols
 
 	debug.write('multiboot-header: ')
 	debug.write_address(information)
@@ -278,6 +324,8 @@ export initialize(information: link, memory_information: SystemMemoryInformation
 		# Round to the next multiple of 8
 		position = (position + 7) & (-8)
 	}
+
+	load_symbols(sections, symbols)
 
 	require(kernel_region.type !== REGION_UNKNOWN, 'Failed to find kernel region')
 

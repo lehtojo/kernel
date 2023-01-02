@@ -21,7 +21,7 @@ Scheduler {
 	}
 
 	switch(frame: TrapFrame*, next: Process) {
-		debug.write('Switching to process ')
+		debug.write('Scheduler: Switching to process ')
 		debug.write(next.id)
 		debug.write_line()
 
@@ -31,7 +31,7 @@ Scheduler {
 	}
 
 	enter(frame: TrapFrame*, next: Process) {
-		debug.write('Entering to process ')
+		debug.write('Scheduler: Entering to process ')
 		debug.write_line(next.id)
 
 		if current !== next switch(frame, next)
@@ -43,24 +43,23 @@ Scheduler {
 		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
 		# TODO: Verify IOPL and RSP
 
-		debug.write('Scheduler tick: ')
-		debug.write('kernel-rsp: ')
+		debug.write('Scheduler: Kernel stack = ')
 		debug.write_address(registers_rsp())
-		debug.write(', ')
+		debug.write_line()
 
 		# Save the state of the current process
 		if current !== none {
 			current.save(frame)
 
+			debug.write('Scheduler: User process: ')
 			debug.write('rip=')
 			debug.write_address(current.registers[].rip)
 			debug.write(', r8=')
 			debug.write_address(current.registers[].r8)
 			debug.write(', rcx=')
 			debug.write_address(current.registers[].rcx)
+			debug.write_line()
 		}
-
-		debug.write_line()
 
 		# Choose the next process to execute
 		next = pick()
@@ -75,7 +74,7 @@ test(allocator: Allocator) {
 	registers = KernelHeap.allocate<RegisterState>()
 	process = Process(0, registers) using KernelHeap
 
-	debug.write('kernel-stack-address: ') debug.write_address(registers_rsp()) debug.write_line()
+	debug.write('Scheduler (test 1): Kernel stack address ') debug.write_address(registers_rsp()) debug.write_line()
 
 	# TODO: Create a test process
 	# Instructions:
@@ -87,8 +86,8 @@ test(allocator: Allocator) {
 	start = KernelHeap.allocate(0x100)
 	stack = ((start + 0x100) & (-16))
 
-	debug.write('test-process-start: ') debug.write_address(start) debug.write_line()
-	debug.write('test-process-stack: ') debug.write_address(stack) debug.write_line()
+	debug.write('Scheduler (test 1): Process code ') debug.write_address(start) debug.write_line()
+	debug.write('Scheduler (test 1): Process stack ') debug.write_address(stack) debug.write_line()
 
 	start[0] = 0x49
 	start[1] = 0xc7

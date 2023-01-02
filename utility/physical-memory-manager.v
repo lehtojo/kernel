@@ -119,16 +119,16 @@ PhysicalMemoryManagerLayer {
 
 	# Summary: Adds the specified entry into the available entries
 	add(physical_address: link) {
-		# Map the slab so that we can write into it
-		kernel.mapper.map_page(physical_address, physical_address)
-
 		element = physical_address as PhysicalMemoryManagerAvailableLayerElement
-		element.next = none as PhysicalMemoryManagerAvailableLayerElement
-		element.previous = last
+
+		# Use quick mapping in order to write to the physical address
+		mapped_element = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(physical_address)
+		mapped_element.next = none as PhysicalMemoryManagerAvailableLayerElement
+		mapped_element.previous = last
 
 		# Connect the currently last element to this new element
 		if last !== none {
-			last.next = element
+			kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(last as link).next = element
 		}
 
 		# Update the next entry if there is none
@@ -142,13 +142,22 @@ PhysicalMemoryManagerLayer {
 
 	# Summary: Removes the specified entry from the available entries
 	remove(element: PhysicalMemoryManagerAvailableLayerElement) {
-		if element.previous !== none { element.previous.next = element.next }
+		mapped_element = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(element as link)
+		element_previous = mapped_element.previous
+		element_next = mapped_element.next
 
-		if element.next !== none { element.next.previous = element.previous }
+		# Update the previous entry of the specified element
+		if element_previous !== none {
+			kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(element_previous as link).next = element_next
+		}
 
-		if element === next { next = element.next }
+		# Update the next entry of the specified element
+		if element_next !== none {
+			kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(element_next as link).previous = element_previous
+		}
 
-		if element === last { last = element.previous }
+		if element === next { next = element_next }
+		if element === last { last = element_previous }
 	}
 
 	# Summary:
@@ -158,8 +167,12 @@ PhysicalMemoryManagerLayer {
 		if next === none return none as PhysicalMemoryManagerAvailableLayerElement
 
 		result = next
-		next = result.next
-		next.previous = none as PhysicalMemoryManagerAvailableLayerElement
+
+		# Load the available element from the element we take
+		next = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(result as link).next
+
+		# Update the next element to be the first available element by settings its previous element to none
+		kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(next as link).previous = none as PhysicalMemoryManagerAvailableLayerElement
 
 		# Update the last available page to none if we have used all the pages
 		if next === none { last = none as link }
@@ -212,8 +225,8 @@ PhysicalMemoryManagerLayer {
 PhysicalMemoryManager {
 	shared instance: PhysicalMemoryManager
 
-	shared initialize(address: link, memory_information: kernel.SystemMemoryInformation) {
-		instance = PhysicalMemoryManager(memory_information) using address
+	shared initialize(memory_information: kernel.SystemMemoryInformation) {
+		instance = PhysicalMemoryManager(memory_information) using memory_information.physical_memory_manager_virtual_address
 	}
 
 	constant LAYER_COUNT = 8
@@ -288,14 +301,14 @@ PhysicalMemoryManager {
 		}
 
 		return
-		print(32)
+		#print(32)
 
 		iterator = layers[0].next
 
 		loop (iterator !== none) {
 			debug.write('Available ') debug.write_address(iterator as link) debug.write_line()
 
-			iterator = iterator.next
+			iterator = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(iterator as link).next
 		}
 	}
 

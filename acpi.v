@@ -175,13 +175,13 @@ plain DeviceIdentifier {
 
 plain HostController {
 	domain: Domain
-	address: link
+	physical_address: link
 	mapped_bus: i16
 	mapped_bus_address: link
 
-	init(domain: Domain, address: link) {
+	init(domain: Domain, physical_address: link) {
 		this.domain = domain
-		this.address = address
+		this.physical_address = physical_address
 		this.mapped_bus = -1
 		this.mapped_bus_address = 0
 	}
@@ -193,9 +193,7 @@ plain HostController {
 		start_bus = math.min(bus, domain.start)
 
 		mapped_bus = bus
-		mapped_bus_address = address + MEMORY_RANGE_PER_BUS * (bus - start_bus)
-
-		mapper.map_region(mapped_bus_address, mapped_bus_address, MEMORY_RANGE_PER_BUS)
+		mapped_bus_address = mapper.map_kernel_region(physical_address + MEMORY_RANGE_PER_BUS * (bus - start_bus), MEMORY_RANGE_PER_BUS)
 	}
 
 	compute_function_address(bus: u8, device: u8, function: u8, register: u8): link {
@@ -517,9 +515,6 @@ plain Parser {
 		debug.write('ACPI: MCFG revision=') debug.write(mcfg.header.revision) debug.write(', size: ') debug.write_line(mcfg.header.length)
 
 		# TODO: Some implementations check for overflows and abort upon failure, but why is this needed?
-	
-		# Map the table so that it can be accessed
-		mapper.map_region(mcfg as link, mcfg as link, mcfg.header.length)
 
 		# Compute how many memory map descriptors there are
 		descriptor_count = (mcfg.header.length - sizeof(MCFG)) / sizeof(MemoryMapDescriptor)
@@ -529,7 +524,7 @@ plain Parser {
 		loop (i = 0, i < descriptor_count, i++) {
 			descriptor = descriptors[i]
 
-			debug.write('PCI: Host controller at ')
+			debug.write('PCI: Host controller at physical address ')
 			debug.write_address(descriptor.base_address)
 			debug.write(', PCI buses ')
 			debug.write(descriptor.start_pci_bus)

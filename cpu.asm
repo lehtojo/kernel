@@ -16,6 +16,11 @@ shr rdx, 32
 wrmsr
 ret
 
+.global flush_tlb_local
+flush_tlb_local:
+invlpg [rdi]
+ret
+
 .global flush_tlb
 flush_tlb:
 mov rax, cr3

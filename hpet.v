@@ -68,7 +68,7 @@ TimerManager {
 	attach(registers: u64*) {
 		this.registers = registers
 
-		debug.write('hpet-registers: ')
+		debug.write('HPET: Registers=')
 		debug.write_address(registers)
 		debug.write_line()
 
@@ -78,10 +78,10 @@ TimerManager {
 		tick_period = (capabilities |> 32) / 1000000
 		timer_count = ((capabilities |> 8) & 15) + 1
 
-		debug.write('hpet-tick-period=')
+		debug.write('HPET: Tick period = ')
 		debug.write(tick_period)
 		debug.write_line('ns')
-		debug.write('hpet-timer-count=')
+		debug.write('HPET: Timer count = ')
 		debug.write(timer_count)
 		debug.write_line()
 
@@ -106,44 +106,41 @@ TimerManager {
 	}
 
 	print() {
-		debug.write('hpet-timers: ')
+		debug.write_line('HPET: Timers: ')
 
 		loop (i = 0, i < timers.size, i++) {
 			timer = timers[i]
 
-			debug.write('timer ')
+			debug.write('HPET: Timer ')
 			debug.write(timer.id)
 
-			if timer.periodic { debug.write(' (periodic) ') }
-			else { debug.put(` `) }
+			if timer.periodic {
+				debug.write_line(' (periodic)')
+			} else {
+				debug.write_line()
+			}
 		}
-
-		debug.write_line()
 	}
 }
 
 export initialize(allocator: Allocator, header: HPETHeader*) {
-	registers = header[].address.address as u64*
+	registers = mapper.map_kernel_page(header[].address.address as link) as u64*
 	require(registers !== none, 'Missing HPET registers')
 
-	debug.write('hpet-registers: ')
+	debug.write('HPET: Registers=')
 	debug.write_address(registers)
 	debug.write_line()
 
-	debug.write('hpet-register-offset: ')
+	debug.write('HPET: Register offset = ')
 	offset = header[].address.register_bit_offset
 	debug.write_line(offset)
 
-	debug.write('hpet-register-width: ')
+	debug.write('HPET: Register width = ')
 	width = header[].address.register_bit_width
 	debug.write_line(width)
 
-	debug.write('hpet-comparator-count: ')
+	debug.write('HPET: Comparator count = ')
 	debug.write_line((header[].information & 31) as i64)
-
-	debug.write('hpet-capabilities: ')
-
-	mapper.map_page(registers, registers)
 
 	manager = TimerManager(allocator) using allocator
 	manager.attach(registers)

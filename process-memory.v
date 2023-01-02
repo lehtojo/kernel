@@ -30,7 +30,7 @@ plain ProcessMemory {
 			region = available_regions[middle]
 
 			# Since we must support alignment, sometimes we need padding in order to make region aligned
-			padding: u64 = memory.align(region.start, alignment) - region.start
+			padding: u64 = memory.round_to(region.start, alignment) - region.start
 
 			if region.size >= (size + padding) {
 				# Because the region can store the specified amount of bytes, set it as candidate
@@ -60,7 +60,7 @@ plain ProcessMemory {
 		available_regions.remove_at(candidate)
 
 		# Compute the virtual start and end addresses of result region
-		virtual_address_start = memory.align(region.start, alignment)
+		virtual_address_start = memory.round_to(region.start, alignment)
 		virtual_address_end = virtual_address_start + size
 
 		mapping = MemoryMapping.new(region.start as u64, virtual_address_start as u64, size)

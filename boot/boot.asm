@@ -101,6 +101,9 @@ mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
 
 ; Identity map the first 1 GiB
 mov dword [abs L4_BASE], (L3_BASE + 3)
+; Point one L4 to the mapped 1 GiB, later the kernel will use the entry for operation
+mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3)
+
 mov dword [abs L3_BASE], (L2_BASE + 3)
 
 ; Initialize L2
@@ -148,7 +151,7 @@ or eax, (1 << 31) | (1 << 0)
 mov cr0, eax
 
 ; Insert address of TSS into GDT before loading it
-lea eax, [tss64]
+lea eax, [tss64] ; Use physical address
 mov word [gdt64_tss_address_0], ax
 shr eax, 16
 mov byte [gdt64_tss_address_1], al
@@ -162,6 +165,11 @@ jmp CODE_SEGMENT_64:enter_kernel
 
 [bits 64]
 enter_kernel:
+; Use kernel mapping in TSS RSPs and ISTs
+mov rax, KERNEL_MAP_BASE
+add qword [tss64_rsp0], rax
+add qword [tss64_ist1], rax
+
 ; Initialize segments
 mov ax, DATA_SEGMENT_64
 mov ds, ax
@@ -174,10 +182,22 @@ mov gs, ax
 mov ax, TSS_SELECTOR
 ltr ax
 
+mov rax, KERNEL_MAP_BASE
+
+; Use kernel mapping with the stack
+add rsp, rax
+
 ; Pass the multiboot information to the kernel
 mov edi, dword [multiboot_information]
+
 lea rsi, [abs interrupt_tables]
-jmp kernel_entry
+add rsi, rax
+
+; Jump to KERNEL_MAP_BASE + kernel_entry 
+lea rcx, [abs kernel_entry]
+add rcx, rax
+
+jmp rcx
 
 ; --- GDT (32-bit) ---
 
@@ -281,10 +301,12 @@ dd gdt64_start
 align 8
 tss64:
 dd 0 ; reserved
+tss64_rsp0:
 dq interrupt_stack_start ; rsp0
 dq 0 ; rsp1
 dq 0 ; rsp2
 dq 0 ; reserved
+tss64_ist1:
 dq interrupt_stack_start ; ist1
 dq 0 ; ist2
 dq 0 ; ist3
@@ -316,6 +338,9 @@ L1_COUNT equ (MAX_MEMORY / 0x1000)
 L2_COUNT equ (MAX_MEMORY / (0x1000 * 512))
 L3_COUNT equ 512
 L4_COUNT equ 512
+
+KERNEL_MAP_BASE equ 0xFFFF800000000000 ; First physical 1 GiB will be mapped here and thus the kernel is accessed through this virtual base address
+KERNEL_MAP_BASE_L4 equ 0x100 ; Index of the L4 paging entry that maps the first physical 1 GiB (kernel) 
 
 ; --- Kernel ---
 

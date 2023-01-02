@@ -1,6 +1,7 @@
 namespace kernel.mapper
 
 import 'C' flush_tlb()
+import 'C' flush_tlb_local(virtual_address: link)
 
 constant INVALID_PHYSICAL_ADDRESS = -1
 
@@ -34,6 +35,9 @@ constant L1_PHYSICAL_BASE: link = PAGE_MAP_PHYSICAL_ADDRESS + (L4_COUNT + L3_COU
 
 constant ENTRIES = 512
 
+# Summary: Stores the pages for each CPU used for mapping physical pages
+quickmap_physical_base: link
+
 # Structure:
 # [                                           L4 1                                          ] ... [                                           L4 512                                        ]
 # [                  L3 1                   ] ... [                  L3 512                 ]     [                  L3 1                   ] ... [                  L3 512                 ]
@@ -57,6 +61,17 @@ constant ENTRIES = 512
 # Number of L2 entries = 1 + (M - 1) / 4096 / 512
 # Number of L3 entries = 1 + (M - 1) / 4096 / 512^2
 # Number of L4 entries = 512 # Use the maximum amount so that we can use the last entry to edit the pages
+
+initialize() {
+	# Disable identity mapping of the first 1 GiB.
+	# Use high virtual address mapping for the kernel from now on.
+	# We can not map the kernel to the first 1 GiB for example, 
+	# because it is generally reserved for user applications. 
+	# However, the kernel must be mapped to the same virtual address region in each process 
+	# so that we do not have to switch page tables during system calls.
+	(L4_BASE).(u64*) = 0
+	flush_tlb()
+}
 
 # Summary: Returns the memory region that the mapper uses
 region(): Segment {
@@ -85,6 +100,15 @@ set_writable(entry: u64*) {
 	entry[] |= 2
 }
 
+# Summary: Controls caching of the specified page entry
+set_cached(entry: u64*, cache: bool) {
+	if cache {
+		entry[] &= !0b10000
+	} else {
+		entry[] |= 0b10000
+	}
+}
+
 # Summary: Sets the address of the specified page entry
 set_address(entry: u64*, physical_address: link) {
 	entry[] |= ((physical_address as u64) & 0x7fffffffff000)
@@ -103,7 +127,7 @@ to_physical_address(virtual_address: link): link {
 	l4_entry = L4_BASE.(u64*)[l4]
 	if not is_present(l4_entry) return INVALID_PHYSICAL_ADDRESS as link
 
-	l4_entry = address_from_page_entry(l4_entry)[l3]
+	l3_entry = address_from_page_entry(l4_entry)[l3]
 	if not is_present(l4_entry) return INVALID_PHYSICAL_ADDRESS as link
 
 	l2_entry = address_from_page_entry(l3_entry)[l2]
@@ -115,7 +139,18 @@ to_physical_address(virtual_address: link): link {
 	return address_from_page_entry(l1_entry) + offset
 }
 
-map_page(virtual_address: link, physical_address: link, flush: bool) {
+to_kernel_virtual_address(physical_address: link): link {
+	return KERNEL_MAP_BASE as link + physical_address as u64
+}
+
+to_kernel_virtual_address(physical_address: u64): link {
+	return KERNEL_MAP_BASE as link + physical_address
+}
+
+map_page(virtual_address: link, physical_address: link, cache: bool, flush: bool): link {
+	require((virtual_address & (PAGE_SIZE - 1)) == 0, 'Virtual address was not aligned correctly upon mapping')
+	require((physical_address & (PAGE_SIZE - 1)) == 0, 'Physical address was not aligned correctly upon mapping')
+
 	# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 	l1: u32 = ((virtual_address as u64) |> 12) & 0x1FF
 	l2: u32 = ((virtual_address as u64) |> 21) & 0x1FF
@@ -154,18 +189,21 @@ map_page(virtual_address: link, physical_address: link, flush: bool) {
 	set_address(l1_address, physical_address)
 	set_writable(l1_address)
 	set_present(l1_address)
+	set_cached(l1_address, cache)
 
 	if flush flush_tlb()
+
+	return virtual_address
 }
 
-map_page(virtual_address: link, physical_address: link) {
-	map_page(virtual_address, physical_address, true)
+map_page(virtual_address: link, physical_address: link): link {
+	return map_page(virtual_address, physical_address, true, true)
 }
 
-map_region(virtual_address_start: link, physical_address_start: link, size: u64) {
+map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {
 	physical_page = physical_address_start & (-PAGE_SIZE)
 	virtual_page = virtual_address_start & (-PAGE_SIZE)
-	last_physical_page = (physical_address_start + size) & (-PAGE_SIZE)
+	last_physical_page = (virtual_address_start + size) & (-PAGE_SIZE)
 	last_virtual_page = (physical_address_start + size) & (-PAGE_SIZE)
 
 	debug.write('Mapping region ')
@@ -175,11 +213,61 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64)
 	debug.write_line()
 
 	loop (physical_page <= last_physical_page) {
-		map_page(virtual_page, physical_page, false)
+		map_page(virtual_page, physical_page, true, false)
 
 		physical_page += PAGE_SIZE
 		virtual_page += PAGE_SIZE
 	}
 
 	flush_tlb()
+
+	return virtual_address_start & (-PAGE_SIZE) # Warning: Should not we return the unaligned virtual address?
+}
+
+map_kernel_page(physical_address: link): link {
+	map_page(physical_address, physical_address)
+	return KERNEL_MAP_BASE as link + physical_address as u64
+}
+
+map_kernel_region(physical_address: link, size: u64): link {
+	map_region(physical_address, physical_address, size)
+	return KERNEL_MAP_BASE as link + physical_address as u64
+}
+
+# Summary:
+# Maps the specified physical address to a specific virtual page and 
+# do not flush the paging tables, instead only update the mapped page.
+# Because only a specific virtual page is used, future calls will remove the mapping.
+# Returns the virtual address that can be used to access the specified physical address.
+quickmap(physical_address: link): link {
+	return map_kernel_page(physical_address)
+
+	# Use the quickmap page of the current CPU
+	cpu = 0 # TODO: Use the cpu id
+	quickmap_page = quickmap_physical_base + cpu * PAGE_SIZE
+
+	# Map the virtual page to the specified physical address, but do not flush, because that would not be quick
+	map_page(quickmap_page, physical_address, false, false)
+
+	# Instead, update only the mapped page
+	virtual_address = KERNEL_MAP_BASE as link + quickmap_page
+	#flush_tlb_local(virtual_address)
+	flush_tlb()
+
+	debug.write('Quickmapped ')
+	debug.write_address(physical_address)
+	debug.write(' to ')
+	debug.write_address(virtual_address)
+	debug.write_line()
+
+	return virtual_address
+}
+
+# Summary:
+# Maps the specified physical address to a specific virtual page and 
+# do not flush the paging tables, instead only update the mapped page.
+# Because only a specific virtual page is used, future calls will remove the mapping. 
+# Returns the virtual address that can be used to access the specified physical address.
+quickmap<T>(physical_address: link): T {
+	return quickmap(physical_address) as T
 }

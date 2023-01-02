@@ -7,12 +7,12 @@ address: link
 next_line_address: link
 
 export initialize() {
-	address = 0xB8000
+	address = kernel.mapper.map_kernel_page(0xb8000 as link)
 	next_line_address = address + WIDTH * strideof(u16)
 }
 
 export clear() {
-	video = 0xB8000 as u64*
+	video = kernel.mapper.map_kernel_page(0xb8000 as link) as u64*
 
 	loop (i = 0, i < 500, i++) {
 		video[i] = 0xff20ff20ff20ff20 # Clear with white spaces

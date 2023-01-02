@@ -84,6 +84,10 @@ zero(address: link, size: u64) {
 	}
 }
 
-align(address, alignment) {
+round_to(address, alignment) {
 	return (address + alignment - 1) & (-alignment)
+}
+
+round_to_page(address) {
+	return (address + PAGE_SIZE - 1) & (-PAGE_SIZE)
 }

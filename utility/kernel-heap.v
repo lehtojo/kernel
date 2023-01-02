@@ -8,6 +8,10 @@ KernelHeap {
 	shared allocate(bytes: u64): link {
 		require(bytes >= 0, 'Illegal allocation size')
 
+		debug.write('Allocating heap ')
+		debug.write(bytes)
+		debug.write_line(' bytes')
+
 		if bytes <= 16 return heap.s16.allocate()
 		if bytes <= 32 return heap.s32.allocate()
 		if bytes <= 64 return heap.s64.allocate()

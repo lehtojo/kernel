@@ -280,9 +280,9 @@ configure_port(configuration: Configuration, port: ControllerPort*, i: u32) {
 }
 
 # Summary: Scans the ports of the specified interface and finds attached devices
-scan_ports(interface: ControllerInterface) {
+scan_ports(interface_physical_address: link) {
 	# Map the controller so it can be accessed
-	mapper.map_region(interface as link, interface as link, sizeof(interface))
+	interface = mapper.map_kernel_region(interface_physical_address, sizeof(ControllerInterface)) as ControllerInterface
 
 	debug.write('AHCI: Scanning ports: Interface=')
 	debug.write_address(interface)
@@ -344,6 +344,6 @@ initialize(parser: kernel.acpi.Parser) {
 			continue
 		}
 
-		scan_ports(device.bar5 as ControllerInterface)
+		scan_ports(device.bar5 as link)
 	}
 }

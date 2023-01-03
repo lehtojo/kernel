@@ -102,13 +102,13 @@ mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
 ; Identity map the first 1 GiB
 mov dword [abs L4_BASE], (L3_BASE + 3)
 ; Point one L4 to the mapped 1 GiB, later the kernel will use the entry for operation
-mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3)
+mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3 + 4) ; Todo: Remove
 
 mov dword [abs L3_BASE], (L2_BASE + 3)
 
 ; Initialize L2
 mov edi, L2_BASE
-mov ebx, (L1_BASE + 3) ; Present | Writable
+mov ebx, (L1_BASE + 3 + 4) ; Present | Writable  ; Todo: Remove
 mov ecx, 512
 l2_mapper:
 mov dword [edi], ebx
@@ -119,7 +119,7 @@ jnz l2_mapper
 
 ; Initialize L1
 mov edi, L1_BASE
-mov ebx, 3 ; Present | Writable
+mov ebx, (3 + 4) ; Present | Writable ; Todo: Remove
 mov ecx, (512*512)
 l1_mapper:
 mov dword [edi], ebx
@@ -193,6 +193,10 @@ mov edi, dword [multiboot_information]
 lea rsi, [abs interrupt_tables]
 add rsi, rax
 
+; Pass the interrupt stack pointer
+lea rdx, [abs interrupt_stack_start]
+add rdx, rax
+
 ; Jump to KERNEL_MAP_BASE + kernel_entry 
 lea rcx, [abs kernel_entry]
 add rcx, rax
@@ -260,20 +264,20 @@ db      10010010b
 db      00000000b
 db      0x00
 
-; User code segment (selector = 0x18)
-dw      0x0000
-dw      0x0000
-db      0x00
-db      11111010b
-db      00100000b
-db      0x00
-
-; User data segment (selector = 0x20)
+; User data segment (selector = 0x18)
 dw      0x0000
 dw      0x0000
 db      0x00
 db      11110010b
 db      00000000b
+db      0x00
+
+; User code segment (selector = 0x20)
+dw      0x0000
+dw      0x0000
+db      0x00
+db      11111010b
+db      00100000b
 db      0x00
 
 ; TSS segment (selector = 0x28)

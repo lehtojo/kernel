@@ -38,10 +38,6 @@ namespace kernel.apic
 
 local_apic_registers: u32*
 
-# Summary: Reads the contents of a 64-bit model specific register specified by the id
-import 'C' read_msr(id: u64): u64
-import 'C' write_msr(id: u64, value: u64)
-
 constant APIC_BASE_MSR = 0x1B
 constant APIC_BASE_MSR_ENABLE = 0x800
 

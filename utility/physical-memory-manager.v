@@ -417,9 +417,8 @@ PhysicalMemoryManager {
 	}
 
 	# Summary:
-	# Allocates the specified amount of bytes and maps it to the specified virtual address.
-	# Returns the physical address of the allocated memory.
-	allocate_unmapped(bytes: u64): link {
+	# Allocates the specified amount of bytes and returns its physical address.
+	allocate_physical_region(bytes: u64): link {
 		# Find the layer where we want to allocate the specified amount of bytes
 		layer = layer_index(bytes)
 
@@ -463,25 +462,12 @@ PhysicalMemoryManager {
 	}
 
 	# Summary:
-	# Allocates the specified amount of bytes and maps it to the same virtual address.
-	# Returns the physical address of the allocated memory.
+	# Allocates the specified amount of bytes and maps it to kernel space.
+	# Returns the virtual address of the allocated memory.
 	allocate(bytes: u64): link {
-		physical_address = allocate_unmapped(bytes)
-		kernel.mapper.map_region(physical_address, physical_address, bytes)
+		physical_address = allocate_physical_region(bytes)
 
-		return physical_address
-	}
-
-	# Summary:
-	# Allocates the specified amount of bytes and maps it to the specified virtual address.
-	# Returns the physical address of the allocated memory.
-	allocate(bytes: u64, virtual_address: link): link {
-		require((virtual_address & (PAGE_SIZE - 1)) == 0, 'Virtual address was not aligned correctly')
-
-		physical_address = allocate_unmapped(bytes)
-		kernel.mapper.map_region(virtual_address, physical_address, bytes)
-
-		return physical_address
+		return kernel.mapper.map_kernel_region(physical_address, bytes)
 	}
 
 	# Summary: Deallocates the specified physical memory.

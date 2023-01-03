@@ -23,7 +23,9 @@ Scheduler {
 	switch(frame: TrapFrame*, next: Process) {
 		debug.write('Scheduler: Switching to process ')
 		debug.write(next.id)
-		debug.write_line()
+		debug.write(' (rip=')
+		debug.write_address(next.registers[].rip)
+		debug.write_line(')')
 
 		frame[].registers[] = next.registers[]
 
@@ -37,9 +39,18 @@ Scheduler {
 		if current !== next switch(frame, next)
 	}
 
+	pick_and_enter(frame: TrapFrame*) {
+		# Choose the next process to execute
+		next = pick()
+		if next === none return
+
+		# Switch to the next process
+		enter(frame, next)
+	}
+
 	tick(frame: TrapFrame*) {
 		registers = frame[].registers
-		require(registers[].cs == CODE_SEGMENT and registers[].userspace_ss == DATA_SEGMENT, 'Illegal segment-register')
+		#require(registers[].cs == KERNEL_CODE_SELECTOR and registers[].userspace_ss == KERNEL_DATA_SELECTOR, 'Illegal segment-register')
 		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
 		# TODO: Verify IOPL and RSP
 
@@ -61,12 +72,21 @@ Scheduler {
 			debug.write_line()
 		}
 
-		# Choose the next process to execute
-		next = pick()
-		if next === none return
+		pick_and_enter(frame)
+	}
 
-		# Switch to the next process
-		enter(frame, next)
+	exit(frame: TrapFrame*, process: Process) {
+		# Remove the specified process from the process list
+		loop (i = 0, i < processes.size, i++) {
+			if processes[i] != process continue
+			processes.remove_at(i)
+			stop
+		}
+
+		process.dispose()
+		KernelHeap.deallocate(process as link)
+
+		pick_and_enter(frame)
 	}
 }
 
@@ -78,8 +98,11 @@ test(allocator: Allocator) {
 
 	# TODO: Create a test process
 	# Instructions:
-	# mov r8, 42
+	# mov r8, 7
+	# mov rcx, 42
+	# mov rax, 33
 	# L0:
+	# syscall
 	# inc r8
 	# jmp L0
 
@@ -89,27 +112,46 @@ test(allocator: Allocator) {
 	debug.write('Scheduler (test 1): Process code ') debug.write_address(start) debug.write_line()
 	debug.write('Scheduler (test 1): Process stack ') debug.write_address(stack) debug.write_line()
 
-	start[0] = 0x49
-	start[1] = 0xc7
-	start[2] = 0xc0
-	start[3] = 0x07
-	start[4] = 0x00
-	start[5] = 0x00
-	start[6] = 0x00
+	# mov r8, 7
+	position = 0
+	start[position++] = 0x49
+	start[position++] = 0xc7
+	start[position++] = 0xc0
+	start[position++] = 0x07
+	start[position++] = 0x00
+	start[position++] = 0x00
+	start[position++] = 0x00
 
-	start[7] = 0x48
-	start[8] = 0xc7
-	start[9] = 0xc1
-	start[10] = 0x2a
-	start[11] = 0x00
-	start[12] = 0x00
-	start[13] = 0x00
+	# mov rcx, 42
+	start[position++] = 0x48
+	start[position++] = 0xc7
+	start[position++] = 0xc1
+	start[position++] = 0x2a
+	start[position++] = 0x00
+	start[position++] = 0x00
+	start[position++] = 0x00
 
-	start[14] = 0x49
-	start[15] = 0xff
-	start[16] = 0xc0
-	start[17] = 0xeb
-	start[18] = 0xfb
+	# mov rax, 33
+	start[position++] = 0x48
+	start[position++] = 0xc7
+	start[position++] = 0xc0
+	start[position++] = 0x21
+	start[position++] = 0x00
+	start[position++] = 0x00
+	start[position++] = 0x00
+
+	# syscall
+	start[position++] = 0x0f
+	start[position++] = 0x05
+
+	# inc r8
+	start[position++] = 0x49
+	start[position++] = 0xff
+	start[position++] = 0xc0
+
+	# jmp L0
+	start[position++] = 0xeb
+	start[position++] = 0xf9
 
 	process.registers[].rip = start
 	process.registers[].userspace_rsp = stack

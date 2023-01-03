@@ -51,12 +51,20 @@ plain PagingTable {
 
 		if mapper.is_present(entry) {
 			# Load the paging table from entry 
-			l4 = mapper.address_from_page_entry(entry) as PagingTable
+			l4 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 		} else {
 			# Create the paging table for the entry
 			l4 = PagingTable() using allocator
+			l4_physical_address = mapper.to_physical_address(l4 as link)
+			debug.write('Paging: Allocated L4 table ')
+			debug.write_address(l4 as link)
+			debug.write(' at physical address ')
+			debug.write_address(l4_physical_address)
+			debug.write_line()
+
 			entry_address = entries + l4_index * sizeof(u64)
-			mapper.set_address(entry_address, l4 as link)
+
+			mapper.set_address(entry_address, l4_physical_address)
 			mapper.set_writable(entry_address)
 			mapper.set_present(entry_address)
 		}
@@ -66,12 +74,20 @@ plain PagingTable {
 
 		if mapper.is_present(entry) {
 			# Load the paging table from entry 
-			l3 = mapper.address_from_page_entry(entry) as PagingTable
+			l3 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 		} else {
 			# Create the paging table for the entry
 			l3 = PagingTable() using allocator
+			l3_physical_address = mapper.to_physical_address(l3 as link)
+			debug.write('Paging: Allocated L3 table ')
+			debug.write_address(l3 as link)
+			debug.write(' at physical address ')
+			debug.write_address(l3_physical_address)
+			debug.write_line()
+
 			entry_address = l4.entries + l3_index * sizeof(u64)
-			mapper.set_address(entry_address, l3 as link)
+
+			mapper.set_address(entry_address, l3_physical_address)
 			mapper.set_writable(entry_address)
 			mapper.set_present(entry_address)
 		}
@@ -81,12 +97,20 @@ plain PagingTable {
 
 		if mapper.is_present(entry) {
 			# Load the paging table from entry 
-			l2 = mapper.address_from_page_entry(entry) as PagingTable
+			l2 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 		} else {
 			# Create the paging table for the entry
 			l2 = PagingTable() using allocator
+			l2_physical_address = mapper.to_physical_address(l2 as link)
+			debug.write('Paging: Allocated L2 table ')
+			debug.write_address(l2 as link)
+			debug.write(' at physical address ')
+			debug.write_address(l2_physical_address)
+			debug.write_line()
+
 			entry_address = l3.entries + l2_index * sizeof(u64)
-			mapper.set_address(entry_address, l2 as link)
+
+			mapper.set_address(entry_address, l2_physical_address)
 			mapper.set_writable(entry_address)
 			mapper.set_present(entry_address)
 		}
@@ -129,19 +153,19 @@ plain PagingTable {
 		entry = entries[l4_index]
 		if not mapper.is_present(entry) return Optionals.empty<link>()
 
-		l4 = mapper.address_from_page_entry(entry) as PagingTable
+		l4 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 
 		# Load the L3 paging table
 		entry = l4.entries[l3_index]
 		if not mapper.is_present(entry) return Optionals.empty<link>()
 
-		l3 = mapper.address_from_page_entry(entry) as PagingTable
+		l3 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 
 		# Load the L2 paging table
 		entry = l3.entries[l2_index]
 		if not mapper.is_present(entry) return Optionals.empty<link>()
 
-		l2 = mapper.address_from_page_entry(entry) as PagingTable
+		l2 = mapper.virtual_address_from_page_entry(entry) as PagingTable
 
 		# Load the L1 entry
 		entry = l2.entries[l1_index]
@@ -163,7 +187,7 @@ plain PagingTable {
 			if not mapper.is_present(entry) continue
 
 			# Dispose the table, its tables and so on until the bottom layer is reached 
-			table = mapper.address_from_page_entry(entry) as PagingTable
+			table = mapper.virtual_address_from_page_entry(entry) as PagingTable
 			table.dispose(layer - 1)
 		}
 

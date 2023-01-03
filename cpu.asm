@@ -16,6 +16,16 @@ shr rdx, 32
 wrmsr
 ret
 
+.global write_cr4
+write_cr4:
+mov cr4, rdi
+ret
+
+.global read_cr4
+read_cr4:
+mov rax, cr4
+ret
+
 .global flush_tlb_local
 flush_tlb_local:
 invlpg [rdi]
@@ -147,7 +157,84 @@ add rsp, 16 # Remove the interrupt number and padding (Added by the interrupt en
 sti # Enable interrupts
 iretq
 
+.global system_call_entry
+system_call_entry:
+# Interrupts are disabled
+cli
+
+# Save the user stack pointer and load the kernel stack pointer
+mov qword [gs:16], rsp
+mov rsp, [gs:8]
+
+# User ss
+pushq 0x18
+push qword [gs:16] # User rsp
+push r11 # RFLAGS
+pushq 0x20 # User cs
+push rcx # User RIP
+pushq 0 # Padding
+pushq 0x80 # "System call interrupt"
+
+push r15
+push r14
+push r13
+push r12
+push r11
+push r10
+push r9
+push r8
+push rax
+push rcx
+push rdx
+push rbx
+push rsp
+push rbp
+push rsi
+push rdi
+
+mov rax, rsp # Save the address of the register state
+sub rsp, 24 # Reserve memory for a trap frame object
+
+mov qword ptr [rsp], 0
+mov qword ptr [rsp+8], 0
+mov qword ptr [rsp+16], rax # Pass the register state
+
+mov rdi, rsp
+call _VN6kernel10interrupts7processEPP9TrapFrame
+
+add rsp, 24 # Remove the trap frame object and the padding
+
+pop rdi
+pop rsi
+pop rbp
+add rsp, 8 # Skip restoring rsp
+pop rbx
+pop rdx
+pop rcx
+pop rax
+pop r8
+pop r9
+pop r10
+pop r11
+pop r12
+pop r13
+pop r14
+pop r15
+
+add rsp, 16 # Remove the interrupt number and padding
+pop rcx
+add rsp, 16
+
+pop rsp
+sti
+sysretq
+
 .global get_interrupt_handler
 get_interrupt_handler:
-lea rax, [interrupt_entry]
+lea rax, [rip+interrupt_entry]
+ret
+
+.global get_system_call_handler
+get_system_call_handler:
+lea rax, [rip+system_call_entry]
 ret

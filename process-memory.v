@@ -14,6 +14,10 @@ plain ProcessMemory {
 		this.allocations = List<MemoryMapping>(allocator) using allocator
 		this.available_regions = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
+
+		# Kernel regions must be mapped to every process, so that the kernel does not need to 
+		# change the paging tables during system calls in order to access the kernel memory.
+		mapper.map_kernel_entry(paging_table as u64*)
 	}
 
 	allocate_region_anywhere(size: u64, alignment: u32): Optional<MemoryMapping> {
@@ -81,7 +85,7 @@ plain ProcessMemory {
 			mapping = allocations[i]
 
 			# Deallocate the physical allocation
-			KernelHeap.deallocate(mapping.physical_address_start)
+			KernelHeap.deallocate(mapping.physical_address_start as link)
 		}
 	}
 }

@@ -69,7 +69,8 @@ initialize() {
 	# because it is generally reserved for user applications. 
 	# However, the kernel must be mapped to the same virtual address region in each process 
 	# so that we do not have to switch page tables during system calls.
-	(L4_BASE).(u64*) = 0
+	l4_base = L4_BASE
+	l4_base.(u64*)[] = 0
 	flush_tlb()
 }
 
@@ -80,6 +81,18 @@ region(): Segment {
 	return Segment.new(REGION_RESERVED, start, end)
 }
 
+# Summary: Maps the kernel regions from the current paging tables to the specified L4 entries
+map_kernel_entry(entries: u64*) {
+	l4_base = L4_BASE
+	entries[KERNEL_MAP_BASE_L4] = l4_base.(u64*)[KERNEL_MAP_BASE_L4]
+}
+
+print_kernel_entry() {
+	debug.write('Kernel entry: ')
+	l4_base = L4_BASE
+	debug.write_line(l4_base.(u64*)[KERNEL_MAP_BASE_L4])
+}
+
 # Summary: Returns whether the specified page entry is present
 is_present(entry: u64): bool {
 	return entry & 1
@@ -88,11 +101,22 @@ is_present(entry: u64): bool {
 # Summary: Marks the specified page entry present
 set_present(entry: u64*) {
 	entry[] |= 1
+
+	# Todo: Remove
+	entry[] |= 4
+	entry[] |= 1
+	entry[] |= 16
 }
 
 # Summary: Returns the physical address stored inside the specified page entry
 address_from_page_entry(entry: u64): u64* {
 	return entry & 0x7fffffffff000
+}
+
+# Summary: Returns the physical address stored inside the specified page entry
+virtual_address_from_page_entry(entry: u64): u64* {
+	physical_address: link = entry & 0x7fffffffff000
+	return map_kernel_page(physical_address) as u64*
 }
 
 # Summary: Sets the specified page entry writable
@@ -116,25 +140,25 @@ set_address(entry: u64*, physical_address: link) {
 
 to_physical_address(virtual_address: link): link {
 	# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
-	offset = (virtual_address as u64) & 0xFFF
-	l1: u32 = ((virtual_address as u64) |> 12) & 0x1FF
-	l2: u32 = ((virtual_address as u64) |> 21) & 0x1FF
-	l3: u32 = ((virtual_address as u64) |> 30) & 0x1FF
-	l4: u32 = ((virtual_address as u64) |> 39) & 0x1FF
+	offset = virtual_address & 0xFFF
+	l1: u32 = (virtual_address |> 12) & 0b111111111
+	l2: u32 = (virtual_address |> 21) & 0b111111111
+	l3: u32 = (virtual_address |> 30) & 0b111111111
+	l4: u32 = (virtual_address |> 39) & 0b111111111
 
-	if l1 >= L1_COUNT or l2 >= L2_COUNT or l3 >= L3_COUNT or l4 >= L4_COUNT return INVALID_PHYSICAL_ADDRESS as link
+	l4_base = L4_BASE
+	l4_entry = l4_base.(u64*)[l4]
+	debug.write(l4) debug.write(' => ') debug.write_line(l4_entry)
+	if not is_present(l4_entry) panic('Virtual address was not mapped (L4)')
 
-	l4_entry = L4_BASE.(u64*)[l4]
-	if not is_present(l4_entry) return INVALID_PHYSICAL_ADDRESS as link
+	l3_entry = virtual_address_from_page_entry(l4_entry)[l3]
+	if not is_present(l3_entry) panic('Virtual address was not mapped (L3)')
 
-	l3_entry = address_from_page_entry(l4_entry)[l3]
-	if not is_present(l4_entry) return INVALID_PHYSICAL_ADDRESS as link
+	l2_entry = virtual_address_from_page_entry(l3_entry)[l2]
+	if not is_present(l2_entry) panic('Virtual address was not mapped (L2)')
 
-	l2_entry = address_from_page_entry(l3_entry)[l2]
-	if not is_present(l2_entry) return INVALID_PHYSICAL_ADDRESS as link
-
-	l1_entry = address_from_page_entry(l2_entry)[l1]
-	if not is_present(l1_entry) return INVALID_PHYSICAL_ADDRESS as link
+	l1_entry = virtual_address_from_page_entry(l2_entry)[l1]
+	if not is_present(l1_entry) panic('Virtual address was not mapped (L1)')
 
 	return address_from_page_entry(l1_entry) + offset
 }

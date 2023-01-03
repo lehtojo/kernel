@@ -65,21 +65,32 @@ Process {
 		this.registers = registers
 		this.memory = memory
 
-		registers[].cs = CODE_SEGMENT
+		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG
-		registers[].userspace_ss = DATA_SEGMENT
+		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 	}
 
 	init(id: u64, registers: RegisterState*) {
 		this.id = id
 		this.registers = registers
 
-		registers[].cs = CODE_SEGMENT
+		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG
-		registers[].userspace_ss = DATA_SEGMENT
+		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 	}
 
 	save(frame: TrapFrame*) {
 		registers[] = frame[].registers[]
+	}
+
+	dispose() {
+		# Dispose the register state
+		if registers !== none KernelHeap.deallocate(registers)
+
+		# Dispose the process memory
+		if memory !== none {
+			memory.dispose()
+			KernelHeap.deallocate(registers)
+		}
 	}
 }

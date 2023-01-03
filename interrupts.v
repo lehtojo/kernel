@@ -123,7 +123,7 @@ export set_interrupt(index: u32, privilege: u8, handler: link) {
 
 	descriptor: InterruptDescriptor
 	descriptor.offset_1 = (handler as u64)
-	descriptor.selector = 8
+	descriptor.selector = KERNEL_CODE_SELECTOR
 	descriptor.interrupt_stack_table_offset = 1
 	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_INTERRUPT
 	descriptor.offset_2 = ((handler as u64) |> 16)
@@ -139,7 +139,7 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 
 	descriptor: InterruptDescriptor
 	descriptor.offset_1 = (handler as u64)
-	descriptor.selector = 8
+	descriptor.selector = KERNEL_CODE_SELECTOR
 	descriptor.interrupt_stack_table_offset = 1
 	descriptor.type_attributes = PRESENT_BIT | (privilege <| 5) | GATE_TYPE_TRAP
 	descriptor.offset_2 = ((handler as u64) |> 16)
@@ -160,7 +160,14 @@ export process(frame: TrapFrame*) {
 		debug.write('Page fault at address ')
 		debug.write_address(frame[].registers[].cs)
 		debug.write_line()
+		debug.write_address(frame[].registers[].rflags)
+		debug.write_line()
 		panic('Page fault')
+	} else code == 0x0d {
+		debug.write('General protection fault at address ')
+		debug.write_address(frame[].registers[].cs)
+		debug.write_line()
+		panic('General protection fault')
 	} else code == 0x80 {
 		system_calls.process(frame)
 	} else {

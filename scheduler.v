@@ -120,8 +120,8 @@ test(allocator: Allocator) {
 	program_text_section_virtual_address = 0x400000 as link
 	program_stack_virtual_address = 0x690000 as link
 
-	#memory.paging_table.map_page(HeapAllocator.instance, program_text_section_virtual_address, text_section_physical_address)
-	#memory.paging_table.map_page(HeapAllocator.instance, program_stack_virtual_address, stack_physical_address)
+	memory.paging_table.map_page(HeapAllocator.instance, program_text_section_virtual_address, text_section_physical_address)
+	memory.paging_table.map_page(HeapAllocator.instance, program_stack_virtual_address, stack_physical_address)
 
 	# mov r8, 7
 	position = 0
@@ -165,8 +165,8 @@ test(allocator: Allocator) {
 	text_section_virtual_address[position++] = 0xf9
 
 	process = Process(registers, memory) using KernelHeap
-	process.registers[].rip = text_section_virtual_address
-	process.registers[].userspace_rsp = stack_virtual_address + 0x100
+	process.registers[].rip = program_text_section_virtual_address
+	process.registers[].userspace_rsp = program_stack_virtual_address + 0x100
 
 	interrupts.scheduler.add(process)
 }

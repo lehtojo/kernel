@@ -13,8 +13,16 @@ namespace kernel {
 	constant KERNEL_MAP_BASE = 0xFFFF800000000000
 	constant KERNEL_MAP_BASE_L4 = 0x100
 
+	constant GDTR_VIRTUAL_ADDRESS = 0x1000
+	constant GDT_VIRTUAL_ADDRESS = 0x2000
+
+	import 'C' write_cr3(value: u64)
 	import 'C' write_cr4(value: u64)
+
+	import 'C' read_cr3(): u64
 	import 'C' read_cr4(): u64
+
+	import 'C' write_gdtr(value: u64)
 
 	# Summary: Reads the contents of a 64-bit model specific register specified by the id
 	import 'C' read_msr(id: u64): u64
@@ -42,11 +50,13 @@ namespace kernel {
 	}
 }
 
-export start(multiboot_information: link, interrupt_tables: link, interrupt_stack_pointer: link) {
+export start(
+	multiboot_information: link,
+	interrupt_tables: link,
+	interrupt_stack_pointer: link,
+	gdtr_physical_address: link
+) {
 	kernel.serial.initialize()
-
-	kernel.mapper.print_kernel_entry()
-	kernel.mapper.initialize()
 
 	allocator = BufferAllocator(buffer: u8[0x2000], 0x2000)
 
@@ -73,6 +83,9 @@ export start(multiboot_information: link, interrupt_tables: link, interrupt_stac
 	kernel.KernelHeap.initialize()
 	kernel.HeapAllocator.initialize(allocator)
 
+	kernel.Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
+	kernel.mapper.remap()
+
 	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(allocator)
 
@@ -82,7 +95,6 @@ export start(multiboot_information: link, interrupt_tables: link, interrupt_stac
 	kernel.apic.initialize(allocator)
 
 	kernel.system_calls.initialize()
-	kernel.Processor.initialize(interrupt_stack_pointer)
 
 	kernel.interrupts.enable()
 

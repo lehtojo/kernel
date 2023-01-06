@@ -21,6 +21,36 @@ constant PAGING_TABLE_ENTRY_COUNT = 512
 plain PagingTable {
 	entries: u64[PAGING_TABLE_ENTRY_COUNT]
 
+	# Summary: Sets the CR3 register to point to this paging table
+	use() {
+		physical_address = mapper.to_physical_address(this as link) as u64
+
+		debug.write('Paging: Switching to paging table ')
+		debug.write_address(physical_address)
+		debug.write(' from the existing paging table ')
+		debug.write_address(read_cr3())
+		debug.write_line()
+
+		write_cr3(physical_address)
+	}
+
+	# Summary:
+	# Map the GDTR to a virtual address that all processes use.
+	map_gdt(allocator: Allocator, gdtr_physical_address: link) {
+		gdtr_virtual_page = GDTR_VIRTUAL_ADDRESS
+		gdtr_virtual_address = gdtr_virtual_page + (gdtr_physical_address as u64) % PAGE_SIZE
+
+		debug.write('Paging: Mapping GDTR at physical address ')
+		debug.write_address(gdtr_physical_address as u64)
+		debug.write(' to virtual address ')
+		debug.write_address(gdtr_virtual_address)
+		debug.write_line()
+
+		# Map the GDTR to a virtual address that all processes use
+		mapping = MemoryMapping.new(gdtr_virtual_page, gdtr_physical_address as u64, 16)
+		map_region(allocator, mapping)
+	}
+
 	# Summary:
 	# Maps the specified physical address to the specified virtual address.
 	# If the entries required to map the address do not exist,
@@ -126,16 +156,16 @@ plain PagingTable {
 
 	# Summary: Maps all the pages in the specified memory region.
 	map_region(allocator: Allocator, mapping: MemoryMapping) {
-		virtual_address = mapping.virtual_address_start as link
-		physical_address = mapping.physical_address_start as link
+		physical_page = mapping.physical_address_start & (-PAGE_SIZE)
+		virtual_page = mapping.virtual_address_start & (-PAGE_SIZE)
+		last_physical_page = (mapping.physical_address_start + mapping.size) & (-PAGE_SIZE)
+		last_virtual_page = (mapping.virtual_address_start + mapping.size) & (-PAGE_SIZE)
 
-		virtual_address_end = virtual_address + mapping.size
+		loop (physical_page <= last_physical_page) {
+			map_page(allocator, virtual_page as link, physical_page as link)
 
-		loop (virtual_address < virtual_address_end) {
-			map_page(allocator, virtual_address, physical_address)
-
-			virtual_address += PAGE_SIZE
-			physical_address += PAGE_SIZE
+			physical_page += PAGE_SIZE
+			virtual_page += PAGE_SIZE
 		}
 	}
 

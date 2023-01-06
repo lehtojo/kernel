@@ -50,7 +50,9 @@ load_program_headers(file: Array<u8>, program_header_table: link, program_header
 }
 
 export load_executable(file: Array<u8>, output: LoadInformation): bool {
-	debug.write_line('Loader: Loading executable')
+	debug.write('Loader: Loading executable from file at address ')
+	debug.write_address(file.data as u64)
+	debug.write_line()
 
 	# Access the file header
 	if access<FileHeader>(file, 0) has not header {

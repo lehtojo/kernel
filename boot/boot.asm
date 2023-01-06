@@ -15,7 +15,7 @@ multiboot_verified:
 mov dword [multiboot_information], ebx
 
 ; Register the global descriptor table
-lgdt [gdt32_descriptor]
+lgdt [gdtr32]
 
 ; Initialize segments
 mov ax, DATA_SEGMENT_32
@@ -102,13 +102,13 @@ mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
 ; Identity map the first 1 GiB
 mov dword [abs L4_BASE], (L3_BASE + 3)
 ; Point one L4 to the mapped 1 GiB, later the kernel will use the entry for operation
-mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3 + 4) ; Todo: Remove
+mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3 + 4) ; Todo: Remove access from the user
 
 mov dword [abs L3_BASE], (L2_BASE + 3)
 
 ; Initialize L2
 mov edi, L2_BASE
-mov ebx, (L1_BASE + 3 + 4) ; Present | Writable  ; Todo: Remove
+mov ebx, (L1_BASE + 3 + 4) ; Present | Writable  ; Todo: Remove access from the user
 mov ecx, 512
 l2_mapper:
 mov dword [edi], ebx
@@ -119,7 +119,7 @@ jnz l2_mapper
 
 ; Initialize L1
 mov edi, L1_BASE
-mov ebx, (3 + 4) ; Present | Writable ; Todo: Remove
+mov ebx, (3 + 4) ; Present | Writable ; Todo: Remove access from the user
 mov ecx, (512*512)
 l1_mapper:
 mov dword [edi], ebx
@@ -151,7 +151,7 @@ or eax, (1 << 31) | (1 << 0)
 mov cr0, eax
 
 ; Insert address of TSS into GDT before loading it
-lea eax, [tss64] ; Use physical address
+lea eax, [tss64]
 mov word [gdt64_tss_address_0], ax
 shr eax, 16
 mov byte [gdt64_tss_address_1], al
@@ -159,17 +159,12 @@ shr eax, 8
 mov byte [gdt64_tss_address_2], al
 
 ; Load the 64-bit global descriptor table
-lgdt [gdt64_descriptor]
+lgdt [gdtr64]
 
 jmp CODE_SEGMENT_64:enter_kernel
 
 [bits 64]
 enter_kernel:
-; Use kernel mapping in TSS RSPs and ISTs
-mov rax, KERNEL_MAP_BASE
-add qword [tss64_rsp0], rax
-add qword [tss64_ist1], rax
-
 ; Initialize segments
 mov ax, DATA_SEGMENT_64
 mov ds, ax
@@ -178,10 +173,32 @@ mov es, ax
 mov fs, ax
 mov gs, ax
 
+; Load the kernel mapping base
+mov rax, KERNEL_MAP_BASE
+
+; Use kernel mapping in TSS RSPs and ISTs
+add qword [tss64_rsp0], rax
+add qword [tss64_ist1], rax
+
+; Use kernel mapping to address TSS
+lea rcx, [tss64]
+add rcx, rax
+mov word [gdt64_tss_address_0], cx
+shr rcx, 16
+mov byte [gdt64_tss_address_1], cl
+shr rcx, 8
+mov byte [gdt64_tss_address_2], cl
+shr rcx, 8
+mov dword [gdt64_tss_address_3], ecx
+
+; Use kernel mapping with GDTR
+add qword [gdtr64_address], rax
+
 ; Register TSS from GDT
 mov ax, TSS_SELECTOR
 ltr ax
 
+; Load the kernel mapping base
 mov rax, KERNEL_MAP_BASE
 
 ; Use kernel mapping with the stack
@@ -190,6 +207,7 @@ add rsp, rax
 ; Pass the multiboot information to the kernel
 mov edi, dword [multiboot_information]
 
+; Pass the interrupt tables to the kernel
 lea rsi, [abs interrupt_tables]
 add rsi, rax
 
@@ -197,11 +215,14 @@ add rsi, rax
 lea rdx, [abs interrupt_stack_start]
 add rdx, rax
 
-; Jump to KERNEL_MAP_BASE + kernel_entry 
-lea rcx, [abs kernel_entry]
-add rcx, rax
+; Pass the physical address of GDTR
+lea rcx, [abs gdtr64]
 
-jmp rcx
+; Jump to the kernel using the kernel mapping
+lea r8, [abs kernel_entry]
+add r8, rax
+
+jmp r8
 
 ; --- GDT (32-bit) ---
 
@@ -229,9 +250,10 @@ db 0x0       ; Segment base, bits 24-31
 gdt32_end:
 
 align 8
-gdt32_descriptor:
+gdtr32:
 dw gdt32_end - gdt32_start - 1
 dd gdt32_start
+dq 0
 
 ; --- GDT (64-bit) ---
 
@@ -291,14 +313,16 @@ db      10001001b ; Present | 64-bit TSS (Available)
 db      00000000b
 gdt64_tss_address_2:
 db      0x00      ; TSS address (bits 24-32)
+gdt64_tss_address_3:
 dq      0x00      ; TSS address (bits 32-64)
 
 gdt64_end:
 
 align 8
-gdt64_descriptor:
+gdtr64:
 dw gdt64_end - gdt64_start - 1
-dd gdt64_start
+gdtr64_address:
+dq gdt64_start
 
 ; --- TSS (64-bit) ---
 

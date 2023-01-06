@@ -150,7 +150,7 @@ export find_root_system_descriptor_table() {
 	# EBDA = Extended BIOS Data Area
 	# RSDP = Root system descriptor pointer
 	ebda_segment_pointer = kernel.mapper.to_kernel_virtual_address(0x40E) as u16*
-	ebda_page_address = (ebda_segment_pointer[] <| 4) as link
+	ebda_page_address = kernel.mapper.to_kernel_virtual_address((ebda_segment_pointer[] <| 4) as link)
 
 	# Size of the EBDA is stored in the first byte of the area (1K units)
 	ebda_size = ebda_page_address[] * KiB
@@ -246,6 +246,8 @@ export max_redirection(registers: u32*) {
 }
 
 export initialize(allocator: Allocator) {
+	debug.write_line('APIC: Finding root system descriptor table')
+
 	# Find the root system descriptor table, so that we can use the hardware
 	rsdp = apic.find_root_system_descriptor_table()
 	debug.write('APIC: RSDP=')

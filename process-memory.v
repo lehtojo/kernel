@@ -18,6 +18,9 @@ plain ProcessMemory {
 		# Kernel regions must be mapped to every process, so that the kernel does not need to 
 		# change the paging tables during system calls in order to access the kernel memory.
 		mapper.map_kernel_entry(paging_table as u64*)
+
+		# Map the GDT as well
+		paging_table.map_gdt(allocator, Processor.current.gdtr_physical_address)
 	}
 
 	allocate_region_anywhere(size: u64, alignment: u32): Optional<MemoryMapping> {

@@ -30,6 +30,9 @@ Scheduler {
 		frame[].registers[] = next.registers[]
 
 		current = next
+
+		# Map the process to memory
+		if next.memory !== none next.memory.paging_table.use()
 	}
 
 	enter(frame: TrapFrame*, next: Process) {
@@ -92,11 +95,9 @@ Scheduler {
 
 test(allocator: Allocator) {
 	registers = KernelHeap.allocate<RegisterState>()
-	process = Process(0, registers) using KernelHeap
 
 	debug.write('Scheduler (test 1): Kernel stack address ') debug.write_address(registers_rsp()) debug.write_line()
 
-	# TODO: Create a test process
 	# Instructions:
 	# mov r8, 7
 	# mov rcx, 42
@@ -106,55 +107,66 @@ test(allocator: Allocator) {
 	# inc r8
 	# jmp L0
 
-	start = KernelHeap.allocate(0x100)
-	stack = ((start + 0x100) & (-16))
+	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
-	debug.write('Scheduler (test 1): Process code ') debug.write_address(start) debug.write_line()
-	debug.write('Scheduler (test 1): Process stack ') debug.write_address(stack) debug.write_line()
+	text_section_virtual_address = KernelHeap.allocate(0x1000)
+	stack_virtual_address = KernelHeap.allocate(0x1000)
+	text_section_physical_address = mapper.to_physical_address(text_section_virtual_address)
+	stack_physical_address = mapper.to_physical_address(stack_virtual_address)
+
+	debug.write('Scheduler (test 1): Process code ') debug.write_address(text_section_physical_address) debug.write_line()
+	debug.write('Scheduler (test 1): Process stack ') debug.write_address(stack_physical_address) debug.write_line()
+
+	program_text_section_virtual_address = 0x400000 as link
+	program_stack_virtual_address = 0x690000 as link
+
+	#memory.paging_table.map_page(HeapAllocator.instance, program_text_section_virtual_address, text_section_physical_address)
+	#memory.paging_table.map_page(HeapAllocator.instance, program_stack_virtual_address, stack_physical_address)
 
 	# mov r8, 7
 	position = 0
-	start[position++] = 0x49
-	start[position++] = 0xc7
-	start[position++] = 0xc0
-	start[position++] = 0x07
-	start[position++] = 0x00
-	start[position++] = 0x00
-	start[position++] = 0x00
+	text_section_virtual_address[position++] = 0x49
+	text_section_virtual_address[position++] = 0xc7
+	text_section_virtual_address[position++] = 0xc0
+	text_section_virtual_address[position++] = 0x07
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
 
 	# mov rcx, 42
-	start[position++] = 0x48
-	start[position++] = 0xc7
-	start[position++] = 0xc1
-	start[position++] = 0x2a
-	start[position++] = 0x00
-	start[position++] = 0x00
-	start[position++] = 0x00
+	text_section_virtual_address[position++] = 0x48
+	text_section_virtual_address[position++] = 0xc7
+	text_section_virtual_address[position++] = 0xc1
+	text_section_virtual_address[position++] = 0x2a
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
 
 	# mov rax, 33
-	start[position++] = 0x48
-	start[position++] = 0xc7
-	start[position++] = 0xc0
-	start[position++] = 0x21
-	start[position++] = 0x00
-	start[position++] = 0x00
-	start[position++] = 0x00
+	text_section_virtual_address[position++] = 0x48
+	text_section_virtual_address[position++] = 0xc7
+	text_section_virtual_address[position++] = 0xc0
+	text_section_virtual_address[position++] = 0x21
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
+	text_section_virtual_address[position++] = 0x00
 
 	# syscall
-	start[position++] = 0x0f
-	start[position++] = 0x05
+	text_section_virtual_address[position++] = 0x0f
+	text_section_virtual_address[position++] = 0x05
 
 	# inc r8
-	start[position++] = 0x49
-	start[position++] = 0xff
-	start[position++] = 0xc0
+	text_section_virtual_address[position++] = 0x49
+	text_section_virtual_address[position++] = 0xff
+	text_section_virtual_address[position++] = 0xc0
 
 	# jmp L0
-	start[position++] = 0xeb
-	start[position++] = 0xf9
+	text_section_virtual_address[position++] = 0xeb
+	text_section_virtual_address[position++] = 0xf9
 
-	process.registers[].rip = start
-	process.registers[].userspace_rsp = stack
+	process = Process(registers, memory) using KernelHeap
+	process.registers[].rip = text_section_virtual_address
+	process.registers[].userspace_rsp = stack_virtual_address + 0x100
 
 	interrupts.scheduler.add(process)
 }
@@ -185,9 +197,13 @@ export test2(allocator: Allocator, memory_information: SystemMemoryInformation) 
 	if application_start === none or application_end === none return
 
 	application_size = (application_end - application_start) as u64
-	application_data = Array<u8>(application_start, application_size)
+
+	mapped_application_start = mapper.map_kernel_region(application_start, application_size)
+	application_data = Array<u8>(mapped_application_start, application_size)
 
 	process = kernel.scheduler.Process.from_executable(allocator, application_data)
+
+	debug.write_line('Scheduler (test 2): Process created')
 
 	#interrupts.scheduler.add(process)
 }

@@ -31,8 +31,10 @@ export initialize() {
 
 	write_msr(MSR_LSTAR, system_call_handler)
 
-	# This MSR controls the bits of rflags that are cleared before saving them to R11 upon system call.
-	write_msr(MSR_SFMASK, 0)
+	# MSR_SFMASK:
+	# - Controls the bits of rflags that are cleared before entering the system call handler.
+	# - Bits are set up so that interrupts are disabled before entering the system call handler. 
+	write_msr(MSR_SFMASK, 0x257fd5)
 
 	# Disable instructions that can interact with the GS and FS registers.
 	# GS register is used to save the user stack and switch to kernel stack during system calls.

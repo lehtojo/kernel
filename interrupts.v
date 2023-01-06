@@ -69,7 +69,12 @@ export initialize() {
 
 	memory.zero(tables + IDT_OFFSET as link, 0x1000)
 
+	interrupt_handler = internal.get_interrupt_handler()
 	entry_address = tables + INTERRUPT_ENTRIES_OFFSET
+
+	debug.write('Interrupts: Interrupt handler address = ')
+	debug.write_address(interrupt_handler)
+	debug.write_line()
 
 	loop (i = 0, i < INTERRUPT_COUNT, i++) {
 		if i < 0x20 {
@@ -78,17 +83,22 @@ export initialize() {
 			set_trap(i, 0, entry_address)
 		}
 
-		entry_address = write_interrupt_entry(entry_address, internal.get_interrupt_handler(), i)
+		entry_address = write_interrupt_entry(entry_address, interrupt_handler, i)
 	}
 
+	debug.write('Interrupts: IDTR = ')
+	debug.write_address(tables + IDTR_OFFSET)
+	debug.write_line()
 	internal.interrupts_set_idtr(tables + IDTR_OFFSET)
 }
 
 export enable() {
+	debug.write_line('Interrupts: Enabling interrupts')
 	internal.interrupts_enable()
 }
 
 export disable() {
+	debug.write_line('Interrupts: Disabling interrupts')
 	internal.interrupts_disable()
 }
 

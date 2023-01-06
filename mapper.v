@@ -62,7 +62,10 @@ quickmap_physical_base: link
 # Number of L3 entries = 1 + (M - 1) / 4096 / 512^2
 # Number of L4 entries = 512 # Use the maximum amount so that we can use the last entry to edit the pages
 
-initialize() {
+# Summary:
+# Removes the first 1 GiB identity mapping from the paging tables.
+# Remaps the GDTR to the virtual address that is used by process paging tables. 
+remap() {
 	# Disable identity mapping of the first 1 GiB.
 	# Use high virtual address mapping for the kernel from now on.
 	# We can not map the kernel to the first 1 GiB for example, 
@@ -71,7 +74,26 @@ initialize() {
 	# so that we do not have to switch page tables during system calls.
 	l4_base = L4_BASE
 	l4_base.(u64*)[] = 0
+
+	# Apply the changes to paging
+	flush_tlb()	
+
+	gdtr_physical_address = Processor.current.gdtr_physical_address
+	gdtr_virtual_address = GDTR_VIRTUAL_ADDRESS + (gdtr_physical_address as u64) % PAGE_SIZE
+
+	# Remap the GDT to the virtual address that is used by process paging tables.
+	paging_table = mapper.map_kernel_page(read_cr3() as link) as scheduler.PagingTable
+	paging_table.map_gdt(HeapAllocator.instance, gdtr_physical_address)
+
+	# Apply the changes to paging
 	flush_tlb()
+
+	# Update the address of GDTR
+	debug.write('Mapper: Switching GDTR to ')
+	debug.write_address(gdtr_virtual_address)
+	debug.write_line()
+
+	write_gdtr(gdtr_virtual_address)
 }
 
 # Summary: Returns the memory region that the mapper uses
@@ -83,14 +105,11 @@ region(): Segment {
 
 # Summary: Maps the kernel regions from the current paging tables to the specified L4 entries
 map_kernel_entry(entries: u64*) {
+	# Todo: Fix the compiler bug: If L4_BASE is used directly, the compiler tries to inline the constant address into an instruction as a 32-bit address.  
 	l4_base = L4_BASE
-	entries[KERNEL_MAP_BASE_L4] = l4_base.(u64*)[KERNEL_MAP_BASE_L4]
-}
 
-print_kernel_entry() {
-	debug.write('Kernel entry: ')
-	l4_base = L4_BASE
-	debug.write_line(l4_base.(u64*)[KERNEL_MAP_BASE_L4])
+	kernel_entry = l4_base.(u64*)[KERNEL_MAP_BASE_L4]
+	entries[KERNEL_MAP_BASE_L4] = (kernel_entry & (!0b111100000))
 }
 
 # Summary: Returns whether the specified page entry is present
@@ -148,7 +167,6 @@ to_physical_address(virtual_address: link): link {
 
 	l4_base = L4_BASE
 	l4_entry = l4_base.(u64*)[l4]
-	debug.write(l4) debug.write(' => ') debug.write_line(l4_entry)
 	if not is_present(l4_entry) panic('Virtual address was not mapped (L4)')
 
 	l3_entry = virtual_address_from_page_entry(l4_entry)[l3]
@@ -198,9 +216,12 @@ map_page(virtual_address: link, physical_address: link, cache: bool, flush: bool
 	l2_address = l2_base + l2 * 8
 	l1_address = l1_base + l1 * 8
 
-	set_address(l4_address, l3_physical_base)
-	set_writable(l4_address)
-	set_present(l4_address)
+	# Todo:
+	# Can not map L4 entries, because other entries than the kernel entry would get mapped.
+	# Rename thing so that this makes sense.
+	#set_address(l4_address, l3_physical_base)
+	#set_writable(l4_address)
+	#set_present(l4_address)
 
 	set_address(l3_address, l2_physical_base)
 	set_writable(l3_address)

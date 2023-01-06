@@ -16,14 +16,29 @@ shr rdx, 32
 wrmsr
 ret
 
+.global write_cr3
+write_cr3:
+mov cr3, rdi
+ret
+
 .global write_cr4
 write_cr4:
 mov cr4, rdi
 ret
 
+.global read_cr3
+read_cr3:
+mov rax, cr3
+ret
+
 .global read_cr4
 read_cr4:
 mov rax, cr4
+ret
+
+.global write_gdtr
+write_gdtr:
+lgdt [rdi]
 ret
 
 .global flush_tlb_local
@@ -160,15 +175,14 @@ iretq
 .global system_call_entry
 system_call_entry:
 # Interrupts are disabled
-cli
 
 # Save the user stack pointer and load the kernel stack pointer
 mov qword [gs:16], rsp
 mov rsp, [gs:8]
 
-# User ss
-pushq 0x18
+pushq 0x18 # User ss
 push qword [gs:16] # User rsp
+
 push r11 # RFLAGS
 pushq 0x20 # User cs
 push rcx # User RIP
@@ -226,8 +240,7 @@ pop rcx
 add rsp, 16
 
 pop rsp
-sti
-sysretq
+sysretq # Enables interrupts
 
 .global get_interrupt_handler
 get_interrupt_handler:

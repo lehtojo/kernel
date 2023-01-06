@@ -6,6 +6,7 @@ Scheduler {
 	allocator: Allocator
 	current: Process
 	processes: List<Process>
+	next_process_id: u32
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
@@ -13,11 +14,16 @@ Scheduler {
 	}
 
 	add(process: Process) {
+		process.id = next_process_id++
 		processes.add(process)
 	}
 
 	pick(): Process {
-		return processes[0]
+		result = processes[0]
+		processes.remove_at(0)
+		processes.add(result)
+
+		return result
 	}
 
 	switch(frame: TrapFrame*, next: Process) {

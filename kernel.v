@@ -83,12 +83,15 @@ export start(
 	kernel.KernelHeap.initialize()
 	kernel.HeapAllocator.initialize(allocator)
 
+	scheduler.processes = List<kernel.scheduler.Process>(kernel.HeapAllocator.instance) using kernel.KernelHeap
+
 	kernel.Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
 	kernel.mapper.remap()
 
 	kernel.interrupts.initialize()
 	kernel.keyboard.initialize(allocator)
 
+	kernel.scheduler.test(allocator)
 	kernel.scheduler.test(allocator)
 	kernel.scheduler.test2(kernel.HeapAllocator.instance, memory_information)
 

@@ -110,6 +110,9 @@ map_kernel_entry(entries: u64*) {
 
 	kernel_entry = l4_base.(u64*)[KERNEL_MAP_BASE_L4]
 	entries[KERNEL_MAP_BASE_L4] = (kernel_entry & (!0b111100000))
+
+	kernel_map_editor_entry = l4_base.(u64*)[ENTRIES - 1]
+	entries[ENTRIES - 1] = (kernel_map_editor_entry & (!0b111100000))
 }
 
 # Summary: Returns whether the specified page entry is present

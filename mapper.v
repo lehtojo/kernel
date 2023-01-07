@@ -251,8 +251,8 @@ map_page(virtual_address: link, physical_address: link): link {
 map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {
 	physical_page = physical_address_start & (-PAGE_SIZE)
 	virtual_page = virtual_address_start & (-PAGE_SIZE)
-	last_physical_page = (virtual_address_start + size) & (-PAGE_SIZE)
-	last_virtual_page = (physical_address_start + size) & (-PAGE_SIZE)
+	last_physical_page = memory.round_to_page(physical_address_start + size)
+	last_virtual_page = memory.round_to_page(virtual_address_start + size)
 
 	debug.write('Mapping region ')
 	debug.write_address(physical_page) debug.put(`-`) debug.write_address(last_physical_page + PAGE_SIZE)
@@ -260,7 +260,7 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64)
 	debug.write_address(virtual_page) debug.put(`-`) debug.write_address(last_virtual_page + PAGE_SIZE)
 	debug.write_line()
 
-	loop (physical_page <= last_physical_page) {
+	loop (physical_page < last_physical_page) {
 		map_page(virtual_page, physical_page, true, false)
 
 		physical_page += PAGE_SIZE

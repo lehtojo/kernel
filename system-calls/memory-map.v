@@ -9,13 +9,37 @@ export system_memory_map(
 	file_descriptor: u32,
 	offset: u64
 ): link {
-	# TODO: Access the current process through the scheduler and use its memory manager
+	debug.write('System call: Memory map: ')
+	debug.write('address=') debug.write_address(address)
+	debug.write(', length=') debug.write(length)
+	debug.write(', protection=') debug.write(protection)
+	debug.write(', flags=') debug.write(flags)
+	debug.write(', file_descriptor=') debug.write(file_descriptor)
+	debug.write(', offset=') debug.write(offset)
+	debug.write_line()
+
 	process = interrupts.scheduler.current
 	require(process !== none, 'Missing process')
 
+	# Use multiple of pages when allocating
+	length = memory.round_to_page(length)
+	if length <= 0 return SYSTEM_CALL_ERROR_NO_MEMORY # Todo: Return correct error code
+
 	# TODO: Support alignment
 	result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
-	if result has not mapping return SYSTEM_CALL_ERROR_NO_MEMORY
+
+	if result has not mapping {
+		debug.write_line('System call: Memory map: Failed to find a memory region for the process')
+		return SYSTEM_CALL_ERROR_NO_MEMORY
+	}
+
+	debug.write('System call: Memory map: Found memory region for the process ')
+	debug.write_address(mapping.virtual_address_start)
+	debug.write(' => ')
+	debug.write_address(mapping.physical_address_start)
+	debug.write(' ')
+	debug.write(mapping.size)
+	debug.write_line(' bytes')
 
 	# Map the pages for the process
 	process.memory.paging_table.map_region(HeapAllocator.instance, mapping)

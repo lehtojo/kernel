@@ -101,7 +101,7 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	# Load each segment into memory
 	loop (i = 0, i < program_header_count, i++) {
 		program_header = program_headers[i]
-		segment_data = file.data + program_header.physical_address
+		segment_data = file.data + program_header.offset
 		segment_size = program_header.segment_memory_size
 
 		# Load the virtual address from the perspective of the program
@@ -121,7 +121,7 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 		debug.write('Loader: Copying ')
 		debug.write(segment_size)
 		debug.write(' byte(s) from the executable starting at offset ')
-		debug.write_address(program_header.physical_address)
+		debug.write_address(program_header.offset)
 		debug.write(' into virtual address ')
 		debug.write_address(program_segment_virtual_address)
 		debug.write(' using physical address ')

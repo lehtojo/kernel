@@ -30,6 +30,9 @@ Process {
 		memory: ProcessMemory = ProcessMemory(allocator) using allocator
 		paging_table = memory.paging_table
 
+		# Todo: Regions are not reserved in the process memory
+		# Todo: Add available regions to process memory before starting
+
 		loop (i = 0, i < allocations.size, i++) {
 			allocation = allocations[i]
 			paging_table.map_region(allocator, allocation)
@@ -49,8 +52,16 @@ Process {
 		register_state = allocator.allocate<RegisterState>()
 		register_state[].rip = load_information.entry_point
 
-		# TODO: Allocate stack
-		# TODO: Interrupts should update the CR3-register
+		# Allocate and map stack for the process
+		# Todo: Implement proper stack support, which means lazy allocation using page faults
+		program_initial_stack_size = 512 * KiB
+		program_stack_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(program_initial_stack_size) as u64
+		program_stack_virtual_address = 0x10000000
+		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address - program_initial_stack_size, program_stack_physical_address, program_initial_stack_size)
+		memory.paging_table.map_region(allocator, program_stack_mapping)
+
+		# Register the stack to the process
+		register_state[].userspace_rsp = program_stack_virtual_address
 
 		return Process(register_state, memory) using allocator
 	}

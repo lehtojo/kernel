@@ -211,5 +211,5 @@ export test2(allocator: Allocator, memory_information: SystemMemoryInformation) 
 
 	debug.write_line('Scheduler (test 2): Process created')
 
-	#interrupts.scheduler.add(process)
+	interrupts.scheduler.add(process)
 }

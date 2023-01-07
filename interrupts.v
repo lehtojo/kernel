@@ -170,8 +170,6 @@ export process(frame: TrapFrame*) {
 		debug.write('Page fault at address ')
 		debug.write_address(frame[].registers[].cs)
 		debug.write_line()
-		debug.write_address(frame[].registers[].rflags)
-		debug.write_line()
 		panic('Page fault')
 	} else code == 0x0d {
 		debug.write('General protection fault at address ')

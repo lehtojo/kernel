@@ -158,10 +158,10 @@ plain PagingTable {
 	map_region(allocator: Allocator, mapping: MemoryMapping) {
 		physical_page = mapping.physical_address_start & (-PAGE_SIZE)
 		virtual_page = mapping.virtual_address_start & (-PAGE_SIZE)
-		last_physical_page = (mapping.physical_address_start + mapping.size) & (-PAGE_SIZE)
-		last_virtual_page = (mapping.virtual_address_start + mapping.size) & (-PAGE_SIZE)
+		last_physical_page = memory.round_to_page(mapping.physical_address_start + mapping.size)
+		last_virtual_page = memory.round_to_page(mapping.virtual_address_start + mapping.size)
 
-		loop (physical_page <= last_physical_page) {
+		loop (physical_page < last_physical_page) {
 			map_page(allocator, virtual_page as link, physical_page as link)
 
 			physical_page += PAGE_SIZE

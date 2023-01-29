@@ -41,15 +41,15 @@ export initialize() {
 	write_cr4(read_cr4() & (!0x10000))
 }
 
-export process(frame: TrapFrame*) {
+export process(frame: TrapFrame*): u64 {
 	registers = frame[].registers
 	system_call_number = registers[].rax
+	result = 0 as u64
 
 	if system_call_number == 1 {
 		system_write(registers[].rdi as u32, registers[].rsi as link, registers[].rdx)
 	} else system_call_number == 9 {
-		# Todo: Return value is not returned, check other system calls as well
-		system_memory_map(
+		result = system_memory_map(
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9
 		)
@@ -66,4 +66,6 @@ export process(frame: TrapFrame*) {
 		debug.write_address(frame[].registers[].rcx)
 		debug.write_line()
 	}
+
+	return result
 }

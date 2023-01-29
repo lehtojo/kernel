@@ -11,6 +11,7 @@ namespace kernel {
 	constant USER_CODE_SELECTOR = 0x20
 
 	constant KERNEL_MAP_BASE = 0xFFFF800000000000
+	constant KERNEL_MAP_END = 0xFFFF808000000000
 	constant KERNEL_MAP_BASE_L4 = 0x100
 
 	constant GDTR_VIRTUAL_ADDRESS = 0x1000

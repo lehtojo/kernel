@@ -159,8 +159,9 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 	(tables + IDT_OFFSET).(InterruptDescriptor*)[index] = descriptor
 }
 
-export process(frame: TrapFrame*) {
+export process(frame: TrapFrame*): u64 {
 	code = frame[].registers[].interrupt
+	result = 0 as u64
 
 	if code == 0x21 {
 		kernel.keyboard.process()
@@ -177,12 +178,13 @@ export process(frame: TrapFrame*) {
 		debug.write_line()
 		panic('General protection fault')
 	} else code == 0x80 {
-		system_calls.process(frame)
+		result = system_calls.process(frame)
 	} else {
 		default_handler()
 	}
 
 	interrupts.end()
+	return result
 }
 
 export end() {

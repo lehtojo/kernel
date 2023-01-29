@@ -146,7 +146,7 @@ mov qword ptr [rsp+8], 0
 mov qword ptr [rsp+16], rax # Pass the register state
 
 mov rdi, rsp
-call _VN6kernel10interrupts7processEPP9TrapFrame
+call _VN6kernel10interrupts7processEPP9TrapFrame_ry
 
 add rsp, 24 # Remove the trap frame object and the padding
 
@@ -214,7 +214,7 @@ mov qword ptr [rsp+8], 0
 mov qword ptr [rsp+16], rax # Pass the register state
 
 mov rdi, rsp
-call _VN6kernel10interrupts7processEPP9TrapFrame
+call _VN6kernel10interrupts7processEPP9TrapFrame_ry
 
 add rsp, 24 # Remove the trap frame object and the padding
 
@@ -225,7 +225,7 @@ add rsp, 8 # Skip restoring rsp
 pop rbx
 pop rdx
 pop rcx
-pop rax
+add rsp, 8 # Skip restoring rax
 pop r8
 pop r9
 pop r10

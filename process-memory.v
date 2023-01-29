@@ -1,18 +1,18 @@
 namespace kernel.scheduler
 
 plain ProcessMemory {
-	# Summary: Sorted list of virtual memory mappings (smallest to largest).
+	# Summary: Sorted list of virtual memory mappings (smallest virtual address to largest).
 	allocations: List<MemoryMapping>
 
-	# Summary: Sorted list of available virtual memory regions (smallest to largest).
-	available_regions: List<Segment>
+	# Summary: Available virtual address regions by address (sorted)
+	available_regions_by_address: List<Segment>
 
 	# Summary: Stores the paging table used for configuring the virtual memory of the process.
 	paging_table: PagingTable
 
 	init(allocator: Allocator) {
 		this.allocations = List<MemoryMapping>(allocator) using allocator
-		this.available_regions = List<Segment>(allocator) using allocator
+		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
 
 		# Kernel regions must be mapped to every process, so that the kernel does not need to 
@@ -21,65 +21,172 @@ plain ProcessMemory {
 
 		# Map the GDT as well
 		paging_table.map_gdt(allocator, Processor.current.gdtr_physical_address)
+
+		# Set all address range after 0x10000 available by default
+		available_regions_by_address.add(Segment.new(0x10000 as link, -1 as link))
+
+		# Reserve the kernel mapping region
+		require(
+			reserve_specific_region(KERNEL_MAP_BASE, KERNEL_MAP_END - KERNEL_MAP_BASE),
+			'Failed to reserve kernel mapping region from process memory'
+		)
+	}
+
+	# Summary:
+	# Attempts to finds a region from the specified regions, which contains the specified address.
+	# If no such region is found, this function returns -1.
+	private find_containing_region(regions: List<Segment>, address: link): i64 {
+		loop (i = 0, i < regions.size, i++) {
+			if regions[i].contains(address) return i
+		}
+
+		return -1
+	}
+
+	private try_find_region_for_specific_virtual_address(virtual_address: u64, size: u64): i64 {
+		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
+		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address must be multiple of pages')
+
+		# Find an available region, which contains the specified virtual address
+		address_list_index = find_containing_region(available_regions_by_address, virtual_address as link)
+		if address_list_index < 0 return -1
+
+		address_list_region = available_regions_by_address[address_list_index]
+
+		# Warning: Overflow seems possible here: (virtual_address + size)
+		# Ensure the allocation will not go over the available region
+		if virtual_address + size > address_list_region.end return -1
+
+		return address_list_index
+	}
+
+	private allocate_specific_region(address_list_index: i64, virtual_address: u64, size: u64) {
+		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
+		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address must be multiple of pages')
+
+		address_list_region = available_regions_by_address[address_list_index]
+
+		# Todo: Look for possible overflows
+		margin_left: u64 = virtual_address - address_list_region.start as u64
+		margin_right: u64 = address_list_region.end - virtual_address
+
+		# Case 1: Containing region is consumed perfectly
+		if margin_left == 0 and margin_right == 0 {
+			# Remove the available region entry
+			available_regions_by_address.remove_at(address_list_index)
+			return
+		}
+
+		# Case 2: Space is consumed from the middle of the region
+		if margin_left > 0 and margin_right > 0 {
+			# The region will be split into two regions:
+			left_region = Segment.new(address_list_region.start, address_list_region.start + margin_left)
+			right_region = Segment.new(address_list_region.end - margin_right, address_list_region.end)
+
+			# Remove the available region entry
+			available_regions_by_address.remove_at(address_list_index)
+
+			# Insert the left and right region at the index of the removed address list entry.
+			# The order will remain correct, because both the left and right region are inside the removed region.
+			available_regions_by_address.insert(address_list_index, right_region)
+			available_regions_by_address.insert(address_list_index, left_region)
+			return
+		}
+
+		if margin_left == 0 {
+			# Case 3: Space is only consumed from the start of the region
+
+			# Consume the specified amount of bytes from the end of the region
+			address_list_region.start += size
+		} else {
+			# Case 4: Space is only consumed from the end of the region:
+
+			# Consume the specified amount of bytes from the end of the region
+			address_list_region.end -= size
+		}
+
+		# Update the entry
+		available_regions_by_address[address_list_index] = address_list_region
+	}
+
+	reserve_specific_region(virtual_address: u64, size: u64): bool {
+		debug.write('Process: Reserving virtual region ')
+		debug.write_address(virtual_address)
+		debug.put(`-`)
+		debug.write_address(virtual_address + size)
+		debug.write_line()
+
+		# Try to find an available region that can contain the specified virtual region
+		address_list_index = try_find_region_for_specific_virtual_address(virtual_address, size)
+		if address_list_index < 0 return false
+
+		# Reserve the virtual region
+		allocate_specific_region(address_list_index, virtual_address, size)
+		return true
+	}
+
+	allocate_specific_region(virtual_address: u64, size: u64): Optional<MemoryMapping> {
+		# Try to find an available region that can contain the specified virtual region
+		address_list_index = try_find_region_for_specific_virtual_address(virtual_address, size)
+		if address_list_index < 0 return Optionals.empty<MemoryMapping>()
+
+		# Now we have a region that can hold the specified virtual region, but we still 
+		# need the actual physical memory before allocating the region.
+		physical_memory_start = PhysicalMemoryManager.instance.allocate_physical_region(size)
+
+		# Allocate the virtual region now that we have the physical memory
+		allocate_specific_region(address_list_index, virtual_address, size)
+
+		mapping = MemoryMapping.new(virtual_address, virtual_address, physical_memory_start, size)
+		allocations.add(mapping)
+
+		return Optionals.new<MemoryMapping>(mapping)
 	}
 
 	allocate_region_anywhere(size: u64, alignment: u32): Optional<MemoryMapping> {
-		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
-		require((alignment % PAGE_SIZE) == 0, 'Allocation alignment must be multiple of pages')
+		require(size % PAGE_SIZE == 0, 'Allocation size was not multiple of pages')
+		require(alignment % PAGE_SIZE == 0, 'Allocation alignment was not multiple of pages')
 
-		# Search the first possible available region that can store the specified amount of bytes
-		candidate = -1
-		low = 0
-		high = available_regions.size
+		loop (i = 0, i < available_regions_by_address.size, i++) {
+			address_list_region = available_regions_by_address[i]
 
-		loop (high - low > 0) {
-			middle = (low + high) / 2
-			region = available_regions[middle]
+			# Skip regions that are not suitable for storing the specified amount of bytes
+			if address_list_region.size < size + alignment continue
 
-			# Since we must support alignment, sometimes we need padding in order to make region aligned
-			padding: u64 = memory.round_to(region.start, alignment) - region.start
+			# Now we have a candidate, but before taking it we must get the physical memory
+			physical_memory_start = PhysicalMemoryManager.instance.allocate_physical_region(size)
 
-			if region.size >= (size + padding) {
-				# Because the region can store the specified amount of bytes, set it as candidate
-				# candidate = middle
+			aligned_virtual_address_start = memory.round_to(address_list_region.start, alignment)
+			aligned_virtual_address_end = aligned_virtual_address_start + size
 
-				# Regions within range low..middle can store less or equal amount of bytes as the middle region,
-				# so search for candidates whose size is closer to the specified amount of bytes.
-				high = middle
+			mapping = MemoryMapping.new(
+				address_list_region.start as u64,
+				aligned_virtual_address_start as u64,
+				physical_memory_start as u64,
+				size
+			)
+
+			allocations.add(mapping)
+
+			# Consume the allocated region from the available region
+			if aligned_virtual_address_end == address_list_region.end {
+				# The available region is consumed completely, so remove it from the list
+				available_regions_by_address.remove_at(i)
 			} else {
-				# Regions within range middle..high can store more or equal amount of bytes as the middle region,
-				# so search for candidates from that range.
-				low = middle
+				# The available region is not consumed completely, so consume the allocated region from the start
+				address_list_region.start = aligned_virtual_address_end
+				available_regions_by_address[i] = address_list_region
 			}
+
+			return Optionals.new<MemoryMapping>(mapping)
 		}
 
-		# Return an error, if no suitable candidate could be found
-		if candidate < 0 return Optionals.empty<MemoryMapping>()
+		return Optionals.empty<MemoryMapping>()
+	}
 
-		# Since we now have a suitable candidate, before doing anything we must get the actual physical memory
-		physical_address_start = KernelHeap.allocate(size)
-		if physical_address_start === none return Optionals.empty<MemoryMapping>()
-
-		# Load the available region from which we allocate
-		region = available_regions[candidate]
-
-		# Remove the region from the list, because its size will shrink and the list must remain sorted
-		available_regions.remove_at(candidate)
-
-		# Compute the virtual start and end addresses of result region
-		virtual_address_start = memory.round_to(region.start, alignment)
-		virtual_address_end = virtual_address_start + size
-
-		mapping = MemoryMapping.new(region.start as u64, virtual_address_start as u64, size)
-
-		# Since the region (region.start)..(virtual_address_end) is consumed from the region, update its start address
-		region.start = virtual_address_end
-
-		# If the region is now empty, do not add it back
-		if region.size == 0 return Optionals.new<MemoryMapping>(mapping)
-
-		# TODO: Add the shrunken region back and keep the list sorted
-		return Optionals.new<MemoryMapping>(mapping)
+	deallocate(virtual_address: link) {
+		# Note: User can deallocate fragments
+		panic('Todo: Implement deallocation')
 	}
 
 	dispose() {

@@ -30,12 +30,17 @@ Process {
 		memory: ProcessMemory = ProcessMemory(allocator) using allocator
 		paging_table = memory.paging_table
 
-		# Todo: Regions are not reserved in the process memory
-		# Todo: Add available regions to process memory before starting
-
 		loop (i = 0, i < allocations.size, i++) {
 			allocation = allocations[i]
 			paging_table.map_region(allocator, allocation)
+
+			# Reserve the allocated virtual region
+			unaligned_size = (allocation.virtual_address_start + allocation.size) - allocation.unaligned_virtual_address_start
+
+			require(memory.reserve_specific_region(
+				allocation.unaligned_virtual_address_start,
+				unaligned_size
+			), 'Failed to reserve memory region before starting the process')
 
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.

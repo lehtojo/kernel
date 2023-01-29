@@ -102,13 +102,14 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	loop (i = 0, i < program_header_count, i++) {
 		program_header = program_headers[i]
 		segment_data = file.data + program_header.offset
-		segment_size = program_header.segment_memory_size
+		segment_physical_size = program_header.segment_memory_size
+		segment_virtual_size = memory.round_to_page(segment_physical_size)
 
 		# Load the virtual address from the perspective of the program
 		program_segment_virtual_address = program_header.virtual_address
 
-		segment_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(segment_size)
-		segment_virtual_address = mapper.map_kernel_region(segment_physical_address, segment_size)
+		segment_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(segment_physical_size)
+		segment_virtual_address = mapper.map_kernel_region(segment_physical_address, segment_virtual_size)
 
 		# TODO: Deallocate upon failure
 
@@ -119,7 +120,7 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 		}
 
 		debug.write('Loader: Copying ')
-		debug.write(segment_size)
+		debug.write(segment_physical_size)
 		debug.write(' byte(s) from the executable starting at offset ')
 		debug.write_address(program_header.offset)
 		debug.write(' into virtual address ')
@@ -129,13 +130,13 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 		debug.write_line()
 
 		# Copy the segment data from the file to the allocated segment
-		memory.copy(segment_virtual_address, segment_data, segment_size)
+		memory.copy(segment_virtual_address, segment_data, segment_physical_size)
 
 		# Add the memory mapping
 		output.allocations.add(MemoryMapping.new(
 			program_segment_virtual_address as u64,
 			segment_physical_address as u64,
-			segment_size
+			segment_virtual_size
 		))
 	}
 

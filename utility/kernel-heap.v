@@ -31,7 +31,8 @@ KernelHeap {
 		if heap.s128.deallocate(address) return
 		if heap.s256.deallocate(address) return
 
-		PhysicalMemoryManager.instance.deallocate(address)
+		physical_address = mapper.to_physical_address(address)
+		PhysicalMemoryManager.instance.deallocate(physical_address)
 	}
 
 	shared allocate<T>(): T* {
@@ -254,6 +255,7 @@ export plain Allocators<T, S> {
 		size--
 	}
 
+	# Summary: Deallocates the specified virtual address
 	deallocate(address: link) {
 		loop (i = 0, i < size, i++) {
 			deallocator = deallocators[i]

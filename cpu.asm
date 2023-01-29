@@ -16,6 +16,21 @@ shr rdx, 32
 wrmsr
 ret
 
+.global write_cr0
+write_cr0:
+mov cr0, rdi
+ret
+
+.global write_cr1
+write_cr1:
+mov cr1, rdi
+ret
+
+.global write_cr2
+write_cr2:
+mov cr2, rdi
+ret
+
 .global write_cr3
 write_cr3:
 mov cr3, rdi
@@ -24,6 +39,21 @@ ret
 .global write_cr4
 write_cr4:
 mov cr4, rdi
+ret
+
+.global read_cr0
+read_cr0:
+mov rax, cr0
+ret
+
+.global read_cr1
+read_cr1:
+mov rax, cr1
+ret
+
+.global read_cr2
+read_cr2:
+mov rax, cr2
 ret
 
 .global read_cr3

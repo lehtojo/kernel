@@ -152,3 +152,103 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	output.entry_point = header.entry
 	return true
 }
+
+export load_stack_startup_data(physical_stack_address_top: link, arguments: List<String>, environment_variables: List<String>): link {
+	# Todo: If there are a lot of arguments and environment variables, stack can overflow
+
+	# Compute the number of bytes needed for the startup data:
+	# 0                  8 (bytes)
+	# +------------------+
+	# |       ...        |
+	# |   Environment    |
+	# |    variables     |
+	# |       ...        |
+	# +------------------+
+	# |       ...        |
+	# |    Arguments     |
+	# |       ...        |
+	# +------------------+
+	# |        0         |
+	# +------------------+ 
+	# |       ...        |
+	# |   Environment    |
+	# |     variable     |
+	# |     pointers     |
+	# |       ...        |
+	# +------------------+ 
+	# |        0         |
+	# +------------------+
+	# |       ...        |
+	# |     Argument     |
+	# |     pointers     |
+	# |       ...        |
+	# +------------------+
+	# |  Argument count  |
+	# +------------------+ <--- rsp
+
+	# Compute the number of bytes required for the first two sections
+	environment_variable_data_section_size = 0
+	argument_data_section_size = 0
+	loop (i = 0, i < environment_variables.size, i++) { environment_variable_data_section_size += environment_variables[i].length + 1 }
+	loop (i = 0, i < arguments.size, i++) { argument_data_section_size += arguments[i].length + 1 }
+
+	# Ensure the sections sizes are multiple of 8 bytes
+	environment_variable_data_section_size = memory.round_to(environment_variable_data_section_size, sizeof(u64))
+	argument_data_section_size = memory.round_to(argument_data_section_size, sizeof(u64))
+
+	total_data_size = sizeof(u64) +                 # Argument count
+		arguments.size * sizeof(link) +              # Argument pointers
+		sizeof(u64) +                                # 0
+		environment_variables.size * sizeof(link) +  # Environment variable pointers
+		sizeof(u64) +                                # 0
+		argument_data_section_size +                 # Arguments
+		environment_variable_data_section_size       # Environment variables
+
+	# Remember to align the stack to 16 bytes
+	total_data_size = memory.round_to(total_data_size, 16)
+
+	# Map the stack memory, so that we can produce the startup data
+	stack_address_top = kernel.mapper.map_kernel_region(physical_stack_address_top - total_data_size, total_data_size)
+
+	# Create pointers to each of the sections
+	environment_variable_data = stack_address_top - environment_variable_data_section_size
+	argument_data = environment_variable_data - argument_data_section_size
+	environment_variable_pointers = argument_data - sizeof(u64) - environment_variables.size * sizeof(link)
+	argument_pointers = environment_variable_pointers - sizeof(u64) - arguments.size * sizeof(link)
+	argument_count = argument_pointers - sizeof(u64)
+
+	# Add all environment variables
+	loop (i = 0, i < environment_variables.size, i++) {
+		environment_variable = environment_variables[i]
+
+		# Copy the current environment variable into the environment variable data section
+		memory.copy(environment_variable_data, environment_variable.data, environment_variable.length + 1)
+
+		# Add pointer to the environment variable pointers that points to the copied data
+		environment_variable_pointers.(link*)[] = environment_variable_data
+
+		# Move over the copied data and the added pointer
+		environment_variable_data += environment_variable.length + 1
+		environment_variable_pointers += sizeof(link)
+	}
+
+	# Add all arguments
+	loop (i = 0, i < arguments.size, i++) {
+		argument = arguments[i]
+
+		# Copy the current argument into the argument data section
+		memory.copy(argument_data, argument.data, argument.length + 1)
+
+		# Add pointer to the argument pointers that points to the copied data
+		argument_pointers.(link*)[] = argument_data
+
+		# Move over the copied data and the added pointer
+		argument_data += argument.length + 1
+		argument_pointers += sizeof(link)
+	}
+
+	# Write the number of arguments
+	argument_count.(u64*)[] = arguments.size
+
+	return physical_stack_address_top - total_data_size
+}

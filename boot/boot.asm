@@ -150,6 +150,16 @@ mov eax, cr0
 or eax, (1 << 31) | (1 << 0)
 mov cr0, eax
 
+; Enable SSE
+mov eax, cr0 ; write_cr0((read_cr0() & 0xfffffff) | 0x2)
+and eax, 0xfffffffb
+or eax, 0x2
+mov cr0, eax
+
+mov eax, cr4 ; write_cr4(read_cr4() | 0x600)
+or eax, 0x600
+mov cr4, eax
+
 ; Insert address of TSS into GDT before loading it
 lea eax, [tss64]
 mov word [gdt64_tss_address_0], ax

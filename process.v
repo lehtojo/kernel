@@ -61,12 +61,24 @@ Process {
 		# Todo: Implement proper stack support, which means lazy allocation using page faults
 		program_initial_stack_size = 512 * KiB
 		program_stack_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(program_initial_stack_size) as u64
-		program_stack_virtual_address = 0x10000000
-		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address - program_initial_stack_size, program_stack_physical_address, program_initial_stack_size)
+		program_stack_virtual_address_top = 0x10000000
+		program_stack_virtual_address_bottom = program_stack_virtual_address_top - program_initial_stack_size
+		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address, program_initial_stack_size)
+
+		# Add environment variables and arguments for the application
+		arguments = List<String>(allocator)
+		arguments.add(String.new('/bin/test2')) # Todo: Add executable path
+
+		environment_variables = List<String>(allocator)
+		environment_variables.add(String.new('PATH=/bin/')) # Todo: Load proper environment variables
+
+		program_stack_pointer = load_stack_startup_data(program_stack_virtual_address_top as link, arguments, environment_variables)
+
+		# Map the stack memory for the application
 		memory.paging_table.map_region(allocator, program_stack_mapping)
 
 		# Register the stack to the process
-		register_state[].userspace_rsp = program_stack_virtual_address
+		register_state[].userspace_rsp = program_stack_pointer
 
 		return Process(register_state, memory) using allocator
 	}

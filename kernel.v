@@ -17,9 +17,15 @@ namespace kernel {
 	constant GDTR_VIRTUAL_ADDRESS = 0x1000
 	constant GDT_VIRTUAL_ADDRESS = 0x2000
 
+	import 'C' write_cr0(value: u64)
+	import 'C' write_cr1(value: u64)
+	import 'C' write_cr2(value: u64)
 	import 'C' write_cr3(value: u64)
 	import 'C' write_cr4(value: u64)
 
+	import 'C' read_cr0(): u64
+	import 'C' read_cr1(): u64
+	import 'C' read_cr2(): u64
 	import 'C' read_cr3(): u64
 	import 'C' read_cr4(): u64
 

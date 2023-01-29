@@ -14,6 +14,20 @@ pack MemoryMapping {
 			size: size
 		} as MemoryMapping
 	}
+
+	shared new(
+		unaligned_virtual_address_start: u64,
+		virtual_address_start: u64,
+		physical_address_start: u64,
+		size: u64
+	): MemoryMapping {
+		return pack {
+			unaligned_virtual_address_start: unaligned_virtual_address_start,
+			virtual_address_start: virtual_address_start,
+			physical_address_start: physical_address_start,
+			size: size
+		} as MemoryMapping
+	}
 }
 
 constant PAGING_TABLE_ENTRY_COUNT = 512

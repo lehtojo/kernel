@@ -26,6 +26,53 @@ panic(error: link) {
 
 namespace memory
 
+namespace sorted {
+	# Summary: Inserts the specified element into the sorted list
+	insert<T>(elements: List<T>, element: T, comparator: (T, T) -> i64) {
+		start = 0
+		end = elements.size
+
+		loop (end - start > 0) {
+			middle = (start + end) / 2
+
+			if comparator(element, elements[middle]) >= 0 {
+				# The specified element must be after the middle element, so it must be inserted within middle..end
+				start = middle
+			} else {
+				# The specified element must be before the middle element, so it must be inserted within start..middle
+				end = middle
+			}
+		}
+
+		elements.insert(start, element)
+	}
+
+	# Summary: Finds an element from the sorted list using the specified comparator
+	find_index<T, U>(elements: List<T>, data: U, comparator: (T, U) -> i64): i64 {
+		start = 0
+		end = elements.size
+
+		loop (end - start > 0) {
+			middle = (start + end) / 2
+
+			comparison = comparator(elements[middle], data)
+
+			if comparison > 0 {
+				# The wanted must be after the middle element, so it must be inserted within middle..end
+				start = middle
+			} else comparison < 0 {
+				# The wanted must be before the middle element, so it must be inserted within start..middle
+				end = middle
+			} else {
+				# We found the wanted element
+				return middle
+			}
+		}
+
+		return -1
+	}
+}
+
 # Summary: Returns whether the contents of the specified memory addresses are equal
 compare(a: link, b: link, size: u64): bool {
 	if size === 0 return true

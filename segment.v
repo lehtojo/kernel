@@ -23,4 +23,9 @@ pack Segment {
 	shared new(start: link, end: link): Segment {
 		return pack { type: 0, start: start, end: end } as Segment
 	}
+
+	# Summary: Returns whether this segment contains the specified address
+	contains(address: link): bool {
+		return address >= start and address < end
+	}
 }

@@ -85,6 +85,8 @@ Scheduler {
 	}
 
 	exit(frame: TrapFrame*, process: Process) {
+		debug.write('Scheduler: Exiting process ') debug.write_line(process.id)
+
 		# Remove the specified process from the process list
 		loop (i = 0, i < processes.size, i++) {
 			if processes[i] != process continue
@@ -92,9 +94,10 @@ Scheduler {
 			stop
 		}
 
-		process.dispose()
-		KernelHeap.deallocate(process as link)
+		debug.write('Scheduler: Destructing process ') debug.write_line(process.id)
+		process.destruct(HeapAllocator.instance)
 
+		debug.write_line('Scheduler: Picking next process after exiting process')
 		pick_and_enter(frame)
 	}
 }

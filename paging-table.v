@@ -220,22 +220,35 @@ plain PagingTable {
 	}
 
 	# Summary: Deallocates this layer and its child tables using the specified allocator
-	dispose(allocator: Allocator, layer: u32) {
+	destruct(allocator: Allocator) {
+		debug.write_line('Paging: Destructing paging table')
+		destruct(allocator, 4)
+	}
+
+	# Summary: Deallocates this layer and its child tables using the specified allocator
+	destruct(allocator: Allocator, layer: u32) {
 		require(layer >= 0, 'Illegal layer number passed to paging table upon disposal')
 
 		# If we are at the bottom, the entries no longer point to structures that can be deallocated
-		if layer == 0 return
+		if layer == 1 {
+			allocator.deallocate(this as link)
+			return
+		}
 
 		loop (i = 0, i < PAGING_TABLE_ENTRY_COUNT, i++) {
 			entry = entries[i]
 			if not mapper.is_present(entry) continue
 
+			# If we are at the top layer, do not destruct shared kernel paging tables etc.
+			# Todo: Implement this better, use page entry flags such as the required privilege level
+			if layer == 4 and (i == KERNEL_MAP_BASE_L4 or i == mapper.ENTRIES - 1) continue
+
 			# Dispose the table, its tables and so on until the bottom layer is reached 
 			table = mapper.virtual_address_from_page_entry(entry) as PagingTable
-			table.dispose(layer - 1)
+			table.destruct(allocator, layer - 1)
 		}
 
 		# Since all the child tables have been deallocated, this table is no longer needed and thus it can be deallocated
-		allocator.deallocate(this)
+		allocator.deallocate(this as link)
 	}
 }

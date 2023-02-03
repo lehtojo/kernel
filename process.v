@@ -111,14 +111,15 @@ Process {
 		registers[] = frame[].registers[]
 	}
 
-	dispose() {
+	destruct(allocator: Allocator) {
 		# Dispose the register state
 		if registers !== none KernelHeap.deallocate(registers)
 
-		# Dispose the process memory
+		# Destruct the process memory
 		if memory !== none {
-			memory.dispose()
-			KernelHeap.deallocate(registers)
+			memory.destruct()
 		}
+
+		allocator.deallocate(this as link)
 	}
 }

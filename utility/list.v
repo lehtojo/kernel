@@ -123,4 +123,9 @@ List<T> {
 		capacity = 0
 		size = 0
 	}
+
+	destruct(allocator: Allocator) {
+		clear()
+		allocator.deallocate(this as link)
+	}
 }

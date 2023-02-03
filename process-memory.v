@@ -1,6 +1,9 @@
 namespace kernel.scheduler
 
 plain ProcessMemory {
+	# Summary: Stores the allocator used by this structure
+	allocator: Allocator
+
 	# Summary: Sorted list of virtual memory mappings (smallest virtual address to largest).
 	allocations: List<MemoryMapping>
 
@@ -11,6 +14,7 @@ plain ProcessMemory {
 	paging_table: PagingTable
 
 	init(allocator: Allocator) {
+		this.allocator = allocator
 		this.allocations = List<MemoryMapping>(allocator) using allocator
 		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
@@ -189,13 +193,28 @@ plain ProcessMemory {
 		panic('Todo: Implement deallocation')
 	}
 
-	dispose() {
+	destruct() {
 		# Deallocate all the memory
 		loop (i = 0, i < allocations.size, i++) {
 			mapping = allocations[i]
 
+			debug.write('Process: Deallocating physical memory region ')
+			debug.write_address(mapping.physical_address_start)
+			debug.put(`-`)
+			debug.write_address(mapping.physical_address_start + mapping.size)
+			debug.write_line()
+
 			# Deallocate the physical allocation
-			KernelHeap.deallocate(mapping.physical_address_start as link)
+			PhysicalMemoryManager.instance.deallocate(mapping.physical_address_start as link)
 		}
+
+		debug.write_line('Process: Deallocated all process memory')
+
+		# Destruct the lists
+		allocations.destruct(allocator)
+		available_regions_by_address.destruct(allocator)
+		paging_table.destruct(allocator)
+
+		allocator.deallocate(this as link)
 	}
 }

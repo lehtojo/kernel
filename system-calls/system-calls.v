@@ -53,12 +53,13 @@ export process(frame: TrapFrame*): u64 {
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9
 		)
-	} else system_call_number == 0x80 {
+	} else system_call_number == 0x3c {
 		system_exit(frame, registers[].rdi as i32)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')
-		debug.write('rip=')
+		debug.write_address(system_call_number)
+		debug.write(': rip=')
 		debug.write_address(frame[].registers[].rip)
 		debug.write(', r8=')
 		debug.write_address(frame[].registers[].r8)

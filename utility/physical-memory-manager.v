@@ -172,10 +172,12 @@ PhysicalMemoryManagerLayer {
 		next = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(result as link).next
 
 		# Update the next element to be the first available element by settings its previous element to none
-		kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(next as link).previous = none as PhysicalMemoryManagerAvailableLayerElement
-
-		# Update the last available page to none if we have used all the pages
-		if next === none { last = none as link }
+		if next !== none {
+			kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(next as link).previous = none as PhysicalMemoryManagerAvailableLayerElement
+		} else {
+			# Update the last available page to none if we have used all the pages
+			last = none as link
+		}
 
 		return result
 	}
@@ -216,6 +218,9 @@ PhysicalMemoryManagerLayer {
 
 			left = math.min(physical_address as u64, buddy as u64) as link
 			upper.add(left)
+		} else {
+			# Since we can not merge, add this slab to the available list
+			add(physical_address)
 		}
 
 		return size

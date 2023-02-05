@@ -3,6 +3,7 @@ List<T> {
 	data: T*
 	capacity: u64
 	size: u64
+	bounds => Range.new(0, size)
 
 	init(allocator: Allocator) {
 		this.allocator = allocator

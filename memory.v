@@ -125,6 +125,10 @@ copy(destination: link, source: link, size: u64) {
 	}
 }
 
+copy_into(destination, destination_offset, source, source_offset, size) {
+	copy(destination.data + destination_offset, source.data + source_offset, size)
+}
+
 zero(address: link, size: u64) {
 	loop (i = 0, i < size, i++) {
 		address[i] = 0

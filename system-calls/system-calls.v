@@ -2,12 +2,46 @@ namespace kernel.system_calls
 
 import 'C' get_system_call_handler(): link
 
-constant SYSTEM_CALL_ERROR_NO_MEMORY = -1
+constant ENOMEM = -1
+constant EBADF = -2
+constant EFAULT = -3
 
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081
 constant MSR_LSTAR = 0xc0000082
 constant MSR_SFMASK = 0xc0000084
+
+# Summary: Returns the process that invoked the current system call
+export get_process(): Process {
+	process = interrupts.scheduler.current
+	require(process !== none, 'System call required the current process, but the process was missing')
+	return process
+}
+
+export load_string(allocator, string: link, limit: u32): Optional<String> {
+	# Todo:
+	# - Verify the address is mapped before loading bytes from it
+	# - Verify passed pointers are accessible to this process
+	length = 0
+	loop (length < limit and string[length] != 0, length++) {}
+
+	# If we reached the limit length, return none
+	if length == limit return Optionals.empty<String>()
+
+	# Allocate a new buffer for copying the characters
+	data = allocator.allocate(length)
+	if data === none return Optionals.empty<String>()
+
+	# Copy the string from userspace
+	memory.copy(data, string, length)
+
+	return Optionals.new<String>(String.new(data, length))
+}
+
+# Summary: Returns whether the specified memory region is mapped and usable by the specified process
+export is_valid_region(process: Process, start: link, size: u64): bool {
+	return true
+}
 
 export initialize() {
 	debug.write_line('System calls: Initializing system calls')

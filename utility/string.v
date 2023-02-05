@@ -16,6 +16,18 @@ pack String {
 		return data[i]
 	}
 
+	# Summary: Returns the substring in the specified range
+	slice(start: u64, end: u64): String {
+		require(start <= end and start >= 0 and end <= length, 'Invalid slice range')
+		return String.new(data + start, end - start)
+	}
+
+	# Summary: Returns the substring starting from the specified offset
+	slice(start: u64): String {
+		require(start >= 0 and start <= length, 'Invalid slice range')
+		return String.new(data + start, length - start)
+	}
+
 	# Summary: Returns whether the two strings are equal
 	equals(other: String): bool {
 		a = length

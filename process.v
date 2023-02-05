@@ -87,6 +87,7 @@ Process {
 	priority: u16 = NORMAL_PRIORITY
 	registers: RegisterState*
 	memory: ProcessMemory
+	file_descriptors: ProcessFileDescriptors
 
 	init(registers: RegisterState*, memory: ProcessMemory) {
 		this.id = 0

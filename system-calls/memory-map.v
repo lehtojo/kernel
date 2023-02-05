@@ -23,14 +23,14 @@ export system_memory_map(
 
 	# Use multiple of pages when allocating
 	length = memory.round_to_page(length)
-	if length <= 0 return SYSTEM_CALL_ERROR_NO_MEMORY # Todo: Return correct error code
+	if length <= 0 return ENOMEM # Todo: Return correct error code
 
 	# TODO: Support alignment
 	result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
 
 	if result has not mapping {
 		debug.write_line('System call: Memory map: Failed to find a memory region for the process')
-		return SYSTEM_CALL_ERROR_NO_MEMORY
+		return ENOMEM
 	}
 
 	debug.write('System call: Memory map: Found memory region for the process ')

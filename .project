@@ -8,7 +8,9 @@
 			"include": [
 				"./",
 				"./utility/",
-				"./system-calls/"
+				"./system-calls/",
+				"./file-systems/",
+				"./file-systems/memory-file-system"
 			]
 		}
 	]

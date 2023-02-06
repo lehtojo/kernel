@@ -7,6 +7,20 @@ constant RFLAGS_INTERRUPT_FLAG = 1 <| 9
 Process {
 	constant NORMAL_PRIORITY = 50
 
+	private shared attach_standard_files(allocator: Allocator, file_descriptors: ProcessFileDescriptors) {
+		standard_input_descriptor = file_descriptors.allocate().or_panic('Failed to create standard input descriptor for a process')
+		require(standard_output_descriptor == 0, 'Created invalid standard input descriptor')
+		standard_input_inode = kernel.file_systems.MemoryInode(allocator, String.new('STANDARD_INPUT')) using allocator
+		standard_input_file = kernel.file_systems.InodeFile(standard_input_inode) using allocator
+		file_descriptors.attach(standard_input_descriptor, kernel.file_systems.OpenFileDescription.try_create(allocator, standard_input_file))
+		
+		standard_output_descriptor = file_descriptors.allocate().or_panic('Failed to create standard output descriptor for a process')
+		require(standard_output_descriptor == 1, 'Created invalid standard output descriptor')
+		standard_output_inode = kernel.file_systems.MemoryInode(allocator, String.new('STANDARD_OUTPUT')) using allocator
+		standard_output_file = kernel.file_systems.InodeFile(standard_output_inode) using allocator
+		file_descriptors.attach(standard_output_descriptor, kernel.file_systems.OpenFileDescription.try_create(allocator, standard_output_file))
+	}
+
 	# Summary: Creates a process from the specified executable file
 	shared from_executable(allocator: Allocator, file: Array<u8>): Process {
 		debug.write_line('Process: Creating a process from executable...')
@@ -80,7 +94,10 @@ Process {
 		# Register the stack to the process
 		register_state[].userspace_rsp = program_stack_pointer
 
-		return Process(register_state, memory) using allocator
+		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
+		attach_standard_files(allocator, file_descriptors)
+
+		return Process(register_state, memory, file_descriptors) using allocator
 	}
 
 	id: u64
@@ -89,10 +106,11 @@ Process {
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
 
-	init(registers: RegisterState*, memory: ProcessMemory) {
+	init(registers: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0
 		this.registers = registers
 		this.memory = memory
+		this.file_descriptors = file_descriptors
 
 		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG

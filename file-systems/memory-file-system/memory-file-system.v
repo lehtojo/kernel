@@ -2,87 +2,22 @@ namespace kernel.file_systems.memory_file_system
 
 import kernel.system_calls
 
-File MemoryObject {
-	name: String
-}
-
-MemoryObject MemoryFile {
-	allocator: Allocator
-	name: String
-	data: List<u8>
+Inode MemoryDirectoryInode {
+	private allocator: Allocator
+	private name: String
+	inodes: List<Inode>
 
 	init(allocator: Allocator, name: String) {
 		this.allocator = allocator
 		this.name = name
-		this.data = List<u8>(allocator) using allocator
+		this.inodes = List<Inode>(allocator) using allocator
 	}
 
-	override can_read(description: OpenFileDescription): bool { return true }
-	override can_write(description: OpenFileDescription): bool { return true }
-	override can_seek(description: OpenFileDescription): bool { return true }
+	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
+	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
-	# Summary: Writes the specified data at the specified offset into this file
-	override write(description: OpenFileDescription, new_data: Array<u8>, offset: u64): u64 {
-		offset = description.offset
-		if data.bounds.outside(offset) return -1
-
-		# Ensure the new data will fit into the file data
-		data.reserve(offset + new_data.size)
-
-		memory.copy_into(data, offset, new_data, 0, new_data.size)
-		return new_data.size
-	}
-
-	# Summary: Reads data from this file using the specified offset
-	override read(description: OpenFileDescription, destination: link, size: u64): u64 {
-		offset = description.offset
-		if data.bounds.outside(offset, size) return -1
-
-		memory.copy(destination, data.data + offset, size)
-		return size
-	}
-
-	# Summary: Seeks to the specified offset
-	override seek(description: OpenFileDescription, offset: u64): i32 {
-		return 0
-	}
-
-	destruct() {
-		data.destruct(allocator)
-		allocator.deallocate(this as link)
-	}
-}
-
-MemoryObject MemoryDirectory {
-	allocator: Allocator
-	objects: List<MemoryObject>
-
-	init(allocator: Allocator) {
-		this.allocator = allocator
-		this.objects = List<MemoryObject>(allocator) using allocator
-	}
-
-	# Summary: Attempts to find an object with the specified name
-	find_object(name: String): MemoryObject {
-		loop (i = 0, i < objects.size, i++) {
-			# Find an object with the specified name
-			object = objects[i]
-			if object.name == name return object
-		}
-
-		return none as MemoryObject
-	}
-
-	# Summary: Creates a new file and adds it to this directory
-	create_file(allocator: Allocator, name: String): File {
-		file = File(name) using allocator
-		objects.add(file)
-		return file
-	}
-
-	destruct() {
-		data.destruct(allocator)
-		allocator.deallocate(this as link)
+	override lookup(name: String) {
+		return none as Inode
 	}
 }
 
@@ -121,53 +56,62 @@ PathParts {
 	}
 }
 
+constant O_CREAT = 0 # Todo: Import the real value
+
 constant CREATE_OPTION_NONE = 0
 constant CREATE_OPTION_FILE = 1
 constant CREATE_OPTION_DIRECTORY = 2
 
 FileSystem MemoryFileSystem {
 	allocator: Allocator
-	root: MemoryDirectory
+
+	init(allocator: Allocator) {
+		this.allocator = allocator
+	}
 
 	# Summary: Produces create options from the specified flags
 	get_create_options(flags: u32, is_directory: bool) {
-		if not has_flag(flags, O_CREAT) return CREATE_FLAG_NONE
+		if not has_flag(flags, O_CREAT) return CREATE_OPTION_NONE
 
-		if is_directory return CREATE_FLAG_DIRECTORY
+		if is_directory return CREATE_OPTION_DIRECTORY
 		return CREATE_OPTION_FILE
 	}
 
-	override open_file(base: Custody, path: String, flags: i32, mode: u32): Result<OpenFileDescriptor, u32> {
-		custody = open_path(base, path, get_create_options(flags))
+	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
+		custody = open_path(base, path, get_create_options(flags, false))
 		if custody === none return Results.error<OpenFileDescription, u32>(-1)
 
-		description = OpenFileDescription.try_create(custody)
+		description = OpenFileDescription.try_create(allocator, custody)
 		custody.destruct_until(allocator, base)
 
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
-	override create_file(base: Custody, path: String, flags: i32, mode: u32): Result<OpenFileDescriptor, u32> {
-		custody = open_path(base, path, get_create_options(flags))
+	override create_file(base: Custody, path: String, flags: i32, mode: u32) {
+		custody = open_path(base, path, get_create_options(flags, false))
 		if custody === none return Results.error<OpenFileDescription, u32>(-1)
 
-		description = OpenFileDescription.try_create(custody)
+		description = OpenFileDescription.try_create(allocator, custody)
 		custody.destruct_until(allocator, base)
 
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
-	open make_directory(base: Custody, path: String, flags: i32, mode: u32): Result<OpenFileDescription, u32> {
+	override make_directory(base: Custody, path: String, flags: i32, mode: u32) {
 		custody = open_path(base, path, CREATE_OPTION_DIRECTORY)
+		if custody === none return Results.error<OpenFileDescription, u32>(-1)
 
+		description = OpenFileDescription.try_create(allocator, custody)
+		custody.destruct_until(allocator, base)
 
+		return Results.new<OpenFileDescription, u32>(description)
 	}
 
 	# Summary:
 	# Starts from the specified custody, follows the specified path and potentially creates it depending on the specified options.
 	# If the end of the path can not be reached, none is returned.
 	open_path(container: Custody, path: String, create_options: u8): Custody {
-		parts = PathParts.new(path)
+		parts = PathParts(path)
 
 		loop {
 			if not parts.next() stop
@@ -180,12 +124,12 @@ FileSystem MemoryFileSystem {
 
 			# If the child does not exist, we must create it if it is allowed or return none
 			if inode === none {
-				if create_options == CREATE_FLAG_NONE return none as Custody
+				if create_options == CREATE_OPTION_NONE return none as Custody
 
 				# Create a directory when:
 				# - We have not reached the last part in the path (only directories can have childs)
 				# - We have reached the last part and it must be a directory
-				create_directory = not parts.ended or has_flag(create_options, CREATE_FLAG_DIRECTORY)
+				create_directory = not parts.ended or has_flag(create_options, CREATE_OPTION_DIRECTORY)
 
 				if create_directory {
 					inode = container.inode.create_directory(part)
@@ -205,4 +149,26 @@ FileSystem MemoryFileSystem {
 
 		return container
 	}
+}
+
+export test(allocator: Allocator) {
+	file_system = MemoryFileSystem(allocator) using allocator
+
+	root = MemoryDirectoryInode(allocator, String.empty) using allocator
+	bin = MemoryDirectoryInode(allocator, String.new('bin')) using allocator
+	home = MemoryDirectoryInode(allocator, String.new('home')) using allocator
+	user = MemoryDirectoryInode(allocator, String.new('user')) using allocator
+
+	lorem_raw_data = 'Lorem ipsum dolor sit amet'
+	lorem_data_size = length_of(lorem_raw_data)
+	lorem_data = Array<u8>(lorem_raw_data, lorem_data_size) using allocator
+	lorem_inode = MemoryInode(allocator, String.new('lorem.txt')) using allocator
+	lorem_file = InodeFile(lorem_inode) using allocator
+
+	root.inodes.add(bin) root.inodes.add(home)
+	home.inodes.add(user)
+	user.inodes.add(lorem_file.inode)
+
+	Custody.root = Custody(String.empty, none as Custody, root) using allocator
+	FileSystem.root = file_system
 }

@@ -20,7 +20,7 @@ export system_open(process: Process, path: String, flags: i32, mode: u32): i32 {
 	if process.file_descriptors.allocate() has not descriptor return ENOMEM
 
 	# Try opening the specified path as a file
-	result = FileSystem.root.open_file(Custody.root, path, flags, mode)
+	result = kernel.file_systems.FileSystem.root.open_file(kernel.file_systems.Custody.root, path, flags, mode)
 	if result has not description return result.error
 
 	require(process.file_descriptors.attach(descriptor, description), 'Failed to attach file description to descriptor')

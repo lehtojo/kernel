@@ -1,8 +1,10 @@
 namespace kernel.scheduler
 
+import kernel.file_systems
+
 pack FileDescriptorState {
 	allocated: bool
-	description: OpenFileDescription
+	description: kernel.file_systems.OpenFileDescription # Todo: Remove full path
 
 	shared new(): FileDescriptorState {
 		return pack { allocated: false, description: none as OpenFileDescription } as FileDescriptorState
@@ -21,7 +23,7 @@ plain ProcessFileDescriptors {
 	}
 
 	# Summary: Attempts to allocate a file descriptor for usage
-	allocate(description: OpenFileDescription): Optional<u32> {
+	allocate(): Optional<u32> {
 		# Look for a file descriptor that is no longer allocated
 		loop (i = 0, i < descriptors.size, i++) {
 			if not descriptors[i].allocated return Optionals.new<i64>(i)
@@ -37,7 +39,7 @@ plain ProcessFileDescriptors {
 	}
 
 	# Summary: Attempts to attach the specified file description to the specified file descriptor
-	attach(descriptor: u32, description: OpenFileDescription): bool {
+	attach(descriptor: u32, description: kernel.file_systems.OpenFileDescription): bool {
 		require(descriptors.bounds.inside(descriptor), 'File descriptor out of bounds')
 
 		# Load the descriptor and ensure it is not allocated
@@ -53,12 +55,12 @@ plain ProcessFileDescriptors {
 	# Summary:
 	# Returns the file description attached to the specified file descriptor, 
 	# if it exists and is open. Otherwise, none is returned.
-	try_get_description(file_descriptor: u32): OpenFileDescription {
+	try_get_description(file_descriptor: u32): kernel.file_systems.OpenFileDescription {
 		# Ensure the file descriptor exists
-		if file_descriptor >= file_descriptors.size return none as OpenFileDescription
+		if file_descriptor >= descriptors.size return none as OpenFileDescription
 
 		# Require the descriptor to be allocated
-		descriptor = file_descriptors[file_descriptor]
+		descriptor = descriptors[file_descriptor]
 		if not descriptor.allocated return none as OpenFileDescription
 
 		return descriptor.description

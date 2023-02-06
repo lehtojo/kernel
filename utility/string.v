@@ -2,6 +2,10 @@ pack String {
 	data: link
 	length: u64
 
+	shared empty(): String {
+		return pack { data: none as link, length: 0 } as String
+	}
+
 	shared new(data: link): String {
 		return pack { data: data, length: length_of(data) } as String
 	}
@@ -14,6 +18,22 @@ pack String {
 	get(i: large) {
 		require(i >= 0 and i <= length, 'Invalid getter index')
 		return data[i]
+	}
+
+	# Summary: Returns the index of the first occurrence of the specified character starting from the specified offset
+	index_of(character: char, offset: u64): i64 {
+		require(offset <= length, 'Invalid offset')
+
+		loop (i = offset, i < length, i++) {
+			if data[i] == character return i
+		}
+
+		return -1
+	}
+
+	# Summary: Returns the index of the first occurrence of the specified character
+	index_of(character: char): i64 {
+		return index_of(character, 0)
 	}
 
 	# Summary: Returns the substring in the specified range

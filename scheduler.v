@@ -173,7 +173,9 @@ test(allocator: Allocator) {
 	text_section_virtual_address[position++] = 0xeb
 	text_section_virtual_address[position++] = 0xf9
 
-	process = Process(registers, memory) using KernelHeap
+	file_descriptors = ProcessFileDescriptors(allocator, 256) using KernelHeap
+
+	process = Process(registers, memory, file_descriptors) using KernelHeap
 	process.registers[].rip = program_text_section_virtual_address
 	process.registers[].userspace_rsp = program_stack_virtual_address + 0x100
 

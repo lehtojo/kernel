@@ -18,8 +18,7 @@ export system_memory_map(
 	debug.write(', offset=') debug.write(offset)
 	debug.write_line()
 
-	process = interrupts.scheduler.current
-	require(process !== none, 'Missing process')
+	process = get_process()
 
 	# Use multiple of pages when allocating
 	length = memory.round_to_page(length)

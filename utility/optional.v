@@ -9,6 +9,11 @@ pack Optional<T> {
 	get_value(): T {
 		return value
 	}
+
+	or_panic(message: link): T {
+		if empty panic(message)
+		return value
+	}
 }
 
 namespace Optionals {

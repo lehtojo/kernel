@@ -1,5 +1,7 @@
 namespace kernel.system_calls
 
+import kernel.scheduler
+
 import 'C' get_system_call_handler(): link
 
 constant ENOMEM = -1

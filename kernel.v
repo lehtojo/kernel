@@ -104,6 +104,8 @@ export start(
 
 	kernel.apic.initialize(allocator)
 
+	kernel.file_systems.memory_file_system.test(kernel.HeapAllocator.instance)
+
 	kernel.system_calls.initialize()
 
 	kernel.interrupts.enable()

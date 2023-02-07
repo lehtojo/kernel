@@ -13,10 +13,30 @@ Inode MemoryDirectoryInode {
 		this.inodes = List<Inode>(allocator) using allocator
 	}
 
+	override is_directory() { return true }
+
 	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
 	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
+	override create_child(name: String) {
+		debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
+
+		inode = MemoryInode(allocator, name) using allocator
+		inodes.add(inode)
+
+		return inode
+	}
+
 	override lookup(name: String) {
+		debug.write('Memory directory inode: Looking for ') debug.write_line(name)
+
+		# Look for an inode with the specified name
+		loop (i = 0, i < inodes.size, i++) {
+			inode = inodes[i]
+			# Todo: That cast is dirty trick, remove it :D 
+			if inode.is_directory() and inode.(MemoryDirectoryInode).name == name return inode
+		}
+
 		return none as Inode
 	}
 }
@@ -31,7 +51,10 @@ PathParts {
 	init(path: String) {
 		this.path = path
 		this.position = 0
-		this.part = 0
+		this.part = String.empty()
+
+		# Skip the root separator automatically
+		if path.starts_with(`/`) { position++ }
 	}
 
 	next(): bool {
@@ -56,7 +79,7 @@ PathParts {
 	}
 }
 
-constant O_CREAT = 0 # Todo: Import the real value
+constant O_CREAT = 0x40
 
 constant CREATE_OPTION_NONE = 0
 constant CREATE_OPTION_FILE = 1
@@ -78,8 +101,14 @@ FileSystem MemoryFileSystem {
 	}
 
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
+		debug.write('Memory file system: Opening file from path ') debug.write_line(path)
+
 		custody = open_path(base, path, get_create_options(flags, false))
-		if custody === none return Results.error<OpenFileDescription, u32>(-1)
+
+		if custody === none {
+			debug.write_line('Memory file system: Failed to open the specified path')
+			return Results.error<OpenFileDescription, u32>(-1)
+		}
 
 		description = OpenFileDescription.try_create(allocator, custody)
 		custody.destruct_until(allocator, base)

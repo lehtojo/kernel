@@ -48,6 +48,11 @@ pack String {
 		return String.new(data + start, length - start)
 	}
 
+	# Summary: Returns whether the first character of this string is the specified one
+	starts_with(character: char): bool {
+		return length > 0 and data[0] == character
+	}
+
 	# Summary: Returns whether the two strings are equal
 	equals(other: String): bool {
 		a = length

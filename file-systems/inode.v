@@ -1,6 +1,8 @@
 namespace kernel.file_systems
 
 Inode {
+	open is_directory(): bool { return false }
+
 	open can_read(description: OpenFileDescription): bool { return false }
 	open can_write(description: OpenFileDescription): bool { return false }
 
@@ -12,7 +14,5 @@ Inode {
 	create_directory(name: String): Inode { return create_child(name) }
 	create_file(name: String): Inode { return create_child(name) }
 
-	open lookup(name: String): Inode {
-		return none as Inode
-	}
+	open lookup(name: String): Inode { return none as Inode }
 }

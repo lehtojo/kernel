@@ -82,9 +82,13 @@ export process(frame: TrapFrame*): u64 {
 	system_call_number = registers[].rax
 	result = 0 as u64
 
-	if system_call_number == 1 {
-		system_write(registers[].rdi as u32, registers[].rsi as link, registers[].rdx)
-	} else system_call_number == 9 {
+	if system_call_number == 0x01 {
+		result = system_write(registers[].rdi as u32, registers[].rsi as link, registers[].rdx)
+	} else system_call_number == 0x02 {
+		result = system_open(registers[].rdi as link, registers[].rsi as i32, registers[].rdx as u32)
+	} else system_call_number == 0x03 {
+		result = system_close(registers[].rdi as u32)
+	} else system_call_number == 0x09 {
 		result = system_memory_map(
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9

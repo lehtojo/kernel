@@ -35,6 +35,7 @@ Inode MemoryDirectoryInode {
 			inode = inodes[i]
 			# Todo: That cast is dirty trick, remove it :D 
 			if inode.is_directory() and inode.(MemoryDirectoryInode).name == name return inode
+			if not inode.is_directory() and inode.(MemoryInode).name == name return inode
 		}
 
 		return none as Inode
@@ -190,8 +191,8 @@ export test(allocator: Allocator) {
 
 	lorem_raw_data = 'Lorem ipsum dolor sit amet'
 	lorem_data_size = length_of(lorem_raw_data)
-	lorem_data = Array<u8>(lorem_raw_data, lorem_data_size) using allocator
-	lorem_inode = MemoryInode(allocator, String.new('lorem.txt')) using allocator
+	lorem_data = List<u8>(allocator, lorem_raw_data, lorem_data_size) using allocator
+	lorem_inode = MemoryInode(allocator, String.new('lorem.txt'), lorem_data) using allocator
 	lorem_file = InodeFile(lorem_inode) using allocator
 
 	root.inodes.add(bin) root.inodes.add(home)

@@ -6,6 +6,8 @@ Inode {
 	open can_read(description: OpenFileDescription): bool { return false }
 	open can_write(description: OpenFileDescription): bool { return false }
 
+	open size(): u64 { return 0 }
+
 	open write_bytes(bytes: Array<u8>, offset: u64): u64
 	open read_bytes(destination: link, offset: u64, size: u64): u64
 

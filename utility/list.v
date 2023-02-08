@@ -20,6 +20,13 @@ List<T> {
 		if fill { this.size = capacity }
 	}
 
+	init(allocator: Allocator, data: T*, size: u64) {
+		this.allocator = allocator
+		this.data = data
+		this.size = size
+		this.capacity = size
+	}
+
 	private extend() {
 		reserve(math.max(size, 1) * 2)
 	}

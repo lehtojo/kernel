@@ -11,8 +11,19 @@ Inode MemoryInode {
 		this.data = List<u8>(allocator) using allocator
 	}
 
+	init(allocator: Allocator, name: String, data: List<u8>) {
+		this.allocator = allocator
+		this.name = name
+		this.data = data
+	}
+
 	override can_read(description: OpenFileDescription) { return true }
 	override can_write(description: OpenFileDescription) { return true }
+	override can_seek(description: OpenFileDescription) { return true }
+
+	override size() {
+		return data.size
+	}
 
 	# Summary: Writes the specified data at the specified offset into this file
 	override write_bytes(bytes: Array<u8>, offset: u64) {
@@ -31,9 +42,7 @@ Inode MemoryInode {
 	}
 
 	# Summary: Reads data from this file using the specified offset
-	open read_bytes(destination: link, offset: u64, size: u64) {
-		offset = description.offset
-
+	override read_bytes(destination: link, offset: u64, size: u64) {
 		if data.bounds.outside(offset, size) {
 			debug.write_line('Memory inode: Specified offset out of bounds (read)')
 			return -1

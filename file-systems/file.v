@@ -5,6 +5,9 @@ File {
 
 	open can_read(description: OpenFileDescription): bool { return false }
 	open can_write(description: OpenFileDescription): bool { return false }
+	open can_seek(description: OpenFileDescription): bool { return false }
+
+	open size(description: OpenFileDescription): u64 { return 0 }
 
 	open write(description: OpenFileDescription, data: Array<u8>): u64 { return -1 }
 	open read(description: OpenFileDescription, destination: link, size: u64): u64 { return -1 }

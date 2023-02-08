@@ -4,9 +4,11 @@ import kernel.scheduler
 
 import 'C' get_system_call_handler(): link
 
-constant ENOMEM = -1
-constant EBADF = -2
-constant EFAULT = -3
+constant EBADF = -9
+constant ENOMEM = -12
+constant EFAULT = -14
+constant EINVAL = -22
+constant ESPIPE = -29
 
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081
@@ -82,12 +84,16 @@ export process(frame: TrapFrame*): u64 {
 	system_call_number = registers[].rax
 	result = 0 as u64
 
-	if system_call_number == 0x01 {
+	if system_call_number == 0x00 {
+		result = system_read(registers[].rdi as u32, registers[].rsi as link, registers[].rdx)
+	} else system_call_number == 0x01 {
 		result = system_write(registers[].rdi as u32, registers[].rsi as link, registers[].rdx)
 	} else system_call_number == 0x02 {
 		result = system_open(registers[].rdi as link, registers[].rsi as i32, registers[].rdx as u32)
 	} else system_call_number == 0x03 {
 		result = system_close(registers[].rdi as u32)
+	} else system_call_number == 0x08 {
+		result = system_seek(registers[].rdi as u32, registers[].rsi as i64, registers[].rdx as i32)
 	} else system_call_number == 0x09 {
 		result = system_memory_map(
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,

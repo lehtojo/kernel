@@ -4,6 +4,13 @@ constant SEEK_SET = 0
 constant SEEK_CUR = 1
 constant SEEK_END = 2
 
+pack DirectoryEntry64 {
+	inode: u64
+	offset: u64
+	size: u16
+	type: u8
+}
+
 plain OpenFileDescription {
 	file: File
 	offset: u64 = 0
@@ -21,7 +28,7 @@ plain OpenFileDescription {
 		this.file = file
 	}
 
-	is_directory(): bool { return file.is_directory() }
+	is_directory(): bool { return file.is_directory(this) }
 
 	can_read(): bool { return file.can_read(this) }
 	can_write(): bool { return file.can_write(this) }
@@ -69,8 +76,19 @@ plain OpenFileDescription {
 		return new_offset
 	}
 
-	get_directory_entries(): i32 {
-		if not is_directory() return -1
-		return file.get_directory_entries(this)
+	get_directory_entries(output_entries: link, output_entries_size: u64): i32 {
+		if not is_directory() return kernel.system_calls.ENOTDIR
+
+		# Todo: Load the inode properly
+		inode = none as Inode
+		allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		loop entry in FileSystem.root.iterate_directory(inode) {
+			# Todo: Process each entry and output them
+		}
+
+		allocator.deallocate()
+
+		return 0 # Todo: Return the correct value
 	}
 }

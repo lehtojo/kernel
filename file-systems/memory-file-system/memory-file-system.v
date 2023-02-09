@@ -42,6 +42,29 @@ Inode MemoryDirectoryInode {
 	}
 }
 
+DirectoryIterator MemoryDirectoryIterator {
+	private inline entry: DirectoryEntry
+	private directory: MemoryDirectoryInode
+	private entry_index: u32 = -1
+
+	init(directory: MemoryDirectoryInode) {
+		this.directory = directory
+	}
+
+	override next() {
+		if ++entry_index >= directory.inodes.size return false 
+
+		inode = directory.inodes[entry_index] as MemoryInode
+		entry.name = inode.name
+
+		return true
+	}
+
+	override value() {
+		return entry
+	}
+}
+
 PathParts {
 	private path: String
 	private position: u64
@@ -135,6 +158,10 @@ FileSystem MemoryFileSystem {
 		custody.destruct_until(allocator, base)
 
 		return Results.new<OpenFileDescription, u32>(description)
+	}
+
+	override iterate_directory(inode: Inode) {
+		return MemoryDirectoryIterator(inode as MemoryDirectoryInode)
 	}
 
 	# Summary:

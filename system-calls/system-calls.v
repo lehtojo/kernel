@@ -9,6 +9,7 @@ constant ENOMEM = -12
 constant EFAULT = -14
 constant EINVAL = -22
 constant ESPIPE = -29
+constant ENOTDIR = 20
 
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081

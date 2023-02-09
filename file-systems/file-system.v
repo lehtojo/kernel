@@ -1,5 +1,16 @@
 namespace kernel.file_systems
 
+plain DirectoryEntry {
+	name: String
+}
+
+DirectoryIterator {
+	open next(): bool
+	open value(): DirectoryEntry
+
+	iterator(): DirectoryIterator { return this }
+}
+
 FileSystem {
 	shared root: FileSystem
 
@@ -20,4 +31,6 @@ FileSystem {
 	open time()
 	open rename()
 	open open_directory()
+
+	open iterate_directory(inode: Inode): DirectoryIterator
 }

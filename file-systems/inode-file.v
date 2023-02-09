@@ -28,8 +28,4 @@ File InodeFile {
 	override seek(description: OpenFileDescription, offset: u64) {
 		return 0
 	}
-
-	override get_directory_entries(description: OpenFileDescription) {
-		return -1
-	}
 }

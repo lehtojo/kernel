@@ -11,6 +11,15 @@ constant EINVAL = -22
 constant ESPIPE = -29
 constant ENOTDIR = 20
 
+constant DT_UNKNOWN = 0
+constant DT_FIFO = 1
+constant DT_CHR = 2
+constant DT_DIR = 4
+constant DT_BLK = 6
+constant DT_REG = 8
+constant DT_LNK = 10
+constant DT_SOCK = 12
+
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081
 constant MSR_LSTAR = 0xc0000082
@@ -102,6 +111,8 @@ export process(frame: TrapFrame*): u64 {
 		)
 	} else system_call_number == 0x3c {
 		system_exit(frame, registers[].rdi as i32)
+	} else system_call_number == 0xd9 {
+		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')

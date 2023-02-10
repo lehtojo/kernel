@@ -1,6 +1,14 @@
 namespace kernel.file_systems
 
 Inode {
+	readable file_system: FileSystem
+	readable index: u64
+
+	init(file_system: FileSystem, index: u64) {
+		this.file_system = file_system
+		this.index = index
+	}
+
 	open is_directory(): bool { return false }
 
 	open can_read(description: OpenFileDescription): bool { return false }

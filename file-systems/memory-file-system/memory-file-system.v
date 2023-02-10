@@ -7,7 +7,9 @@ Inode MemoryDirectoryInode {
 	private name: String
 	inodes: List<Inode>
 
-	init(allocator: Allocator, name: String) {
+	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String) {
+		Inode.init(file_system, index)
+
 		this.allocator = allocator
 		this.name = name
 		this.inodes = List<Inode>(allocator) using allocator
@@ -21,7 +23,11 @@ Inode MemoryDirectoryInode {
 	override create_child(name: String) {
 		debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
 
-		inode = MemoryInode(allocator, name) using allocator
+		# Allocate an inode index for the child
+		child_index = file_system.allocate_inode_index()
+		if child_index == -1 return none as Inode
+
+		inode = MemoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator
 		inodes.add(inode)
 
 		return inode
@@ -43,11 +49,12 @@ Inode MemoryDirectoryInode {
 }
 
 DirectoryIterator MemoryDirectoryIterator {
-	private inline entry: DirectoryEntry
+	private entry: DirectoryEntry
 	private directory: MemoryDirectoryInode
 	private entry_index: u32 = -1
 
-	init(directory: MemoryDirectoryInode) {
+	init(entry: DirectoryEntry, directory: MemoryDirectoryInode) {
+		this.entry = entry
 		this.directory = directory
 	}
 
@@ -56,6 +63,8 @@ DirectoryIterator MemoryDirectoryIterator {
 
 		inode = directory.inodes[entry_index] as MemoryInode
 		entry.name = inode.name
+		entry.inode = inode
+		entry.type = DT_REG # Todo: Figure out the type
 
 		return true
 	}
@@ -111,6 +120,7 @@ constant CREATE_OPTION_DIRECTORY = 2
 
 FileSystem MemoryFileSystem {
 	allocator: Allocator
+	inode_index: u64
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
@@ -160,8 +170,15 @@ FileSystem MemoryFileSystem {
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
-	override iterate_directory(inode: Inode) {
-		return MemoryDirectoryIterator(inode as MemoryDirectoryInode)
+	override iterate_directory(allocator: Allocator, inode: Inode) {
+		require(inode.is_directory(), 'Specified inode was not a directory')
+
+		entry = DirectoryEntry() using allocator
+		return MemoryDirectoryIterator(entry, inode as MemoryDirectoryInode) using allocator
+	}
+
+	override allocate_inode_index() {
+		return inode_index++
 	}
 
 	# Summary:
@@ -211,15 +228,16 @@ FileSystem MemoryFileSystem {
 export test(allocator: Allocator) {
 	file_system = MemoryFileSystem(allocator) using allocator
 
-	root = MemoryDirectoryInode(allocator, String.empty) using allocator
-	bin = MemoryDirectoryInode(allocator, String.new('bin')) using allocator
-	home = MemoryDirectoryInode(allocator, String.new('home')) using allocator
-	user = MemoryDirectoryInode(allocator, String.new('user')) using allocator
+	root = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.empty) using allocator
+	bin = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('bin')) using allocator
+	home = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('home')) using allocator
+	user = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('user')) using allocator
 
 	lorem_raw_data = 'Lorem ipsum dolor sit amet'
 	lorem_data_size = length_of(lorem_raw_data)
 	lorem_data = List<u8>(allocator, lorem_raw_data, lorem_data_size) using allocator
-	lorem_inode = MemoryInode(allocator, String.new('lorem.txt'), lorem_data) using allocator
+	lorem_index = file_system.allocate_inode_index()
+	lorem_inode = MemoryInode(allocator, file_system, lorem_index, String.new('lorem.txt'), lorem_data) using allocator
 	lorem_file = InodeFile(lorem_inode) using allocator
 
 	root.inodes.add(bin) root.inodes.add(home)

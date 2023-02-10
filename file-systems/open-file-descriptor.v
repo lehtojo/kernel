@@ -9,6 +9,10 @@ pack DirectoryEntry64 {
 	offset: u64
 	size: u16
 	type: u8
+
+	shared new(inode: u64, offset: u64, size: u16, type: u8): DirectoryEntry64 {
+		return pack { inode: inode, offset: offset, size: size, type: type } as DirectoryEntry64
+	}
 }
 
 plain OpenFileDescription {
@@ -76,19 +80,75 @@ plain OpenFileDescription {
 		return new_offset
 	}
 
-	get_directory_entries(output_entries: link, output_entries_size: u64): i32 {
-		if not is_directory() return kernel.system_calls.ENOTDIR
+	get_directory_entries(output: MemoryRegion): u64 {
+		if not is_directory() {
+			debug.write_line('Open file description: Can not get directory entries, because the opened file is not a directory')
+			return kernel.system_calls.ENOTDIR
+		}
 
-		# Todo: Load the inode properly
-		inode = none as Inode
+		# Todo: Figure out if this is safe: Because the opened file is a directory, we assume that the file must be an inode file
+		inode = file.(InodeFile).inode
 		allocator = LocalHeapAllocator(HeapAllocator.instance)
+		error = 0
 
-		loop entry in FileSystem.root.iterate_directory(inode) {
-			# Todo: Process each entry and output them
+		debug.write_line('Open file description: Iterating directory entries...')
+
+		loop entry in FileSystem.root.iterate_directory(allocator, inode) {
+			debug.write('Open file description: Found directory entry: name=')
+			debug.write(entry.name)
+			debug.write(', inode=')
+			debug.write_line(entry.inode.index)
+
+			# Compute the size of the output data structure with the name, align it to 8 bytes
+			unaligned_output_entry_size = sizeof(DirectoryEntry64) + entry.name.length + 1
+			output_entry_size = memory.round_to(sizeof(DirectoryEntry64) + entry.name.length + 1, 8)
+			padding = output_entry_size - unaligned_output_entry_size
+
+			# Compute the offset to the next entry
+			next_entry_offset = output.position + output_entry_size
+
+			output_entry = DirectoryEntry64.new(
+				entry.inode.index,
+				next_entry_offset,
+				output_entry_size,
+				entry.type
+			)
+
+			# Output the current entry data
+			if not output.write_and_advance<DirectoryEntry64>(output_entry) {
+				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
+				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				stop
+			}
+
+			# Output the name of the current entry and zero terminate it
+			if not output.write_string_and_advance(entry.name, true) {
+				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
+				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				stop
+			}
+
+			# Move over the padding
+			# Note: It is a bit dumb if the last entry is written, but the padding fails the whole system call, but 
+			# the idea is that the offset should never point outside the userspace buffer and currently even the 
+			# last entry has an offset that points to the "next entry". 
+			if not output.advance(padding) {
+				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
+				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				stop
+			}
 		}
 
 		allocator.deallocate()
 
-		return 0 # Todo: Return the correct value
+		debug.write_line('Open file description: Finished iterating directory entries')
+
+		# Return the error code if it was set
+		if error return error
+
+		debug.write('Open file description: Wrote directory entries ') debug.write(output.position) debug.write_line(' byte(s) into userspace')
+
+		# Return the number of bytes written to the output
+		return output.position
 	}
 }

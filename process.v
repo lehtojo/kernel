@@ -8,15 +8,17 @@ Process {
 	constant NORMAL_PRIORITY = 50
 
 	private shared attach_standard_files(allocator: Allocator, file_descriptors: ProcessFileDescriptors) {
+		# Todo: Do not use an inode file here, create a memory backed file (inodes are used for file systems)
 		standard_input_descriptor = file_descriptors.allocate().or_panic('Failed to create standard input descriptor for a process')
 		require(standard_output_descriptor == 0, 'Created invalid standard input descriptor')
-		standard_input_inode = kernel.file_systems.MemoryInode(allocator, String.new('STANDARD_INPUT')) using allocator
+		standard_input_inode = kernel.file_systems.MemoryInode(allocator, none as kernel.file_systems.FileSystem, -1, String.new('STANDARD_INPUT')) using allocator
 		standard_input_file = kernel.file_systems.InodeFile(standard_input_inode) using allocator
 		file_descriptors.attach(standard_input_descriptor, kernel.file_systems.OpenFileDescription.try_create(allocator, standard_input_file))
 		
+		# Todo: Do not use an inode file here, create a memory backed file (inodes are used for file systems)
 		standard_output_descriptor = file_descriptors.allocate().or_panic('Failed to create standard output descriptor for a process')
 		require(standard_output_descriptor == 1, 'Created invalid standard output descriptor')
-		standard_output_inode = kernel.file_systems.MemoryInode(allocator, String.new('STANDARD_OUTPUT')) using allocator
+		standard_output_inode = kernel.file_systems.MemoryInode(allocator, none as kernel.file_systems.FileSystem, -1, String.new('STANDARD_OUTPUT')) using allocator
 		standard_output_file = kernel.file_systems.InodeFile(standard_output_inode) using allocator
 		file_descriptors.attach(standard_output_descriptor, kernel.file_systems.OpenFileDescription.try_create(allocator, standard_output_file))
 	}

@@ -2,6 +2,8 @@ namespace kernel.file_systems
 
 plain DirectoryEntry {
 	name: String
+	inode: Inode
+	type: u8
 }
 
 DirectoryIterator {
@@ -32,5 +34,6 @@ FileSystem {
 	open rename()
 	open open_directory()
 
-	open iterate_directory(inode: Inode): DirectoryIterator
+	open iterate_directory(allocator: Allocator, inode: Inode): DirectoryIterator
+	open allocate_inode_index(): u64
 }

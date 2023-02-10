@@ -53,6 +53,11 @@ pack String {
 		return length > 0 and data[0] == character
 	}
 
+	# Summary:
+	copy(allocator: Allocator): String {
+		return String.new(allocator.copy(data, length), length)
+	}
+
 	# Summary: Returns whether the two strings are equal
 	equals(other: String): bool {
 		a = length

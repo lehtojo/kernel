@@ -5,6 +5,12 @@ Allocator {
 	allocate<T>(): T* {
 		return allocate(sizeof(T))
 	}
+
+	copy(source: link, size: u64): link {
+		result = allocate(size)
+		memory.copy(result, source, size)
+		return result
+	}
 }
 
 Allocator BufferAllocator {

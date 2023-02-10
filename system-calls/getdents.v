@@ -1,7 +1,7 @@
 namespace kernel.system_calls
 
 # Summary: getdents64
-export system_getdents64(file_descriptor: u32, output_entries: link, output_entries_size: u64) {
+export system_getdents64(file_descriptor: u32, output_entries: link, output_entries_size: u64): u64 {
 	debug.write('System call: Get directory entries: ')
 	debug.write('file_descriptor=') debug.write(file_descriptor)
 	debug.write(', output_entries=') debug.write_address(output_entries)
@@ -22,7 +22,10 @@ export system_getdents64(file_descriptor: u32, output_entries: link, output_entr
 	}
 
 	# Verify the loaded file description represents a directory
-	if not file_description.is_directory return ENOTDIR
+	if not file_description.is_directory {
+		debug.write_line('System call: Get directory entries: Specified file descriptor did not represent a directory')
+		return ENOTDIR
+	}
 
-	return file_description.get_directory_entries(output_entries, output_entries_size)
+	return file_description.get_directory_entries(MemoryRegion(output_entries, output_entries_size))
 }

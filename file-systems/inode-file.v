@@ -7,7 +7,7 @@ File InodeFile {
 		this.inode = inode
 	}
 
-	override is_directory(description: OpenFileDescription) { return false }
+	override is_directory(description: OpenFileDescription) { return inode.is_directory() }
 
 	override size(description: OpenFileDescription) { return inode.size() }
 

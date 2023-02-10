@@ -5,13 +5,17 @@ Inode MemoryInode {
 	name: String
 	data: List<u8>
 
-	init(allocator: Allocator, name: String) {
+	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String) {
+		Inode.init(file_system, index)
+
 		this.allocator = allocator
 		this.name = name
 		this.data = List<u8>(allocator) using allocator
 	}
 
-	init(allocator: Allocator, name: String, data: List<u8>) {
+	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String, data: List<u8>) {
+		Inode.init(file_system, index)
+
 		this.allocator = allocator
 		this.name = name
 		this.data = data

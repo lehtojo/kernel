@@ -8,6 +8,7 @@ export system_close(file_descriptor: u32): i32 {
 	debug.write('file_descriptor=') debug.write(file_descriptor)
 	debug.write_line()
 
-	# Todo: Implement
-	return 0
+	process = get_process()
+
+	return process.file_descriptors.close(file_descriptor)
 }

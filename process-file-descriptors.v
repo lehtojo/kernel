@@ -66,6 +66,31 @@ plain ProcessFileDescriptors {
 		return descriptor.description
 	}
 
+	# Summary: Attempts to close the specified file descriptor
+	close(file_descriptor: u32): u32 {
+		# Ensure the file descriptor exists
+		if file_descriptor >= descriptors.size {
+			debug.write_line('Process file descriptors: Failed to close, because the file descriptor did not exist')
+			return kernel.system_calls.EBADF
+		}
+
+		# Require the descriptor to be allocated before closing
+		state = descriptors[file_descriptor]
+
+		if not state.allocated {
+			debug.write_line('Process file descriptors: Failed to close, because the file descriptor was not allocated')
+			return kernel.system_calls.EBADF
+		}
+
+		debug.write_line('Process file descriptors: Deallocating the file descriptor and closing its description')
+
+		# Set the descriptor deallocated and empty
+		descriptors[file_descriptor] = FileDescriptorState.new()
+
+		# Close the file description and return potential errors from there
+		return state.description.close()
+	}
+
 	destruct() {
 		descriptors.destruct(allocator)
 		allocator.deallocate(this as link)

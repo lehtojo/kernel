@@ -151,4 +151,8 @@ plain OpenFileDescription {
 		# Return the number of bytes written to the output
 		return output.position
 	}
+
+	close(): u32 {
+		return file.close()
+	}
 }

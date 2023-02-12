@@ -10,6 +10,7 @@ constant EFAULT = -14
 constant EINVAL = -22
 constant ESPIPE = -29
 constant ENOTDIR = 20
+constant EOVERFLOW = -75
 
 constant DT_UNKNOWN = 0
 constant DT_FIFO = 1
@@ -55,6 +56,11 @@ export load_string(allocator, string: link, limit: u32): Optional<String> {
 # Summary: Returns whether the specified memory region is mapped and usable by the specified process
 export is_valid_region(process: Process, start: link, size: u64): bool {
 	return true
+}
+
+# Summary: Returns whether the specified system call code is an error
+export is_error_code(code: u64) {
+	return (code as i64) < 0
 }
 
 export initialize() {
@@ -109,6 +115,8 @@ export process(frame: TrapFrame*): u64 {
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9
 		)
+	} else system_call_number == 0x14 {
+		result = system_writev(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0x3c {
 		system_exit(frame, registers[].rdi as i32)
 	} else system_call_number == 0xd9 {

@@ -35,6 +35,10 @@ constant PAGING_TABLE_ENTRY_COUNT = 512
 plain PagingTable {
 	entries: u64[PAGING_TABLE_ENTRY_COUNT]
 
+	init() {
+		memory.zero(this as link, PAGING_TABLE_ENTRY_COUNT * sizeof(u64))
+	}
+
 	# Summary: Sets the CR3 register to point to this paging table
 	use() {
 		physical_address = mapper.to_physical_address(this as link) as u64

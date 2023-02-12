@@ -14,8 +14,7 @@ namespace kernel {
 	constant KERNEL_MAP_END = 0xFFFF808000000000
 	constant KERNEL_MAP_BASE_L4 = 0x100
 
-	constant GDTR_VIRTUAL_ADDRESS = 0x1000
-	constant GDT_VIRTUAL_ADDRESS = 0x2000
+	constant GDTR_VIRTUAL_ADDRESS = 0x100000000000
 
 	import 'C' write_cr0(value: u64)
 	import 'C' write_cr1(value: u64)

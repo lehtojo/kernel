@@ -26,8 +26,14 @@ plain ProcessMemory {
 		# Map the GDT as well
 		paging_table.map_gdt(allocator, Processor.current.gdtr_physical_address)
 
-		# Set all address range after 0x10000 available by default
-		available_regions_by_address.add(Segment.new(0x10000 as link, -1 as link))
+		# Add available address regions
+		available_regions_by_address.add(Segment.new(0 as link, mapper.PAGE_MAP_VIRTUAL_BASE as link))
+
+		# Reserve the GDTR page
+		require(
+			reserve_specific_region(GDTR_VIRTUAL_ADDRESS, PAGE_SIZE),
+			'Failed to reserve GDTR page from process memory'
+		)
 
 		# Reserve the kernel mapping region
 		require(

@@ -111,13 +111,17 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 		segment_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(segment_physical_size)
 		segment_virtual_address = mapper.map_kernel_region(segment_physical_address, segment_virtual_size)
 
-		# TODO: Deallocate upon failure
+		# Todo: Deallocate upon failure
 
 		if segment_physical_address === none {
 			debug.write_line('Loader: Failed to allocate memory for a loadable segment')
 			failed = true
 			stop
 		}
+
+		# Todo:
+		# It seems that the runtime linker has unaligned virtual addresses so take them into consideration.
+		# Those addresses crash the kernel.
 
 		debug.write('Loader: Copying ')
 		debug.write(segment_physical_size)

@@ -30,15 +30,14 @@ load_program_headers(file: Array<u8>, program_header_table: link, program_header
 
 		# TODO: Verify virtual region and alignment
 		debug.write('Loader: Program header: Physical address = ')
-		debug.write_address(program_header.physical_address)
+		debug.write_address(program_header.offset)
 		debug.write(', Physical size = ')
 		debug.write(program_header.segment_file_size)
 		debug.write(', Memory size = ')
 		debug.write_line(program_header.segment_memory_size)
 
 		# Verify the loaded file section exists
-		if not is_accessible_region(file, program_header.physical_address, program_header.segment_file_size) or 
-			program_header.segment_memory_size > program_header.segment_file_size {
+		if not is_accessible_region(file, program_header.offset, program_header.segment_file_size) {
 			debug.write_line('Loader: Invalid program header')
 			return false
 		}
@@ -64,7 +63,6 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	if header.magic_number != ELF_MAGIC_NUMBER or 
 		header.class != ELF_CLASS_64_BIT or 
 		header.endianness != ELF_LITTLE_ENDIAN or 
-		header.type != ELF_OBJECT_FILE_TYPE_EXECUTABLE or 
 		header.machine != ELF_MACHINE_TYPE_X64 {
 		debug.write_line('Loader: Unsupported executable')
 		return false
@@ -102,8 +100,10 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	loop (i = 0, i < program_header_count, i++) {
 		program_header = program_headers[i]
 		segment_data = file.data + program_header.offset
-		segment_physical_size = program_header.segment_memory_size
-		segment_virtual_size = memory.round_to_page(segment_physical_size)
+		segment_physical_size = math.min(program_header.segment_file_size, program_header.segment_memory_size)
+		segment_virtual_size = memory.round_to_page(
+			math.max(program_header.segment_file_size, program_header.segment_memory_size)
+		)
 
 		# Load the virtual address from the perspective of the program
 		program_segment_virtual_address = program_header.virtual_address

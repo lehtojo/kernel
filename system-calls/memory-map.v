@@ -22,9 +22,9 @@ export system_memory_map(
 
 	# Use multiple of pages when allocating
 	length = memory.round_to_page(length)
-	if length <= 0 return ENOMEM # Todo: Return correct error code
+	if length <= 0 return EOVERFLOW
 
-	# TODO: Support alignment
+	# Todo: Support alignment
 	result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
 
 	if result has not mapping {

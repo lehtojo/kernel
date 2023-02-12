@@ -1,10 +1,11 @@
 namespace kernel.scheduler
 
+import kernel.system_calls
 import kernel.file_systems
 
 pack FileDescriptorState {
 	allocated: bool
-	description: kernel.file_systems.OpenFileDescription # Todo: Remove full path
+	description: OpenFileDescription
 
 	shared new(): FileDescriptorState {
 		return pack { allocated: false, description: none as OpenFileDescription } as FileDescriptorState
@@ -39,7 +40,7 @@ plain ProcessFileDescriptors {
 	}
 
 	# Summary: Attempts to attach the specified file description to the specified file descriptor
-	attach(descriptor: u32, description: kernel.file_systems.OpenFileDescription): bool {
+	attach(descriptor: u32, description: OpenFileDescription): bool {
 		require(descriptors.bounds.inside(descriptor), 'File descriptor out of bounds')
 
 		# Load the descriptor and ensure it is not allocated
@@ -55,7 +56,7 @@ plain ProcessFileDescriptors {
 	# Summary:
 	# Returns the file description attached to the specified file descriptor, 
 	# if it exists and is open. Otherwise, none is returned.
-	try_get_description(file_descriptor: u32): kernel.file_systems.OpenFileDescription {
+	try_get_description(file_descriptor: u32): OpenFileDescription {
 		# Ensure the file descriptor exists
 		if file_descriptor >= descriptors.size return none as OpenFileDescription
 
@@ -71,7 +72,7 @@ plain ProcessFileDescriptors {
 		# Ensure the file descriptor exists
 		if file_descriptor >= descriptors.size {
 			debug.write_line('Process file descriptors: Failed to close, because the file descriptor did not exist')
-			return kernel.system_calls.EBADF
+			return EBADF
 		}
 
 		# Require the descriptor to be allocated before closing
@@ -79,7 +80,7 @@ plain ProcessFileDescriptors {
 
 		if not state.allocated {
 			debug.write_line('Process file descriptors: Failed to close, because the file descriptor was not allocated')
-			return kernel.system_calls.EBADF
+			return EBADF
 		}
 
 		debug.write_line('Process file descriptors: Deallocating the file descriptor and closing its description')

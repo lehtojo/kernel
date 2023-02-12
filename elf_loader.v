@@ -208,7 +208,7 @@ export load_stack_startup_data(physical_stack_address_top: link, arguments: List
 	total_data_size = memory.round_to(total_data_size, 16)
 
 	# Map the stack memory, so that we can produce the startup data
-	stack_address_top = kernel.mapper.map_kernel_region(physical_stack_address_top - total_data_size, total_data_size)
+	stack_address_top = mapper.map_kernel_region(physical_stack_address_top - total_data_size, total_data_size)
 
 	# Create pointers to each of the sections
 	environment_variable_data = stack_address_top - environment_variable_data_section_size

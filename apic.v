@@ -149,8 +149,8 @@ export find_table(rsdp: RSDPDescriptor20*, signature: link): link {
 export find_root_system_descriptor_table() {
 	# EBDA = Extended BIOS Data Area
 	# RSDP = Root system descriptor pointer
-	ebda_segment_pointer = kernel.mapper.to_kernel_virtual_address(0x40E) as u16*
-	ebda_page_address = kernel.mapper.to_kernel_virtual_address((ebda_segment_pointer[] <| 4) as link)
+	ebda_segment_pointer = mapper.to_kernel_virtual_address(0x40E) as u16*
+	ebda_page_address = mapper.to_kernel_virtual_address((ebda_segment_pointer[] <| 4) as link)
 
 	# Size of the EBDA is stored in the first byte of the area (1K units)
 	ebda_size = ebda_page_address[] * KiB
@@ -160,7 +160,7 @@ export find_root_system_descriptor_table() {
 	if rsdp !== none return rsdp
 
 	# Store the location and size of BIOS area
-	bios_page_address = kernel.mapper.to_kernel_virtual_address(0xE0000) as u8*
+	bios_page_address = mapper.to_kernel_virtual_address(0xE0000) as u8*
 	bios_size = 128 * KiB
 
 	# Try finding RSDP from EBDA
@@ -294,29 +294,29 @@ export initialize(allocator: Allocator) {
 	enable()
 	enable_interrupts(information.local_apic_registers)
 
-	kernel.ioapic.initialize(information.ioapic_registers)
-	kernel.ioapic.redirect(1, 83)
-	kernel.ioapic.redirect(3, 83)
-	kernel.ioapic.redirect(4, 83)
+	ioapic.initialize(information.ioapic_registers)
+	ioapic.redirect(1, 83)
+	ioapic.redirect(3, 83)
+	ioapic.redirect(4, 83)
 
-	hpet_table = find_table(rsdp, 'HPET') as kernel.hpet.HPETHeader*
+	hpet_table = find_table(rsdp, 'HPET') as hpet.HPETHeader*
 	debug.write('APIC: HPET=')
 	debug.write_address(hpet_table as u64)
 	debug.write_line()
 
 	if hpet_table !== none {
-		kernel.hpet.initialize(allocator, hpet_table)
+		hpet.initialize(allocator, hpet_table)
 	}
 
-	fadt_table = find_table(rsdp, 'FACP') as kernel.acpi.FADT
+	fadt_table = find_table(rsdp, 'FACP') as acpi.FADT
 	debug.write('APIC: FADT=') debug.write_address(fadt_table as u64) debug.write_line()
 	require(fadt_table !== none, 'Failed to initialize ACPI')
 
-	mcfg_table = find_table(rsdp, 'MCFG') as kernel.acpi.MCFG
+	mcfg_table = find_table(rsdp, 'MCFG') as acpi.MCFG
 	debug.write('APIC: MCFG=') debug.write_address(mcfg_table as u64) debug.write_line()
 	require(mcfg_table !== none, 'Failed to initialize MCFG')
 
-	kernel.acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
+	acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
 
-	kernel.ahci.initialize(kernel.acpi.Parser.instance)
+	ahci.initialize(acpi.Parser.instance)
 }

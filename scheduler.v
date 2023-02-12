@@ -212,7 +212,7 @@ export test2(allocator: Allocator, memory_information: SystemMemoryInformation) 
 	mapped_application_start = mapper.map_kernel_region(application_start, application_size)
 	application_data = Array<u8>(mapped_application_start, application_size)
 
-	process = kernel.scheduler.Process.from_executable(allocator, application_data)
+	process = Process.from_executable(allocator, application_data)
 	if process === none panic('Scheduler (test 2): Failed to create the process')
 
 	debug.write_line('Scheduler (test 2): Process created')

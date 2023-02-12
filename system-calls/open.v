@@ -32,7 +32,7 @@ export system_open(process: Process, path: String, flags: i32, mode: u32): i32 {
 	}
 
 	# Try opening the specified path as a file
-	result = kernel.file_systems.FileSystem.root.open_file(kernel.file_systems.Custody.root, path, flags, mode)
+	result = FileSystem.root.open_file(Custody.root, path, flags, mode)
 
 	if result has not description {
 		debug.write_line('System call: Open: Failed to open the specified path')

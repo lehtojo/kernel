@@ -57,13 +57,15 @@ namespace kernel {
 	}
 }
 
+import kernel
+
 export start(
 	multiboot_information: link,
 	interrupt_tables: link,
 	interrupt_stack_pointer: link,
 	gdtr_physical_address: link
 ) {
-	kernel.serial.initialize()
+	serial.initialize()
 
 	allocator = BufferAllocator(buffer: u8[0x2000], 0x2000)
 
@@ -71,44 +73,43 @@ export start(
 	boot.console.clear()
 	boot.console.write_line('...')
 
-	scheduler = kernel.scheduler.Scheduler(allocator)
-	kernel.interrupts.tables = interrupt_tables
-	kernel.interrupts.scheduler = scheduler
+	interrupts.tables = interrupt_tables
+	interrupts.scheduler = scheduler.Scheduler(allocator)
 
-	memory_information = kernel.SystemMemoryInformation()
+	memory_information = SystemMemoryInformation()
 	memory_information.regions = List<Segment>(allocator)
 	memory_information.reserved = List<Segment>(allocator)
-	memory_information.sections = List<kernel.elf.SectionHeader>(allocator)
-	memory_information.symbols = List<kernel.SymbolInformation>(allocator)
+	memory_information.sections = List<elf.SectionHeader>(allocator)
+	memory_information.symbols = List<SymbolInformation>(allocator)
 
-	kernel.multiboot.initialize(multiboot_information, memory_information)
+	multiboot.initialize(multiboot_information, memory_information)
 
 	# Tell the mapper where the quickmap base is, so that quickmapping is possible
-	kernel.mapper.quickmap_physical_base = memory_information.quickmap_physical_base
+	mapper.quickmap_physical_base = memory_information.quickmap_physical_base
 
 	PhysicalMemoryManager.initialize(memory_information)
-	kernel.KernelHeap.initialize()
-	kernel.HeapAllocator.initialize(allocator)
+	KernelHeap.initialize()
+	HeapAllocator.initialize(allocator)
 
-	scheduler.processes = List<kernel.scheduler.Process>(kernel.HeapAllocator.instance) using kernel.KernelHeap
+	interrupts.scheduler.processes = List<scheduler.Process>(HeapAllocator.instance) using KernelHeap
 
-	kernel.Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
-	kernel.mapper.remap()
+	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
+	mapper.remap()
 
-	kernel.interrupts.initialize()
-	kernel.keyboard.initialize(allocator)
+	interrupts.initialize()
+	keyboard.initialize(allocator)
 
-	kernel.scheduler.test(allocator)
-	kernel.scheduler.test(allocator)
-	kernel.scheduler.test2(kernel.HeapAllocator.instance, memory_information)
+	scheduler.test(allocator)
+	scheduler.test(allocator)
+	scheduler.test2(HeapAllocator.instance, memory_information)
 
-	kernel.apic.initialize(allocator)
+	apic.initialize(allocator)
 
-	kernel.file_systems.memory_file_system.test(kernel.HeapAllocator.instance)
+	file_systems.memory_file_system.test(HeapAllocator.instance)
 
-	kernel.system_calls.initialize()
+	system_calls.initialize()
 
-	kernel.interrupts.enable()
+	interrupts.enable()
 
 	loop {}
 }

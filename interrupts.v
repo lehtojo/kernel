@@ -32,6 +32,8 @@ pack TrapFrame {
 
 namespace kernel.interrupts
 
+import kernel.scheduler
+
 namespace internal {
 	import 'C' interrupts_set_idtr(idtr: link)
 	import 'C' interrupts_enable()
@@ -51,7 +53,7 @@ constant GATE_TYPE_INTERRUPT = 0xE
 constant GATE_TYPE_TRAP = 0xF
 
 tables: link
-scheduler: kernel.scheduler.Scheduler
+scheduler: Scheduler
 
 pack InterruptDescriptor {
 	offset_1: u16
@@ -164,7 +166,7 @@ export process(frame: TrapFrame*): u64 {
 	result = 0 as u64
 
 	if code == 0x21 {
-		kernel.keyboard.process()
+		keyboard.process()
 	} else code == 0x24 {
 		scheduler.tick(frame)
 	} else code == 0x0e {

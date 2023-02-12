@@ -1,6 +1,8 @@
 # AHCI (Advance Host Controller Interface)
 namespace kernel.ahci
 
+import kernel.acpi
+
 constant PORT_INTERFACE_POWER_MANAGEMENT_ACTIVE = 0x1
 constant PORT_DETECTION_PRESENT = 0x3
 
@@ -334,13 +336,13 @@ scan_ports(interface_physical_address: link) {
 	}
 }
 
-initialize(parser: kernel.acpi.Parser) {
+initialize(parser: Parser) {
 	loop (i = 0, i < parser.device_identifiers.size, i++) {
 		device = parser.device_identifiers[i]
 
 		# Find SATA-controllers
-		if device.class_code != kernel.acpi.CLASS_MASS_STORAGE_CONTROLLER or
-			device.subclass_code != kernel.acpi.SUBCLASS_SATA_CONTROLLER {
+		if device.class_code != CLASS_MASS_STORAGE_CONTROLLER or
+			device.subclass_code != SUBCLASS_SATA_CONTROLLER {
 			continue
 		}
 

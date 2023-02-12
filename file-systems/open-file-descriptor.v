@@ -16,6 +16,8 @@ pack DirectoryEntry64 {
 }
 
 plain OpenFileDescription {
+	import kernel.system_calls
+
 	file: File
 	offset: u64 = 0
 
@@ -53,7 +55,7 @@ plain OpenFileDescription {
 	seek(offset: i64, whence: i32): i32 {
 		if not can_seek() {
 			debug.write_line('Open file description: Seeking is not allowed')
-			return kernel.system_calls.ESPIPE # Todo: Remove full path
+			return ESPIPE
 		}
 
 		new_offset = 0
@@ -66,9 +68,9 @@ plain OpenFileDescription {
 			new_offset = size() + offset
 		}
 
-		if new_offset < 0 return {
+		if new_offset < 0 {
 			debug.write_line('Open file description: Offset became negative')
-			kernel.system_calls.EINVAL
+			return EINVAL
 		}
 
 		# Warning: Remember to handle cases where seeking past the end is not allowed (normally it is)
@@ -83,7 +85,7 @@ plain OpenFileDescription {
 	get_directory_entries(output: MemoryRegion): u64 {
 		if not is_directory() {
 			debug.write_line('Open file description: Can not get directory entries, because the opened file is not a directory')
-			return kernel.system_calls.ENOTDIR
+			return ENOTDIR
 		}
 
 		# Todo: Figure out if this is safe: Because the opened file is a directory, we assume that the file must be an inode file
@@ -117,14 +119,14 @@ plain OpenFileDescription {
 			# Output the current entry data
 			if not output.write_and_advance<DirectoryEntry64>(output_entry) {
 				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
-				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				error = EINVAL # Tell the user the output buffer is too small
 				stop
 			}
 
 			# Output the name of the current entry and zero terminate it
 			if not output.write_string_and_advance(entry.name, true) {
 				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
-				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				error = EINVAL # Tell the user the output buffer is too small
 				stop
 			}
 
@@ -134,7 +136,7 @@ plain OpenFileDescription {
 			# last entry has an offset that points to the "next entry". 
 			if not output.advance(padding) {
 				debug.write_line('Open file description: Userspace buffer was too small for directory entries')
-				error = kernel.system_calls.EINVAL # Tell the user the output buffer is too small
+				error = EINVAL # Tell the user the output buffer is too small
 				stop
 			}
 		}

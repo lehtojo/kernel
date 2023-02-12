@@ -1,5 +1,7 @@
 namespace kernel.multiboot
 
+import kernel.elf
+
 constant TAG_TYPE_MEMORY_MAP = 6
 constant TAG_TYPE_FRAMEBUFFER = 8
 constant TAG_TYPE_SECTION_HEADER_TABLE = 9
@@ -154,7 +156,7 @@ export insert_region(regions: List<Segment>, region: Segment) {
 # Summary:
 # Loads all kernel sections headers from the specified tag and adds them to the specified list.
 # Returns the physical memory region that contains the kernel.
-export process_section_header_table_tag(tag: SectionHeaderTableTag, section_headers: List<kernel.elf.SectionHeader>): Segment {
+export process_section_header_table_tag(tag: SectionHeaderTableTag, section_headers: List<SectionHeader>): Segment {
 	debug.write('Multiboot: Section header table = ')
 	debug.write_address(tag as link)
 	debug.write(', Section count = ')
@@ -173,7 +175,7 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 
 	loop (position < tag.size) {
 		# Load the current section header and move the position to the next entry 
-		section_header = (tag as link + position) as kernel.elf.SectionHeader
+		section_header = (tag as link + position) as SectionHeader
 		position += tag.section_header_size
 
 		section_headers.add(section_header)

@@ -98,18 +98,32 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 
 	# Load each segment into memory
 	loop (i = 0, i < program_header_count, i++) {
+		# Load only the loadable segments into memory
 		program_header = program_headers[i]
+		if program_header.type != ELF_SEGMENT_TYPE_LOADABLE continue
+
 		segment_data = file.data + program_header.offset
-		segment_physical_size = math.min(program_header.segment_file_size, program_header.segment_memory_size)
-		segment_virtual_size = memory.round_to_page(
-			math.max(program_header.segment_file_size, program_header.segment_memory_size)
-		)
 
-		# Load the virtual address from the perspective of the program
-		program_segment_virtual_address = program_header.virtual_address
+		# Determine how many bytes should be copied from the file into memory
+		segment_copy_size = math.min(program_header.segment_file_size, program_header.segment_memory_size)
 
+		# Load the virtual address where the segment must be placed, this can be unaligned 
+		unaligned_segment_virtual_address = program_header.virtual_address
+
+		# Compute the virtual page that contains the start of the segment
+		segment_virtual_base = unaligned_segment_virtual_address & (-PAGE_SIZE)
+		# Compute the offset of the segment in the first page
+		segment_start_offset = unaligned_segment_virtual_address - segment_virtual_base
+
+		# Compute how many bytes the segment required, aligned to pages
+		segment_physical_size = memory.round_to_page((unaligned_segment_virtual_address + segment_copy_size) - segment_virtual_base)
+
+		# Allocate the physical memory for the segment
 		segment_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(segment_physical_size)
-		segment_virtual_address = mapper.map_kernel_region(segment_physical_address, segment_virtual_size)
+		unaligned_segment_physical_address = segment_physical_address + segment_start_offset
+
+		# Map the allocated physical memory, so that we can copy the segment into memory
+		mapped_segment_address = mapper.map_kernel_region(unaligned_segment_physical_address as link, segment_copy_size)
 
 		# Todo: Deallocate upon failure
 
@@ -119,28 +133,24 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 			stop
 		}
 
-		# Todo:
-		# It seems that the runtime linker has unaligned virtual addresses so take them into consideration.
-		# Those addresses crash the kernel.
-
 		debug.write('Loader: Copying ')
-		debug.write(segment_physical_size)
+		debug.write(segment_copy_size)
 		debug.write(' byte(s) from the executable starting at offset ')
 		debug.write_address(program_header.offset)
 		debug.write(' into virtual address ')
-		debug.write_address(program_segment_virtual_address)
+		debug.write_address(unaligned_segment_virtual_address)
 		debug.write(' using physical address ')
-		debug.write_address(segment_physical_address)
+		debug.write_address(unaligned_segment_physical_address)
 		debug.write_line()
 
 		# Copy the segment data from the file to the allocated segment
-		memory.copy(segment_virtual_address, segment_data, segment_physical_size)
+		memory.copy(mapped_segment_address, segment_data, segment_copy_size)
 
 		# Add the memory mapping
 		output.allocations.add(MemoryMapping.new(
-			program_segment_virtual_address as u64,
+			segment_virtual_base as u64,
 			segment_physical_address as u64,
-			segment_virtual_size
+			segment_physical_size
 		))
 	}
 

@@ -46,10 +46,19 @@ plain ProcessMemory {
 	# Attempts to finds a region from the specified regions, which contains the specified address.
 	# If no such region is found, this function returns -1.
 	private find_containing_region(regions: List<Segment>, address: link): i64 {
+		debug.write('Process memory: Finding an available region that contains ') debug.write_address(address) debug.write_line()
+
 		loop (i = 0, i < regions.size, i++) {
-			if regions[i].contains(address) return i
+			region = regions[i]
+
+			debug.write('Process memory: Processing region ')
+			debug.write_address(region.start) debug.put(`-`) debug.write_address(region.end)
+			debug.write_line()
+
+			if region.contains(address) return i
 		}
 
+		debug.write_line('Process memory: No available region contained the specified size')
 		return -1
 	}
 
@@ -171,7 +180,6 @@ plain ProcessMemory {
 
 			mapping = MemoryMapping.new(
 				address_list_region.start as u64,
-				aligned_virtual_address_start as u64,
 				physical_memory_start as u64,
 				size
 			)

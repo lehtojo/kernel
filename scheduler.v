@@ -161,8 +161,12 @@ test(allocator: Allocator) {
 	text_section_virtual_address[position++] = 0x00
 
 	# syscall
-	text_section_virtual_address[position++] = 0x0f
-	text_section_virtual_address[position++] = 0x05
+	# text_section_virtual_address[position++] = 0x0f
+	# text_section_virtual_address[position++] = 0x05
+
+	# nop nop
+	text_section_virtual_address[position++] = 0x90
+	text_section_virtual_address[position++] = 0x90
 
 	# inc r8
 	text_section_virtual_address[position++] = 0x49

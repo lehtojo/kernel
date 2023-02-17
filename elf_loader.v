@@ -186,6 +186,10 @@ export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_ad
 	# +----------------------------------+ <--+
 	# |             Padding              |        Padding to make the whole startup data 16 byte aligned
 	# +----------------------------------+
+	# |                                  |
+	# |        Auxiliary vector          |        Aligned to 16 bytes
+	# |                                  |
+	# +----------------------------------+
 	# |                0                 |
 	# +----------------------------------+ 
 	# |     Environment variable n       |
@@ -221,11 +225,16 @@ export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_ad
 	entry_count = 3 + environment_variables.size + arguments.size
 	padding = entry_count % 2 * sizeof(u64)
 
+	# Todo: Implement this
+	auxiliary_vector_size = 64
+	require(auxiliary_vector_size % 16 == 0, 'Auxiliary vector was not aligned to 16 bytes')
+
 	total_data_size = sizeof(u64) +                 # Argument count
 		arguments.size * sizeof(link) +              # Argument pointers
 		sizeof(u64) +                                # 0
 		environment_variables.size * sizeof(link) +  # Environment variable pointers
 		sizeof(u64) +                                # 0
+		auxiliary_vector_size +                      # Auxiliary vector
 		padding +                                    # Padding
 		argument_data_section_size +                 # Arguments
 		environment_variable_data_section_size       # Environment variables
@@ -238,7 +247,7 @@ export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_ad
 	# Create pointers for writing into the startup data
 	mapped_environment_variable_data = mapped_stack_address_top - environment_variable_data_section_size
 	mapped_argument_data = mapped_environment_variable_data - argument_data_section_size
-	mapped_environment_variable_pointers = mapped_argument_data - padding - sizeof(u64) - environment_variables.size * sizeof(link)
+	mapped_environment_variable_pointers = mapped_argument_data - padding - auxiliary_vector_size - sizeof(u64) - environment_variables.size * sizeof(link)
 	mapped_argument_pointers = mapped_environment_variable_pointers - sizeof(u64) - arguments.size * sizeof(link)
 	mapped_argument_count = mapped_argument_pointers - sizeof(u64)
 

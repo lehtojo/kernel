@@ -388,7 +388,7 @@ kernel_entry:
 incbin "build/kernel.bin"
 
 application_start:
-incbin "app"
+incbin "ld"
 application_end:
 
 section .bss

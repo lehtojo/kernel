@@ -6,6 +6,9 @@ pack MemoryMapping {
 	physical_address_start: u64
 	size: u64
 
+	virtual_address_end => virtual_address_start + size
+	physical_address_end => physical_address_start + size
+
 	shared new(virtual_address_start: u64, physical_address_start: u64, size: u64): MemoryMapping {
 		return pack {
 			unaligned_virtual_address_start: virtual_address_start,

@@ -13,11 +13,19 @@ plain ProcessMemory {
 	# Summary: Stores the paging table used for configuring the virtual memory of the process.
 	paging_table: PagingTable
 
+	# Summary: Stores the current program break address that the process can adjust
+	break: u64
+
+	# Summary: Stores the maximum allowed value for the program break
+	max_break: u64
+
 	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.allocations = List<MemoryMapping>(allocator) using allocator
 		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
+		this.break = 0
+		this.max_break = mapper.PAGE_MAP_VIRTUAL_BASE
 
 		# Kernel regions must be mapped to every process, so that the kernel does not need to 
 		# change the paging tables during system calls in order to access the kernel memory.
@@ -156,7 +164,7 @@ plain ProcessMemory {
 		# Allocate the virtual region now that we have the physical memory
 		allocate_specific_region(address_list_index, virtual_address, size)
 
-		mapping = MemoryMapping.new(virtual_address, virtual_address, physical_memory_start, size)
+		mapping = MemoryMapping.new(virtual_address, virtual_address, physical_memory_start as u64, size)
 		allocations.add(mapping)
 
 		return Optionals.new<MemoryMapping>(mapping)

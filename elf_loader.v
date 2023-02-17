@@ -167,38 +167,43 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 	return true
 }
 
-export load_stack_startup_data(physical_stack_address_top: link, arguments: List<String>, environment_variables: List<String>): link {
+# Summary:
+# Copies process startup data such as arguments and environment arguments to the top of the stack.
+# Returns the number of copied bytes so that the caller can adjust the stack pointer.
+export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_address_top: u64, arguments: List<String>, environment_variables: List<String>): u64 {
 	# Todo: If there are a lot of arguments and environment variables, stack can overflow
 
 	# Compute the number of bytes needed for the startup data:
-	# 0                  8 (bytes)
-	# +------------------+
-	# |       ...        |
-	# |   Environment    |
-	# |    variables     |
-	# |       ...        |
-	# +------------------+
-	# |       ...        |
-	# |    Arguments     |
-	# |       ...        |
-	# +------------------+
-	# |        0         |
-	# +------------------+ 
-	# |       ...        |
-	# |   Environment    |
-	# |     variable     |
-	# |     pointers     |
-	# |       ...        |
-	# +------------------+ 
-	# |        0         |
-	# +------------------+
-	# |       ...        |
-	# |     Argument     |
-	# |     pointers     |
-	# |       ...        |
-	# +------------------+
-	# |  Argument count  |
-	# +------------------+ <--- rsp
+	# 0                                  8 (bytes)
+	# +----------------------------------+ <--+
+	# |                                  |    |
+	# | Environment variable string data |    |
+	# |                                  |    |
+	# +----------------------------------+    |   Startup data section (16 byte aligned)
+	# |                                  |    |
+	# |      Argument string data        |    |
+	# |                                  |    |
+	# +----------------------------------+ <--+
+	# |             Padding              |        Padding to make the whole startup data 16 byte aligned
+	# +----------------------------------+
+	# |                0                 |
+	# +----------------------------------+ 
+	# |     Environment variable n       |
+	# |               ...                |
+	# |     Environment variable 3       |
+	# |     Environment variable 2       |
+	# |     Environment variable 1       |
+	# +----------------------------------+ 
+	# |                0                 |
+	# +----------------------------------+
+	# |            Argument n            |
+	# |               ...                |
+	# |            Argument 3            |
+	# |            Argument 2            |
+	# |            Argument 1            |
+	# +----------------------------------+
+	# |          Argument count          |
+	# +----------------------------------+ <--- rsp
 
 	# Compute the number of bytes required for the first two sections
 	environment_variable_data_section_size = 0
@@ -206,44 +211,55 @@ export load_stack_startup_data(physical_stack_address_top: link, arguments: List
 	loop (i = 0, i < environment_variables.size, i++) { environment_variable_data_section_size += environment_variables[i].length + 1 }
 	loop (i = 0, i < arguments.size, i++) { argument_data_section_size += arguments[i].length + 1 }
 
-	# Ensure the sections sizes are multiple of 8 bytes
-	environment_variable_data_section_size = memory.round_to(environment_variable_data_section_size, sizeof(u64))
-	argument_data_section_size = memory.round_to(argument_data_section_size, sizeof(u64))
+	# Ensure the sections sizes are multiple of 16 bytes
+	environment_variable_data_section_size = memory.round_to(environment_variable_data_section_size, 16)
+	argument_data_section_size = memory.round_to(argument_data_section_size, 16)
+
+	# All of the startup data must be 16 byte aligned.
+	# Since the startup data section is aligned to 16 bytes, we must take care of the other data below it.
+	# All of the data below the data section are 8 byte entries, so we need to add an extra 8 byte padding if there are odd number of entries.
+	entry_count = 3 + environment_variables.size + arguments.size
+	padding = entry_count % 2 * sizeof(u64)
 
 	total_data_size = sizeof(u64) +                 # Argument count
 		arguments.size * sizeof(link) +              # Argument pointers
 		sizeof(u64) +                                # 0
 		environment_variables.size * sizeof(link) +  # Environment variable pointers
 		sizeof(u64) +                                # 0
+		padding +                                    # Padding
 		argument_data_section_size +                 # Arguments
 		environment_variable_data_section_size       # Environment variables
 
-	# Remember to align the stack to 16 bytes
-	total_data_size = memory.round_to(total_data_size, 16)
+	require(total_data_size % 16 == 0, 'Startup data was not aligned to 16 bytes')
 
 	# Map the stack memory, so that we can produce the startup data
-	stack_address_top = mapper.map_kernel_region(physical_stack_address_top - total_data_size, total_data_size)
+	mapped_stack_address_top = mapper.map_kernel_region(stack_physical_address_top as link - total_data_size, total_data_size) + total_data_size
 
-	# Create pointers to each of the sections
-	environment_variable_data = stack_address_top - environment_variable_data_section_size
-	argument_data = environment_variable_data - argument_data_section_size
-	environment_variable_pointers = argument_data - sizeof(u64) - environment_variables.size * sizeof(link)
-	argument_pointers = environment_variable_pointers - sizeof(u64) - arguments.size * sizeof(link)
-	argument_count = argument_pointers - sizeof(u64)
+	# Create pointers for writing into the startup data
+	mapped_environment_variable_data = mapped_stack_address_top - environment_variable_data_section_size
+	mapped_argument_data = mapped_environment_variable_data - argument_data_section_size
+	mapped_environment_variable_pointers = mapped_argument_data - padding - sizeof(u64) - environment_variables.size * sizeof(link)
+	mapped_argument_pointers = mapped_environment_variable_pointers - sizeof(u64) - arguments.size * sizeof(link)
+	mapped_argument_count = mapped_argument_pointers - sizeof(u64)
+
+	# Create pointers into the data section that the process can use
+	virtual_environment_variable_data = stack_virtual_address_top - environment_variable_data_section_size
+	virtual_argument_data = virtual_environment_variable_data - argument_data_section_size
 
 	# Add all environment variables
 	loop (i = 0, i < environment_variables.size, i++) {
 		environment_variable = environment_variables[i]
 
 		# Copy the current environment variable into the environment variable data section
-		memory.copy(environment_variable_data, environment_variable.data, environment_variable.length + 1)
+		memory.copy(mapped_environment_variable_data, environment_variable.data, environment_variable.length + 1)
 
 		# Add pointer to the environment variable pointers that points to the copied data
-		environment_variable_pointers.(link*)[] = environment_variable_data
+		mapped_environment_variable_pointers.(link*)[] = virtual_environment_variable_data
 
 		# Move over the copied data and the added pointer
-		environment_variable_data += environment_variable.length + 1
-		environment_variable_pointers += sizeof(link)
+		mapped_environment_variable_data += environment_variable.length + 1
+		virtual_environment_variable_data += environment_variable.length + 1
+		mapped_environment_variable_pointers += sizeof(link)
 	}
 
 	# Add all arguments
@@ -251,18 +267,19 @@ export load_stack_startup_data(physical_stack_address_top: link, arguments: List
 		argument = arguments[i]
 
 		# Copy the current argument into the argument data section
-		memory.copy(argument_data, argument.data, argument.length + 1)
+		memory.copy(mapped_argument_data, argument.data, argument.length + 1)
 
 		# Add pointer to the argument pointers that points to the copied data
-		argument_pointers.(link*)[] = argument_data
+		mapped_argument_pointers.(link*)[] = virtual_argument_data
 
 		# Move over the copied data and the added pointer
-		argument_data += argument.length + 1
-		argument_pointers += sizeof(link)
+		mapped_argument_data += argument.length + 1
+		virtual_argument_data += argument.length + 1
+		mapped_argument_pointers += sizeof(link)
 	}
 
 	# Write the number of arguments
-	argument_count.(u64*)[] = arguments.size
+	mapped_argument_count.(u64*)[] = arguments.size
 
-	return physical_stack_address_top - total_data_size
+	return total_data_size
 }

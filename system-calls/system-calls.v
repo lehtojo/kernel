@@ -116,7 +116,7 @@ export process(frame: TrapFrame*): u64 {
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9
 		)
 	} else system_call_number == 0x0c {
-		result = system_brk(registers[].rdi as link)
+		result = system_brk(registers[].rdi as u64)
 	} else system_call_number == 0x14 {
 		result = system_writev(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0x3c {

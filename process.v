@@ -69,6 +69,9 @@ Process {
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
 			memory.allocations.add(allocation)
+
+			# Set the program break after all loaded segments
+			memory.break = math.max(memory.break, allocation.virtual_address_end)
 		}
 
 		# The local allocation list is no longer needed
@@ -84,10 +87,11 @@ Process {
 		# Allocate and map stack for the process
 		# Todo: Implement proper stack support, which means lazy allocation using page faults
 		program_initial_stack_size = 512 * KiB
-		program_stack_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(program_initial_stack_size) as u64
+		program_stack_physical_address_bottom = PhysicalMemoryManager.instance.allocate_physical_region(program_initial_stack_size) as u64
+		program_stack_physical_address_top = program_stack_physical_address_bottom + program_initial_stack_size
 		program_stack_virtual_address_top = 0x10000000
 		program_stack_virtual_address_bottom = program_stack_virtual_address_top - program_initial_stack_size
-		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address, program_initial_stack_size)
+		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address_bottom, program_initial_stack_size)
 
 		# Add environment variables and arguments for the application
 		arguments = List<String>(allocator)
@@ -96,7 +100,8 @@ Process {
 		environment_variables = List<String>(allocator)
 		environment_variables.add(String.new('PATH=/bin/')) # Todo: Load proper environment variables
 
-		program_stack_pointer = load_stack_startup_data(program_stack_virtual_address_top as link, arguments, environment_variables)
+		startup_data_size = load_stack_startup_data(program_stack_physical_address_top, program_stack_virtual_address_top, arguments, environment_variables)
+		program_stack_pointer = program_stack_virtual_address_top - startup_data_size
 
 		# Map the stack memory for the application
 		memory.paging_table.map_region(allocator, program_stack_mapping)

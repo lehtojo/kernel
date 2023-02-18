@@ -36,4 +36,5 @@ FileSystem {
 
 	open iterate_directory(allocator: Allocator, inode: Inode): DirectoryIterator
 	open allocate_inode_index(): u64
+	open open_path(allocator: Allocator, container: Custody, path: String, create_options: u8): Custody
 }

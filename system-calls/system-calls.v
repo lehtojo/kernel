@@ -4,6 +4,7 @@ import kernel.scheduler
 
 import 'C' get_system_call_handler(): link
 
+constant ENOENT = -2
 constant EBADF = -9
 constant ENOMEM = -12
 constant EFAULT = -14
@@ -20,6 +21,8 @@ constant DT_BLK = 6
 constant DT_REG = 8
 constant DT_LNK = 10
 constant DT_SOCK = 12
+
+constant AT_FDCWD = 4294967196
 
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081
@@ -123,6 +126,12 @@ export process(frame: TrapFrame*): u64 {
 		system_exit(frame, registers[].rdi as i32)
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
+	} else system_call_number == 0xe7 {
+		# System call: exit_group
+	} else system_call_number == 0x9e {
+		# System call: arch_prctl
+	} else system_call_number == 0x101 {
+		result = system_openat(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u64)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')
@@ -134,6 +143,7 @@ export process(frame: TrapFrame*): u64 {
 		debug.write(', rcx=')
 		debug.write_address(frame[].registers[].rcx)
 		debug.write_line()
+		panic('Unsupported system call')
 	}
 
 	return result

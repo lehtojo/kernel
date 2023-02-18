@@ -399,9 +399,16 @@ memory_file_system_start_ld_start:
 incbin "ld"
 memory_file_system_start_ld_end:
 
+dq memory_file_system_start_startup_path
+dq memory_file_system_start_startup_end - memory_file_system_start_startup_start
+memory_file_system_start_startup_start:
+incbin "startup"
+memory_file_system_start_startup_end:
+
 memory_file_system_end:
 
 memory_file_system_start_ld_path: db "/lib/ld", 0
+memory_file_system_start_startup_path: db "/bin/startup", 0
 
 section .bss
 align 0x1000

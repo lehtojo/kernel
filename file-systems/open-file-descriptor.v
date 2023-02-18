@@ -20,13 +20,17 @@ plain OpenFileDescription {
 
 	file: File
 	offset: u64 = 0
+	custody: Custody
 
 	shared try_create(allocator, custody: Custody) {
 		file: InodeFile = InodeFile(custody.inode) using allocator
-		return OpenFileDescription(file) using allocator
+		description = OpenFileDescription(file) using allocator
+		description.custody = custody
+		return description
 	}
 
 	shared try_create(allocator, file: File) {
+		# Todo: Verify the specified file is not file system based, because we always want the custody 
 		return OpenFileDescription(file) using allocator
 	}
 

@@ -144,36 +144,51 @@ FileSystem MemoryFileSystem {
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
 		debug.write('Memory file system: Opening file from path ') debug.write_line(path)
 
-		custody = open_path(base, path, get_create_options(flags, false))
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		custody = open_path(local_allocator, base, path, get_create_options(flags, false))
 
 		if custody === none {
 			debug.write_line('Memory file system: Failed to open the specified path')
-			return Results.error<OpenFileDescription, u32>(-1)
+			local_allocator.deallocate()
+			return Results.error<OpenFileDescription, u32>(ENOENT)
 		}
 
 		description = OpenFileDescription.try_create(allocator, custody)
-		custody.destruct_until(allocator, base)
 
+		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
 	override create_file(base: Custody, path: String, flags: i32, mode: u32) {
-		custody = open_path(base, path, get_create_options(flags, false))
-		if custody === none return Results.error<OpenFileDescription, u32>(-1)
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		custody = open_path(local_allocator, base, path, get_create_options(flags, false))
+
+		if custody === none {
+			local_allocator.deallocate()
+			return Results.error<OpenFileDescription, u32>(-1)
+		}
 
 		description = OpenFileDescription.try_create(allocator, custody)
-		custody.destruct_until(allocator, base)
 
+		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
 	override make_directory(base: Custody, path: String, flags: i32, mode: u32) {
-		custody = open_path(base, path, CREATE_OPTION_DIRECTORY)
-		if custody === none return Results.error<OpenFileDescription, u32>(-1)
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		custody = open_path(local_allocator, base, path, CREATE_OPTION_DIRECTORY)
+
+		if custody === none {
+			local_allocator.deallocate()
+			return Results.error<OpenFileDescription, u32>(-1)
+		}
 
 		description = OpenFileDescription.try_create(allocator, custody)
-		custody.destruct_until(allocator, base)
 
+		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
 	}
 
@@ -191,7 +206,7 @@ FileSystem MemoryFileSystem {
 	# Summary:
 	# Starts from the specified custody, follows the specified path and potentially creates it depending on the specified options.
 	# If the end of the path can not be reached, none is returned.
-	open_path(container: Custody, path: String, create_options: u8): Custody {
+	override open_path(allocator: Allocator, container: Custody, path: String, create_options: u8) {
 		parts = PathParts(path)
 
 		loop {

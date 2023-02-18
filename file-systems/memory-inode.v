@@ -41,6 +41,9 @@ Inode MemoryInode {
 		# Ensure the new data will fit into the file data
 		data.reserve(offset + bytes.size)
 
+		# Todo: Is this a bit hacky?
+		data.size = math.max(data.size, offset + bytes.size)
+
 		memory.copy_into(data, offset, bytes, 0, bytes.size)
 		return bytes.size
 	}

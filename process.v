@@ -96,7 +96,8 @@ Process {
 		# Add environment variables and arguments for the application
 		arguments = List<String>(allocator)
 		arguments.add(String.new('/bin/test2')) # Todo: Add executable path
-		arguments.add(String.new('--help')) # Todo: Add executable path
+		arguments.add(String.new('--help'))
+		# arguments.add(String.new('/bin/startup'))
 
 		environment_variables = List<String>(allocator)
 		environment_variables.add(String.new('PATH=/bin/')) # Todo: Load proper environment variables
@@ -113,7 +114,10 @@ Process {
 		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
 		attach_standard_files(allocator, file_descriptors)
 
-		return Process(register_state, memory, file_descriptors) using allocator
+		process = Process(register_state, memory, file_descriptors) using allocator
+		process.working_directory = String.new('/bin/')
+
+		return process
 	}
 
 	id: u64
@@ -121,12 +125,14 @@ Process {
 	registers: RegisterState*
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
+	working_directory: String
 
 	init(registers: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0
 		this.registers = registers
 		this.memory = memory
 		this.file_descriptors = file_descriptors
+		this.working_directory = String.empty
 
 		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG
@@ -136,6 +142,7 @@ Process {
 	init(id: u64, registers: RegisterState*) {
 		this.id = id
 		this.registers = registers
+		this.working_directory = String.empty
 
 		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG

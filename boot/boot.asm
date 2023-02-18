@@ -391,6 +391,18 @@ application_start:
 incbin "ld"
 application_end:
 
+memory_file_system_start:
+
+dq memory_file_system_start_ld_path
+dq memory_file_system_start_ld_end - memory_file_system_start_ld_start
+memory_file_system_start_ld_start:
+incbin "ld"
+memory_file_system_start_ld_end:
+
+memory_file_system_end:
+
+memory_file_system_start_ld_path: db "/lib/ld", 0
+
 section .bss
 align 0x1000
 

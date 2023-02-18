@@ -20,14 +20,19 @@ Inode MemoryDirectoryInode {
 	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
 	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
-	override create_child(name: String) {
+	override create_child(name: String, is_directory: bool) {
 		debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
 
 		# Allocate an inode index for the child
 		child_index = file_system.allocate_inode_index()
 		if child_index == -1 return none as Inode
 
-		inode = MemoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator
+		inode = none as Inode
+
+		# Create a directory or a normal inode based on the arguments
+		if is_directory { inode = MemoryDirectoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator }
+		else { inode = MemoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator }
+		
 		inodes.add(inode)
 
 		return inode
@@ -113,6 +118,8 @@ PathParts {
 }
 
 constant O_CREAT = 0x40
+constant O_RDONLY = 0
+constant O_WRONLY = 1
 
 constant CREATE_OPTION_NONE = 0
 constant CREATE_OPTION_FILE = 1
@@ -225,7 +232,100 @@ FileSystem MemoryFileSystem {
 	}
 }
 
-export test(allocator: Allocator) {
+pack BootFileHeader {
+	path: link
+	size: u64
+	data: link
+
+	shared new(path: link, size: u64, data: link): BootFileHeader {
+		return pack { path: path, size: size, data: data } as BootFileHeader
+	}
+}
+
+# Summary: Loads memory file system boot files from the specified memory region
+load_boot_file_headers(allocator, start: link, end: link): List<BootFileHeader> {
+	headers = List<BootFileHeader>(allocator) using allocator
+
+	loop (start + sizeof(u64) * 2 < end) {
+		path = start.(u64*)[0] as link
+		size = start.(u64*)[1]
+
+		# Create a file header for the current file and map the addresses so that we can read from them
+		header = BootFileHeader.new(
+			mapper.to_kernel_virtual_address(path),
+			size,
+			start + sizeof(u64) * 2
+		)
+
+		debug.write('Memory file system: Boot file: path=')
+		debug.write(header.path)
+		debug.write(', size=')
+		debug.write(size)
+		debug.write(', data=')
+		debug.write_address(header.data)
+		debug.write_line()
+
+		headers.add(header)
+
+		# Move over the current file
+		start += sizeof(u64) * 2 + size
+	}
+
+	return headers
+}
+
+# Summary: Loads the files into memory based on their headers
+load_files_into_memory(file_system: FileSystem, headers: List<BootFileHeader>) {
+	debug.write_line('Memory file system: Copying the boot files into memory...')
+
+	loop (i = 0, i < headers.size, i++) {
+		header = headers[i]
+		path = String.new(header.path)
+
+		# Create the file and then write its contents
+		if file_system.create_file(Custody.root, path, O_CREAT | O_WRONLY, 777) has not descriptor {
+			panic('Failed to create boot file')
+		}
+
+		# Write the contents and then close
+		require(descriptor.write(Array<u8>(header.data, header.size)) == header.size, 'Failed to write the boot file into memory')
+
+		descriptor.close()
+	}
+
+	debug.write_line('Memory file system: Finished copying the boot files into memory')
+}
+
+export load_boot_files(allocator: Allocator, file_system: FileSystem, memory_information: SystemMemoryInformation) {
+	symbols = memory_information.symbols
+	start_symbol_name = 'memory_file_system_start'
+	end_symbol_name = 'memory_file_system_end'
+
+	# Find the symbol that marks the start of the memory file system
+	start_symbol_index = symbols.find_index<link>(start_symbol_name, (i: SymbolInformation, symbol: link) -> i.name == symbol)
+	end_symbol_index = symbols.find_index<link>(end_symbol_name, (i: SymbolInformation, symbol: link) -> i.name == symbol)
+	require(start_symbol_index >= 0 and end_symbol_index >= 0, 'Failed to find the boot memory file system')
+
+	# Load the symbols so that we know where to load the files
+	start_symbol = symbols[start_symbol_index]
+	end_symbol = symbols[end_symbol_index]
+
+	debug.write('Memory file system: Boot data start = ') debug.write_address(start_symbol.address) debug.write_line()
+	debug.write('Memory file system: Boot data end = ') debug.write_address(end_symbol.address) debug.write_line()
+
+	# Map the symbols addresses so that can we read between them
+	mapped_start_symbol = mapper.to_kernel_virtual_address(start_symbol.address)
+	mapped_end_symbol = mapper.to_kernel_virtual_address(end_symbol.address)
+
+	loader_allocator = LocalHeapAllocator(allocator)
+
+	headers = load_boot_file_headers(loader_allocator, mapped_start_symbol, mapped_end_symbol)
+	load_files_into_memory(file_system, headers)
+
+	loader_allocator.deallocate()
+}
+
+export test(allocator: Allocator, memory_information: SystemMemoryInformation) {
 	file_system = MemoryFileSystem(allocator) using allocator
 
 	root = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.empty) using allocator
@@ -246,4 +346,6 @@ export test(allocator: Allocator) {
 
 	Custody.root = Custody(String.empty, none as Custody, root) using allocator
 	FileSystem.root = file_system
+
+	load_boot_files(allocator, file_system, memory_information)
 }

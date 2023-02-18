@@ -66,7 +66,7 @@ export start(
 ) {
 	serial.initialize()
 
-	allocator = BufferAllocator(buffer: u8[0x2000], 0x2000)
+	allocator = BufferAllocator(buffer: u8[0x4000], 0x4000)
 
 	boot.console.initialize()
 	boot.console.clear()
@@ -104,7 +104,7 @@ export start(
 
 	apic.initialize(allocator)
 
-	file_systems.memory_file_system.test(HeapAllocator.instance)
+	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information)
 
 	system_calls.initialize()
 

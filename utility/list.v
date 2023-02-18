@@ -122,6 +122,22 @@ List<T> {
 		data[i] = element
 	}
 
+	find_index(filter: (T) -> bool): i64 {
+		loop (i = 0, i < size, i++) {
+			if filter(data[i]) return i
+		}
+
+		return -1
+	}
+
+	find_index<U>(data: U, filter: (T, U) -> bool): i64 {
+		loop (i = 0, i < size, i++) {
+			if filter(this.data[i], data) return i
+		}
+
+		return -1
+	}
+
 	clear() {
 		if data !== none {
 			allocator.deallocate(data)

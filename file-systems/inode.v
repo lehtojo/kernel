@@ -19,10 +19,10 @@ Inode {
 	open write_bytes(bytes: Array<u8>, offset: u64): u64
 	open read_bytes(destination: link, offset: u64, size: u64): u64
 
-	open create_child(name: String): Inode { return none as Inode }
+	open create_child(name: String, is_directory: bool): Inode { return none as Inode }
 
-	create_directory(name: String): Inode { return create_child(name) }
-	create_file(name: String): Inode { return create_child(name) }
+	create_directory(name: String): Inode { return create_child(name, true) }
+	create_file(name: String): Inode { return create_child(name, false) }
 
 	open lookup(name: String): Inode { return none as Inode }
 }

@@ -163,7 +163,7 @@ export process_section_header_table_tag(tag: SectionHeaderTableTag, section_head
 	debug.write(tag.section_count)
 	debug.write(', Section header size = ')
 	debug.write(tag.section_header_size)
-	debug.write(', "Index of the section that has names of all sections" =')
+	debug.write(', "Index of the section that has names of all sections" = ')
 	debug.write(tag.section_name_entry_index)
 	debug.write_line()
 

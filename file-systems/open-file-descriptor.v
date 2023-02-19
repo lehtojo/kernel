@@ -46,14 +46,22 @@ plain OpenFileDescription {
 
 	size(): u64 { return file.size(this) }
 
-	write(data: Array<u8>): u64 {
+	write(data: Array<u8>, offset: u64): u64 {
 		if not can_write() return -1
-		return file.write(this, data)
+		return file.write(this, data, offset)
+	}
+
+	write(data: Array<u8>): u64 {
+		return write(data, offset)
+	}
+
+	read(destination: link, offset: u64, size: u64): u64 {
+		if not can_read() return -1
+		return file.read(this, destination, offset, size)
 	}
 
 	read(destination: link, size: u64): u64 {
-		if not can_read() return -1
-		return file.read(this, destination, size)
+		return read(destination, offset, size)
 	}
 
 	seek(offset: i64, whence: i32): i32 {

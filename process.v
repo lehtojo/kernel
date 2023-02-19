@@ -97,6 +97,7 @@ Process {
 		arguments = List<String>(allocator)
 		arguments.add(String.new('/bin/test2')) # Todo: Add executable path
 		# arguments.add(String.new('--help'))
+		# arguments.add(String.new('/bin/hello'))
 		arguments.add(String.new('/bin/startup'))
 
 		environment_variables = List<String>(allocator)

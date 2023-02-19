@@ -21,12 +21,23 @@ export system_memory_map(
 	process = get_process()
 
 	# Use multiple of pages when allocating
-	length = memory.round_to_page(length)
-	if length <= 0 return EOVERFLOW
+	length = memory.round_to_page(length) # Todo: Overflow
 
-	# Todo: Support alignment
-	# Todo: Support specific virtual addresses
-	result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
+	# We are allowed to align the specified address to pages as it is only a hint and other implementations do this as well
+	address = memory.round_to_page(address) # Todo: Overflow
+
+	# If the specified address is zero, allocate a suitable region anywhere.
+	# Otherwise try to allocate the specified region.
+	result = Optionals.empty<MemoryMapping>()
+
+	if address == 0 {
+		result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
+	} else {
+		result = process.memory.allocate_specific_region(address as u64, length)
+
+		# If the specific allocation failed, attempt to allocate anywhere
+		if result.empty { result = process.memory.allocate_region_anywhere(length, PAGE_SIZE) }
+	}
 
 	if result has not mapping {
 		debug.write_line('System call: Memory map: Failed to find a memory region for the process')

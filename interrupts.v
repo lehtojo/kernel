@@ -185,8 +185,10 @@ export process_page_fault(frame: TrapFrame*) {
 	# Todo: Continue
 	if process !== none and process.memory !== none and process.memory.process_page_fault(address, false) return
 
-	debug.write('Page fault at address ')
-	debug.write_address(frame[].registers[].cs)
+	debug.write('Attempted to access address ')
+	debug.write_address(address)
+	debug.write(' at ')
+	debug.write_address(frame[].registers[].rip)
 	debug.write_line()
 	panic('Page fault')
 }

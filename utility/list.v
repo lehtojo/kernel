@@ -85,7 +85,7 @@ List<T> {
 	}
 
 	insert(i: u64, element: T) {
-		require(i >= 0 and i < size, 'Index out of bounds')
+		require(i >= 0 and i <= size, 'Index out of bounds')
 
 		if size >= capacity extend()
 

@@ -68,7 +68,7 @@ Process {
 
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.allocations.add(Segment.new(
+			memory.add_allocation(Segment.new(
 				allocation.unaligned_virtual_address_start as link,
 				allocation.virtual_address_end as link
 			))

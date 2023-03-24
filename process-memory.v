@@ -143,6 +143,11 @@ plain ProcessMemory {
 		available_regions_by_address[address_list_index] = address_list_region
 	}
 
+	# Summary: Adds the specified allocation into the sorted allocation list
+	add_allocation(allocation: Segment): _ {
+		memory.sorted.insert<Segment>(allocations, allocation, (a: Segment, b: Segment) -> (a.start - b.start) as i64)
+	}
+
 	reserve_specific_region(virtual_address: u64, size: u64): bool {
 		debug.write('Process: Reserving virtual region ')
 		debug.write_address(virtual_address)
@@ -166,6 +171,8 @@ plain ProcessMemory {
 
 		# Allocate the virtual region now that we have the physical memory
 		allocate_specific_region(address_list_index, virtual_address, size)
+
+		add_allocation(Segment.new(virtual_address as link, virtual_address as link + size))
 		return true
 	}
 
@@ -189,7 +196,8 @@ plain ProcessMemory {
 			aligned_virtual_address_start = memory.round_to(unaligned_virtual_address_start, alignment)
 			aligned_virtual_address_end = aligned_virtual_address_start + size
 
-			allocations.add(Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end))
+			# Insert the allocation being made into the sorted allocation list
+			add_allocation(Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end))
 
 			# Consume the allocated region from the available region
 			if aligned_virtual_address_end == address_list_region.end {

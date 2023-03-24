@@ -118,6 +118,8 @@ export process(frame: TrapFrame*): u64 {
 			registers[].rdi as link, registers[].rsi, registers[].rdx as u32,
 			registers[].r10 as u32, registers[].r8 as u32, registers[].r9
 		)
+	} else system_call_number == 0x0b {
+		result = system_munmap(registers[].rdi as link, registers[].rsi)
 	} else system_call_number == 0x11 {
 		result = system_pread64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64, registers[].r10 as u64)
 	} else system_call_number == 0x12 {

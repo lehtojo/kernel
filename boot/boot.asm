@@ -388,7 +388,7 @@ kernel_entry:
 incbin "build/kernel.bin"
 
 application_start:
-incbin "ld"
+incbin "app"
 application_end:
 
 memory_file_system_start:

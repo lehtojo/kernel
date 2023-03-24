@@ -12,6 +12,10 @@ pack Segment {
 	end: link
 	size => (end - start) as u64
 
+	shared empty(): Segment {
+		return pack { type: 0, start: 0, end: 0 } as Segment
+	}
+
 	shared new(type: i8): Segment {
 		return pack { type: type, start: 0, end: 0 } as Segment
 	}
@@ -27,5 +31,10 @@ pack Segment {
 	# Summary: Returns whether this segment contains the specified address
 	contains(address: link): bool {
 		return address >= start and address < end
+	}
+
+	# Summary: Returns whether this segment contains the specified segment
+	contains(segment: Segment): bool {
+		return segment.start <= segment.end segment.start >= start and segment.end <= end
 	}
 }

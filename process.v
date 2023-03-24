@@ -68,7 +68,10 @@ Process {
 
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.allocations.add(allocation)
+			memory.allocations.add(Segment.new(
+				allocation.unaligned_virtual_address_start as link,
+				allocation.virtual_address_end as link
+			))
 
 			# Set the program break after all loaded segments
 			memory.break = math.max(memory.break, allocation.virtual_address_end)

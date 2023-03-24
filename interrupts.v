@@ -108,8 +108,24 @@ export disable() {
 # Writes an interrupt entry to the specified address that pushes the interrupt number to stack and jumps to the handler.
 # Returns the address after writing the entry.
 export write_interrupt_entry(address: link, to: link, interrupt: i32) {
+	if interrupt < 0x20 {
+		address[0] = 0x68 # push qword interrupt
+		(address + 1).(i32*)[] = interrupt
+		address += strideof(i32) + 1
+
+		# Jump to the interrupt handler
+		from = address + strideof(i32) + 1
+		offset = to - from
+
+		address[0] = 0xe9 # jmp to
+		(address + 1).(i32*)[] = offset
+		address += strideof(i32) + 1
+
+		return address + 6 # Align to 16 bytes
+	}
+
 	# Align the stack to 16 bytes
-	address[0] = 0x68 # push dword 0
+	address[0] = 0x68 # push qword interrupt
 	(address + 1).(i32*)[] = interrupt
 	address += strideof(i32) + 1
 
@@ -161,6 +177,20 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 	(tables + IDT_OFFSET).(InterruptDescriptor*)[index] = descriptor
 }
 
+export process_page_fault(frame: TrapFrame*) {
+	address = read_cr2()
+	process = scheduler.current
+
+	# If the current process determines the page fault was legal, then continue
+	# Todo: Continue
+	if process !== none and process.memory !== none and process.memory.process_page_fault(address, false) return
+
+	debug.write('Page fault at address ')
+	debug.write_address(frame[].registers[].cs)
+	debug.write_line()
+	panic('Page fault')
+}
+
 export process(frame: TrapFrame*): u64 {
 	code = frame[].registers[].interrupt
 	result = 0 as u64
@@ -170,10 +200,7 @@ export process(frame: TrapFrame*): u64 {
 	} else code == 0x24 {
 		scheduler.tick(frame)
 	} else code == 0x0e {
-		debug.write('Page fault at address ')
-		debug.write_address(frame[].registers[].cs)
-		debug.write_line()
-		panic('Page fault')
+		process_page_fault(frame)
 	} else code == 0x0d {
 		debug.write('General protection fault at address ')
 		debug.write_address(frame[].registers[].cs)

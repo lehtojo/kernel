@@ -17,13 +17,18 @@ PhysicalMemoryManagerLayer {
 	# Summary:
 	# Splits slabs towards the specified physical address down to the specified depth.
 	# Allocates the lowest slab containing the specified physical address.
-	split(physical_address: link, to: u32): link {
+	# In manual mode, this function just sets the bits correctly and does not add or remove slabs from lists.
+	split(physical_address: link, to: u32, manual: bool, allocate: bool): link {
 		slab: link = (physical_address as u64) & (-size)
 
 		# Stop when the target depth is reached
 		if depth == to {
 			index = (slab as u64) / size
-			set_unavailable(index)
+
+			# Allocate or deallocate the final slab depending on the arguments
+			if allocate { set_unavailable(index) }
+			else not manual { add(slab) }
+
 			return slab
 		}
 
@@ -36,7 +41,7 @@ PhysicalMemoryManagerLayer {
 		require(is_available(index), 'Can not split an unavailable slab')
 
 		# Since we are splitting the specified slab, it must be set unavailable
-		remove(slab as PhysicalMemoryManagerAvailableLayerElement)
+		if not manual remove(slab as PhysicalMemoryManagerAvailableLayerElement)
 		set_unavailable(index)
 
 		# Compute the addresses of the two lower layer slabs
@@ -44,10 +49,17 @@ PhysicalMemoryManagerLayer {
 		buddy = ((slab as u64) ¤ lower.size) as link
 
 		# Set the buddy slab available on the lower layer
-		lower.add(buddy)
+		if not manual lower.add(buddy)
 
 		# Since we have not reached the target depth, continue lower
 		return lower.split(physical_address, to)
+	}
+
+	# Summary:
+	# Splits slabs towards the specified physical address down to the specified depth.
+	# Allocates the lowest slab containing the specified physical address.
+	split(physical_address: link, to: u32): link {
+		return split(physical_address, to, false, true)
 	}
 
 	# Summary:
@@ -196,7 +208,7 @@ PhysicalMemoryManagerLayer {
 	}
 
 	# Summary: Deallocates the specified entry
-	deallocate(physical_address: link): u64 {
+	deallocate(physical_address: link, add: bool): u64 {
 		require(((physical_address as u64) & (size - 1)) == 0, 'Address was not aligned correctly')
 
 		index = (physical_address as u64) / size
@@ -214,13 +226,17 @@ PhysicalMemoryManagerLayer {
 
 		# If the buddy slab is available as well, we can merge the deallocated slab with its buddy slab.
 		if upper !== none and is_available((buddy as u64) / size) {
+			# Remove the buddy slab from the available slabs
 			remove(buddy)
 
+			# Find out the left slab
 			left = math.min(physical_address as u64, buddy as u64) as link
-			upper.add(left)
+
+			# Set the upper slab available that contains the deallocated and the buddy slab
+			if add { upper.add(left) }
 		} else {
 			# Since we can not merge, add this slab to the available list
-			add(physical_address)
+			if add { add(physical_address) }
 		}
 
 		return size
@@ -292,7 +308,7 @@ PhysicalMemoryManager {
 
 		# Set all the reserved segments unavailable
 		loop (i = 0, i < reserved.size, i++) {
-			reserve_region(reserved[i])
+			reserve_region_with_largest_slabs(reserved[i])
 		}
 
 		# Compute the number of L0 slabs needed for the whole physical memory
@@ -372,7 +388,7 @@ PhysicalMemoryManager {
 
 	# Summary:
 	# Returns the most suitable layer (index) for the specified amount of bytes.
-	layer_index(bytes: u64) {
+	layer_index(bytes: u64): u64 {
 		if bytes > L0_SIZE panic('No layer can store the specified amount of bytes')
 		if bytes > L1_SIZE return 0
 		if bytes > L2_SIZE return 1
@@ -385,10 +401,10 @@ PhysicalMemoryManager {
 	}
 
 	# Summary: Reserves the specified region by using L0 slabs
-	private reserve_region(segment: Segment) {
+	private reserve_region_with_largest_slabs(segment: Segment) {
 		if segment.size > L0_SIZE {
-			reserve_region(Segment.new(segment.type, segment.start, segment.start + segment.size / 2))
-			reserve_region(Segment.new(segment.type, segment.start + segment.size / 2, segment.end))
+			reserve_region_with_largest_slabs(Segment.new(segment.type, segment.start, segment.start + segment.size / 2))
+			reserve_region_with_largest_slabs(Segment.new(segment.type, segment.start + segment.size / 2, segment.end))
 			return
 		}
 
@@ -407,18 +423,15 @@ PhysicalMemoryManager {
 	}
 
 	# Summary:
-	# Reserves the specified memory area.
-	reserve(physical_address: link, bytes: u64) {
-		layer = layers[layer_index(bytes)]
-		start = physical_address & (-layer.size)
-		end = (physical_address + bytes) & (-layer.size)
+	# Reserves the specified slab
+	reserve_slab(slab: Segment): _ {
+		# Find the layer that has the specified slab
+		layer = layers[layer_index(slab.size)]
+		start = slab.start & (-layer.size)
 
+		# Split the layers above the slab so that it can be reserved
+		# Note: Splitting here also reserves the slab
 		layers[0].split(start, layer.depth)
-
-		# If the reserved memory area uses two slabs, reserve both
-		if end != start {
-			layers[0].split(end, layer.depth)
-		}
 	}
 
 	# Summary:
@@ -475,19 +488,107 @@ PhysicalMemoryManager {
 		return kernel.mapper.map_kernel_region(physical_address, bytes)
 	}
 
-	# Summary: Deallocates the specified physical memory.
-	deallocate(address: link) {
+	# Summary:
+	# Deallocates the slab that starts the specified physical address.
+	# Use deallocation, which allows for fragmentation when, for example, you deallocate a region in the middle of an allocation.
+	# Parameter "add" controls whether the deallocated region is added to avalailable memory.
+	deallocate_all(address: link, add: bool): u64 {
 		require((address & (L7_SIZE - 1)) == 0, 'Physical address was not aligned correctly')
 
-		if layers[7].owns(address) return layers[7].deallocate(address)
-		if layers[6].owns(address) return layers[6].deallocate(address)
-		if layers[5].owns(address) return layers[5].deallocate(address)
-		if layers[4].owns(address) return layers[4].deallocate(address)
-		if layers[3].owns(address) return layers[3].deallocate(address)
-		if layers[2].owns(address) return layers[2].deallocate(address)
-		if layers[1].owns(address) return layers[1].deallocate(address)
-		if layers[0].owns(address) return layers[0].deallocate(address)
+		if layers[7].owns(address) return layers[7].deallocate(address, add)
+		if layers[6].owns(address) return layers[6].deallocate(address, add)
+		if layers[5].owns(address) return layers[5].deallocate(address, add)
+		if layers[4].owns(address) return layers[4].deallocate(address, add)
+		if layers[3].owns(address) return layers[3].deallocate(address, add)
+		if layers[2].owns(address) return layers[2].deallocate(address, add)
+		if layers[1].owns(address) return layers[1].deallocate(address, add)
+		if layers[0].owns(address) return layers[0].deallocate(address, add)
 
 		panic('Can not deallocate memory that has not been allocated')
+	}
+
+	# Summary:
+	# Deallocates the slab that starts the specified physical address.
+	# Use deallocation, which allows for fragmentation when, for example, you deallocate a region in the middle of an allocation.
+	deallocate_all(address: link): u64 {
+		return deallocate_all(address, true)
+	}
+
+	# Summary:
+	# Iterates through the specified region with largest possible slabs inside it and calls the specified action with them.
+	private shared iterate_region_with_largest_slabs<T>(region: Segment, data: T, action: (Segment, T) -> _): _ {
+		require(memory.is_aligned(region.start, L0_SIZE), 'Start of the specified region was not aligned')
+		require(memory.is_aligned(region.size, L0_SIZE), 'Size of the specified region was not aligned')
+
+		position = region.start
+
+		loop (position < region.end) {
+			# Find the largest slab that starts at the current position and fits in the remaining region
+			i = LAYER_COUNT - 1
+
+			loop (i >= 0, i--) {
+				layer = layers[i]
+
+				# Move to a smaller slab if the position is not a start of a slab on this layer
+				if not memory.is_aligned(position, layer.size) continue
+
+				# Ensure the slab that starts at the current position is inside the remaining region
+				end = position + layer.size # Todo: Overflow might be possible
+				if end <= region.end continue
+
+				# We found the next largest slab inside the remaining region, give it to the caller
+				action(data, Segment.new(position, position + layer.size))
+
+				# Move past the consumed slab
+				position += layer.size
+				stop
+			}
+
+			if i < 0 panic('Failed to iterate the region')
+		}
+	}
+
+	# Summary:
+	# Deallocates the specified physical region while allowing fragmentation.
+	# Fragmentation means that part of a large slab can be deallocated.
+	# In this case, the remaining regions remain allocated with the help of smaller slabs.
+	deallocate_fragment(physical_region: Segment): _ {
+		# Verify the specified physical region is valid
+		require(memory.is_aligned(physical_region.start, L7_SIZE), 'Physical memory region was not aligned')
+		require(memory.is_aligned(physical_region.size, L7_SIZE), 'Physical memory region size was not aligned')
+
+		# Find the layer with the smallest slab that owns the specified physical region
+		layer = none as PhysicalMemoryManagerLayer
+		containing_slab = Segment.empty()
+		i = LAYER_COUNT - 1
+
+		loop (i >= 0, i--) {
+			layer = layers[i]
+			
+			# Find the start of the slab that contains the specified region on this layer
+			containing_slab_start = physical_region.size & (-layer.size)
+			containing_slab_end = containing_slab_start + layer.size
+			containing_slab = Segment.new(containing_slab_start, containing_slab_end)
+
+			# Stop if this layer owns the physical region			
+			if layer.owns(containing_slab_start) stop
+		}
+
+		# Panic if the physical region is not even allocated
+		if i < 0 panic('Specified physical region was not allocated')
+
+		# Deallocate the slab that contains the physical region and do not add it back to available slabs
+		deallocate(start, false)
+
+		# Reserve the regions inside the deallocated slab that are not being deallocated
+		remaining_left_region = Segment.new(containing_slab.start, physical_region.start)
+		remaining_right_region = Segment.new(physical_region.end, containing_slab.end)
+
+		# Iterate all slabs inside the left and right remaining region and reserve them, because they are not being deallocated
+		iterate_region_with_largest_slabs<PhysicalMemoryManager>(remaining_left_region, this, (slab: Segment, manager: PhysicalMemoryManager) -> manager.reserve_slab(slab))
+		iterate_region_with_largest_slabs<PhysicalMemoryManager>(remaining_right_region, this, (slab: Segment, manager: PhysicalMemoryManager) -> manager.reserve_slab(slab))
+
+		# Deallocate all slabs inside the deallocated region
+		iterate_region_with_largest_slabs<PhysicalMemoryManager>(physical_region, this, (slab: Segment, manager: PhysicalMemoryManager) -> manager.deallocate(slab))
 	}
 }

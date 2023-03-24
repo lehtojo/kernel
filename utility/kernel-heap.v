@@ -8,10 +8,6 @@ KernelHeap {
 	shared allocate(bytes: u64): link {
 		require(bytes >= 0, 'Illegal allocation size')
 
-		debug.write('Allocating heap ')
-		debug.write(bytes)
-		debug.write_line(' bytes')
-
 		if bytes <= 16 return heap.s16.allocate()
 		if bytes <= 32 return heap.s32.allocate()
 		if bytes <= 64 return heap.s64.allocate()
@@ -32,7 +28,7 @@ KernelHeap {
 		if heap.s256.deallocate(address) return
 
 		physical_address = mapper.to_physical_address(address)
-		PhysicalMemoryManager.instance.deallocate(physical_address)
+		PhysicalMemoryManager.instance.deallocate_all(physical_address)
 	}
 
 	shared allocate<T>(): T* {
@@ -97,10 +93,7 @@ export plain SlabAllocator<T> {
 	}
 
 	allocate() {
-		debug.write('Used slab allocator of ')
-		debug.write(sizeof(T))
-		debug.write_line(' bytes')
-
+		# Use the next available entry if such exists
 		if available != none {
 			result = available
 
@@ -164,8 +157,8 @@ export plain SlabAllocator<T> {
 	}
 
 	dispose() {
-		PhysicalMemoryManager.instance.deallocate(start)
-		PhysicalMemoryManager.instance.deallocate(states)
+		PhysicalMemoryManager.instance.deallocate_all(start)
+		PhysicalMemoryManager.instance.deallocate_all(states)
 	}
 }
 
@@ -199,8 +192,8 @@ export plain Allocators<T, S> {
 			memory.copy(new_deallocators, deallocators, size * strideof(T))
 
 			# Deallocate the old allocator and deallocator lists
-			PhysicalMemoryManager.instance.deallocate(allocators)
-			PhysicalMemoryManager.instance.deallocate(deallocators)
+			PhysicalMemoryManager.instance.deallocate_all(allocators)
+			PhysicalMemoryManager.instance.deallocate_all(deallocators)
 
 			capacity = new_capacity
 			allocators = new_allocators

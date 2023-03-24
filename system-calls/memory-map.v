@@ -28,35 +28,27 @@ export system_memory_map(
 
 	# If the specified address is zero, allocate a suitable region anywhere.
 	# Otherwise try to allocate the specified region.
-	result = Optionals.empty<MemoryMapping>()
+	result = Optionals.empty<u64>()
 
 	# Todo: Support MAP_FIXED that forces the specified address and updates its settings
 
 	if address == 0 {
 		result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
+	} else process.memory.allocate_specific_region(address as u64, length) {
+		result = Optionals.new<u64>(address as u64)
 	} else {
-		result = process.memory.allocate_specific_region(address as u64, length)
-
 		# If the specific allocation failed, attempt to allocate anywhere
-		if result.empty { result = process.memory.allocate_region_anywhere(length, PAGE_SIZE) }
+		result = process.memory.allocate_region_anywhere(length, PAGE_SIZE)
 	}
 
-	if result has not mapping {
-		debug.write_line('System call: Memory map: Failed to find a memory region for the process')
-		return ENOMEM
+	# Return the allocated virtual address
+	if result has virtual_address {
+		debug.write('System call: Memory map: Found virtual region for process ')
+		debug.write_address(virtual_address)
+		debug.write_line()
+		return virtual_address
 	}
 
-	debug.write('System call: Memory map: Found memory region for the process ')
-	debug.write_address(mapping.virtual_address_start)
-	debug.write(' => ')
-	debug.write_address(mapping.physical_address_start)
-	debug.write(' ')
-	debug.write(mapping.size)
-	debug.write_line(' bytes')
-
-	# Map the pages for the process
-	process.memory.paging_table.map_region(HeapAllocator.instance, mapping)
-
-	# Return the virtual starting address of the allocated region
-	return mapping.virtual_address_start
+	debug.write_line('System call: Memory map: Failed to find a memory region for the process')
+	return ENOMEM
 }

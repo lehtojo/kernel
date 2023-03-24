@@ -142,3 +142,7 @@ round_to(address, alignment) {
 round_to_page(address) {
 	return (address + PAGE_SIZE - 1) & (-PAGE_SIZE)
 }
+
+is_aligned(address, alignment): bool {
+	return (address & (-alignment)) == address
+}

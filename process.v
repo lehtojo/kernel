@@ -35,18 +35,10 @@ Process {
 	shared from_executable(allocator: Allocator, file: Array<u8>): Process {
 		debug.write_line('Process: Creating a process from executable...')
 
-		allocations = List<MemoryMapping>(allocator)
+		allocations = List<Segment>(allocator)
 
 		load_information = LoadInformation()
 		load_information.allocations = allocations
-
-		debug.write_line('Process: Loading executable into memory...')
-
-		# Try loading the executable into memory
-		if not load_executable(file, load_information) {
-			allocations.clear()
-			return none as Process
-		}
 
 		debug.write_line('Process: Creating process paging tables...')
 
@@ -54,27 +46,26 @@ Process {
 		memory: ProcessMemory = ProcessMemory(allocator) using allocator
 		paging_table = memory.paging_table
 
+		debug.write_line('Process: Loading executable into memory...')
+
+		# Try loading the executable into memory
+		if not load_executable(allocator, paging_table, file, load_information) {
+			allocations.clear()
+			return none as Process
+		}
+
 		loop (i = 0, i < allocations.size, i++) {
 			allocation = allocations[i]
-			paging_table.map_region(allocator, allocation)
 
-			# Reserve the allocated virtual region
-			unaligned_size = (allocation.virtual_address_start + allocation.size) - allocation.unaligned_virtual_address_start
-
-			require(memory.reserve_specific_region(
-				allocation.unaligned_virtual_address_start,
-				unaligned_size
-			), 'Failed to reserve memory region before starting the process')
+			# Reserve the allocation from the process memory
+			require(memory.reserve_specific_region(allocation.start as u64, allocation.size), 'Failed to reserve memory region before starting the process')
 
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.add_allocation(Segment.new(
-				allocation.unaligned_virtual_address_start as link,
-				allocation.virtual_address_end as link
-			))
+			memory.add_allocation(allocation)
 
 			# Set the program break after all loaded segments
-			memory.break = math.max(memory.break, allocation.virtual_address_end)
+			memory.break = math.max(memory.break, allocation.end as u64)
 		}
 
 		# The local allocation list is no longer needed

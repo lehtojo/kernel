@@ -142,6 +142,10 @@ zero(address: link, size: u64) {
 	}
 }
 
+page_of(address) {
+	return address & (-PAGE_SIZE)
+}
+
 round_to(address, alignment) {
 	return (address + alignment - 1) & (-alignment)
 }
@@ -152,4 +156,8 @@ round_to_page(address) {
 
 is_aligned(address, alignment): bool {
 	return (address & (-alignment)) == address
+}
+
+is_page_aligned(address): bool {
+	return (address & (-PAGE_SIZE)) == address
 }

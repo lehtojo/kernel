@@ -3,7 +3,7 @@ namespace kernel.elf.loader
 import kernel.scheduler
 
 plain LoadInformation {
-	allocations: List<MemoryMapping>
+	allocations: List<Segment>
 	entry_point: u64
 }
 
@@ -48,7 +48,57 @@ load_program_headers(file: Array<u8>, program_header_table: link, program_header
 	return true
 }
 
-export load_executable(file: Array<u8>, output: LoadInformation): bool {
+# Summary:
+# Copies one page from the data to the destination while taking into account the paging table.
+# If the destination page is already mapped to physical memory, the mapped physical memory will be used.
+# Otherwise new physical page will be allocated and mapped for copying.
+copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_destination: u64, source: link, remaining: u64): u64 {
+	# Compute the next virtual page starting from the specified virtual address
+	next_virtual_page = memory.round_to_page(unaligned_virtual_destination)
+	if next_virtual_page == unaligned_virtual_destination { next_virtual_page += PAGE_SIZE }
+
+	# Compute the number of bytes that should be copied:
+	# - Copy the number of bytes that will reach the next page
+	# - Do not copy bytes more than there are remaining
+	size = math.min(next_virtual_page - unaligned_virtual_destination, remaining)
+
+	# Todo: Do we need to check permissions here or is everything verified before this function is called?
+	mapped_unaligned_physical_page = none as link
+
+	# Use existing physical memory when possible
+	if paging_table.to_physical_address(unaligned_virtual_destination as link) has existing_physical_page {
+		# Map the exiting physical memory into kernel space, so that we can copy into it
+		debug.write_line('Loader: Using existing physical page for program section ')
+		debug.write_address(existing_physical_page)
+		debug.write_line()
+		mapped_unaligned_physical_page = mapper.map_kernel_region(existing_physical_page, size)
+
+	} else {
+		# Todo: Remove?
+		# Compute the address of the page where we will copy data
+		virtual_page: link = memory.page_of(unaligned_virtual_destination)
+
+		# Compute the offset inside virtual page
+		offset = unaligned_virtual_destination as u64 - virtual_page as u64
+
+		# Since no physical memory is mapped, we need to allocate it
+		new_physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
+
+		# Map the new page to the paging table
+		paging_table.map_page(allocator, virtual_page, new_physical_page)
+
+		# Map the new physical memory into kernel space, so that we can copy into it
+		mapped_unaligned_physical_page = mapper.map_kernel_region(new_physical_page, size) + offset
+	}
+
+	# Copy the data into the physical memory
+	memory.copy(mapped_unaligned_physical_page, source, size)
+
+	# Return the number of bytes copied
+	return size
+}
+
+export load_executable(allocator: Allocator, paging_table: PagingTable, file: Array<u8>, output: LoadInformation): bool {
 	debug.write('Loader: Loading executable from file at address ')
 	debug.write_address(file.data as u64)
 	debug.write_line()
@@ -102,64 +152,37 @@ export load_executable(file: Array<u8>, output: LoadInformation): bool {
 		program_header = program_headers[i]
 		if program_header.type != ELF_SEGMENT_TYPE_LOADABLE continue
 
-		segment_data = file.data + program_header.offset
-
-		# Determine how many bytes should be copied from the file into memory
-		segment_copy_size = math.min(program_header.segment_file_size, program_header.segment_memory_size)
-
-		# Load the virtual address where the segment must be placed, this can be unaligned 
-		unaligned_segment_virtual_address = program_header.virtual_address
-
-		# Compute the virtual page that contains the start of the segment
-		segment_virtual_base = unaligned_segment_virtual_address & (-PAGE_SIZE)
-		# Compute the offset of the segment in the first page
-		segment_start_offset = unaligned_segment_virtual_address - segment_virtual_base
-
-		# Compute how many bytes the segment required, aligned to pages
-		segment_physical_size = memory.round_to_page((unaligned_segment_virtual_address + segment_copy_size) - segment_virtual_base)
-
-		# Allocate the physical memory for the segment
-		segment_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(segment_physical_size)
-		unaligned_segment_physical_address = segment_physical_address + segment_start_offset
-
-		# Map the allocated physical memory, so that we can copy the segment into memory
-		mapped_segment_address = mapper.map_kernel_region(unaligned_segment_physical_address as link, segment_copy_size)
-
-		# Todo: Deallocate upon failure
-
-		if segment_physical_address === none {
-			debug.write_line('Loader: Failed to allocate memory for a loadable segment')
-			failed = true
-			stop
-		}
+		destination_virtual_address = program_header.virtual_address
+		source_data = file.data + program_header.offset
+		remaining = math.min(program_header.segment_file_size, program_header.segment_memory_size) # Determine how many bytes should be copied from the file into memory
 
 		debug.write('Loader: Copying ')
-		debug.write(segment_copy_size)
+		debug.write(remaining)
 		debug.write(' byte(s) from the executable starting at offset ')
 		debug.write_address(program_header.offset)
 		debug.write(' into virtual address ')
-		debug.write_address(unaligned_segment_virtual_address)
-		debug.write(' using physical address ')
-		debug.write_address(unaligned_segment_physical_address)
+		debug.write_address(destination_virtual_address)
 		debug.write_line()
 
-		# Copy the segment data from the file to the allocated segment
-		memory.copy(mapped_segment_address, segment_data, segment_copy_size)
+		# Add the memory mapping to allocations
+		start_virtual_address = memory.page_of(destination_virtual_address) as link
+		end_virtual_address = memory.round_to_page(destination_virtual_address + remaining) as link
+		output.allocations.add(Segment.new(start_virtual_address, end_virtual_address))
 
-		# Add the memory mapping
-		output.allocations.add(MemoryMapping.new(
-			segment_virtual_base as u64,
-			segment_physical_address as u64,
-			segment_physical_size
-		))
+		# Copy pages from the executable until there is no data left
+		loop (remaining > 0) {
+			copied = copy_page(allocator, paging_table, destination_virtual_address, source_data, remaining)
+
+			destination_virtual_address += copied
+			source_data += copied
+			remaining -= copied
+		}
 	}
 
 	# Because the program headers were processed, they are no longer needed
 	KernelHeap.deallocate(program_headers_buffer)
 
-	if failed {
-		return false
-	}
+	if failed return false
 
 	# Register the entry point
 	# TODO: Verify the entry point is inside an executable region

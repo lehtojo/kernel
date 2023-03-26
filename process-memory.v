@@ -1,5 +1,9 @@
 namespace kernel.scheduler
 
+constant PROCESS_ALLOCATION_PROGRAM_TEXT = 1
+constant PROCESS_ALLOCATION_PROGRAM_DATA = 2
+constant PROCESS_ALLOCATION_RUNTIME_DATA = 4
+
 plain ProcessMemory {
 	# Summary: Stores the allocator used by this structure
 	allocator: Allocator
@@ -73,7 +77,7 @@ plain ProcessMemory {
 			if region.contains(address) return i
 		}
 
-		debug.write_line('Process memory: No available region contained the specified size')
+		debug.write_line('Process memory: No available region contained the specified address')
 		return -1
 	}
 
@@ -144,7 +148,8 @@ plain ProcessMemory {
 	}
 
 	# Summary: Adds the specified allocation into the sorted allocation list
-	add_allocation(allocation: Segment): _ {
+	add_allocation(type: u8, allocation: Segment): _ {
+		allocation.type = type
 		memory.sorted.insert<Segment>(allocations, allocation, (a: Segment, b: Segment) -> (a.start - b.start) as i64)
 	}
 
@@ -172,7 +177,7 @@ plain ProcessMemory {
 		# Allocate the virtual region now that we have the physical memory
 		allocate_specific_region(address_list_index, virtual_address, size)
 
-		add_allocation(Segment.new(virtual_address as link, virtual_address as link + size))
+		add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, Segment.new(virtual_address as link, virtual_address as link + size))
 		return true
 	}
 
@@ -197,7 +202,7 @@ plain ProcessMemory {
 			aligned_virtual_address_end = aligned_virtual_address_start + size
 
 			# Insert the allocation being made into the sorted allocation list
-			add_allocation(Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end))
+			add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end))
 
 			# Consume the allocated region from the available region
 			if aligned_virtual_address_end == address_list_region.end {
@@ -251,6 +256,19 @@ plain ProcessMemory {
 		return true
 	}
 
+	# Summary: Deallocates all programs allocations and removes them from the allocation list
+	deallocate_program_allocations() {
+		loop (i = allocations.size - 1, i >= 0, i--) {
+			# Skip runtime allocations
+			allocation = allocations[i]
+			if allocation.type != PROCESS_ALLOCATION_PROGRAM_TEXT and allocation.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
+
+			# Deallocate the program allocation and remove it from the allocations
+			allocations.remove_at(i)
+			deallocate(allocation)
+		}
+	}
+ 
 	# Summary: Deallocates the specified region allowing fragmentation
 	deallocate(virtual_region: Segment): i64 {
 		# Validate the specified region before doing anything with it

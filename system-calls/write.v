@@ -16,10 +16,6 @@ export system_write(file_descriptor: u32, buffer: link, size: u64): u64 {
 		return EFAULT
 	}
 
-	# Todo: Remove
-	debug.write_bytes(buffer, size)
-	debug.write_line()
-
 	# Try getting the file description associated with the specified descriptor
 	file_description = process.file_descriptors.try_get_description(file_descriptor)
 

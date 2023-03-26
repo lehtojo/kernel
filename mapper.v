@@ -157,7 +157,8 @@ set_cached(entry: u64*, cache: bool) {
 
 # Summary: Sets the address of the specified page entry
 set_address(entry: u64*, physical_address: link) {
-	entry[] |= ((physical_address as u64) & 0x7fffffffff000)
+	current = entry[] & (!0x7fffffffff000)
+	entry[] = current | ((physical_address as u64) & 0x7fffffffff000)
 }
 
 to_physical_address(virtual_address: link): link {

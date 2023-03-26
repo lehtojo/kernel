@@ -117,10 +117,6 @@ PathParts {
 	}
 }
 
-constant O_CREAT = 0x40
-constant O_RDONLY = 0
-constant O_WRONLY = 1
-
 constant CREATE_OPTION_NONE = 0
 constant CREATE_OPTION_FILE = 1
 constant CREATE_OPTION_DIRECTORY = 2

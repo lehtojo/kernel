@@ -145,6 +145,11 @@ registers_rsp:
 lea rax, [rsp+8]
 ret
 
+.global registers_rip
+registers_rip:
+mov rax, [rsp]
+ret
+
 .align 32
 .global interrupt_entry
 interrupt_entry:

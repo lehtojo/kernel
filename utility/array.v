@@ -7,6 +7,11 @@ plain Array<T> {
 		this.size = size
 	}
 
+	init(allocator: Allocator, size: u64) {
+		this.data = allocator.allocate(size * sizeof(T))
+		this.size = size
+	}
+
 	set(i: u64, element: T) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 		data[i] = element

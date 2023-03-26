@@ -1,5 +1,9 @@
 namespace kernel.file_systems
 
+constant O_CREAT = 0x40
+constant O_RDONLY = 0
+constant O_WRONLY = 1
+
 plain DirectoryEntry {
 	name: String
 	inode: Inode

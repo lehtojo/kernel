@@ -5,6 +5,7 @@ import kernel.scheduler
 import 'C' get_system_call_handler(): link
 
 constant ENOENT = -2
+constant ENOEXEC = -8
 constant EBADF = -9
 constant ENOMEM = -12
 constant EFAULT = -14
@@ -99,6 +100,10 @@ export initialize() {
 }
 
 export process(frame: TrapFrame*): u64 {
+	# Save all the registers so that they can be modified
+	process = get_process()
+	process.save(frame)
+
 	registers = frame[].registers
 	system_call_number = registers[].rax
 	result = 0 as u64
@@ -153,6 +158,10 @@ export process(frame: TrapFrame*): u64 {
 		debug.write_line()
 		panic('Unsupported system call')
 	}
+
+	# Load updated registers
+	process = get_process()
+	frame[].registers[] = process.registers[]
 
 	return result
 }

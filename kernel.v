@@ -36,6 +36,9 @@ namespace kernel {
 	# Summary: Sets the contents of a 64-bit model specific register specified by the id
 	import 'C' write_msr(id: u64, value: u64)
 
+	import 'C' registers_rsp(): u64
+	import 'C' registers_rip(): u64
+
 	pack SymbolInformation {
 		name: String
 		address: link

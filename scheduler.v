@@ -1,7 +1,5 @@
 namespace kernel.scheduler
 
-import 'C' registers_rsp(): u64
-
 Scheduler {
 	allocator: Allocator
 	current: Process

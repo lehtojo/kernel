@@ -31,28 +31,9 @@ Process {
 		file_descriptors.attach(standard_error_descriptor, OpenFileDescription.try_create(allocator, standard_error_file))
 	}
 
-	# Summary: Creates a process from the specified executable file
-	shared from_executable(allocator: Allocator, file: Array<u8>): Process {
-		debug.write_line('Process: Creating a process from executable...')
-
-		allocations = List<Segment>(allocator)
-
-		load_information = LoadInformation()
-		load_information.allocations = allocations
-
-		debug.write_line('Process: Creating process paging tables...')
-
-		# Create paging tables for the process so that it can access memory correctly
-		memory: ProcessMemory = ProcessMemory(allocator) using allocator
-		paging_table = memory.paging_table
-
-		debug.write_line('Process: Loading executable into memory...')
-
-		# Try loading the executable into memory
-		if not load_executable(allocator, paging_table, file, load_information) {
-			allocations.clear()
-			return none as Process
-		}
+	# Summary: Adds the allocations in the specified load information to the specified process memory
+	private shared add_allocations_to_process_memory(memory: ProcessMemory, load_information: LoadInformation): _ {
+		allocations = load_information.allocations
 
 		loop (i = 0, i < allocations.size, i++) {
 			allocation = allocations[i]
@@ -62,20 +43,22 @@ Process {
 
 			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.add_allocation(allocation)
+			memory.add_allocation(allocation.type, allocation)
 
 			# Set the program break after all loaded segments
 			memory.break = math.max(memory.break, allocation.end as u64)
 		}
+	}
 
-		# The local allocation list is no longer needed
-		allocations.clear()
+	# Summary: Configures the specified register state based on the specified load information
+	private shared configure_process_before_startup(allocator: Allocator, register_state: RegisterState*, memory: ProcessMemory, load_information: LoadInformation): _ {
+		debug.write_line('Process: Configuring process before starting...')
 
+		# Set the process to start at the entry point
 		debug.write('Process: Setting process to entry point ')
 		debug.write_address(load_information.entry_point)
 		debug.write_line()
-
-		register_state = allocator.allocate<RegisterState>()
+	
 		register_state[].rip = load_information.entry_point
 
 		# Allocate and map stack for the process
@@ -105,7 +88,42 @@ Process {
 
 		# Register the stack to the process
 		register_state[].userspace_rsp = program_stack_pointer
+	}
 
+	# Summary: Creates a process from the specified executable file
+	shared from_executable(allocator: Allocator, file: Array<u8>): Process {
+		debug.write_line('Process: Creating a process from executable...')
+
+		allocations = List<Segment>(allocator)
+
+		load_information = LoadInformation()
+		load_information.allocations = allocations
+
+		debug.write_line('Process: Creating process paging tables...')
+
+		# Create paging tables for the process so that it can access memory correctly
+		memory: ProcessMemory = ProcessMemory(allocator) using allocator
+		paging_table = memory.paging_table
+
+		debug.write_line('Process: Loading executable into memory...')
+
+		# Try loading the executable into memory
+		if not load_executable(allocator, paging_table, file, load_information) {
+			allocations.clear()
+			return none as Process
+		}
+
+		# Add the allocations from the load information to the process memory
+		add_allocations_to_process_memory(memory, load_information)
+
+		# The local allocation list is no longer needed
+		allocations.clear()
+
+		# Allocate register state for the process so that we can configure the registers before starting
+		register_state = allocator.allocate<RegisterState>()
+		configure_process_before_startup(allocator, register_state, memory, load_information)
+
+		# Attach the standard files for the new process
 		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
 		attach_standard_files(allocator, file_descriptors)
 
@@ -144,11 +162,39 @@ Process {
 		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 	}
 
-	save(frame: TrapFrame*) {
+	save(frame: TrapFrame*): _ {
 		registers[] = frame[].registers[]
 	}
 
-	destruct(allocator: Allocator) {
+	# Summary: Loads the specified program into this process
+	load(allocator: Allocator, file: Array<u8>): i32 {
+		debug.write_line('Process: Loading program into process...')
+
+		allocations = List<Segment>(allocator)
+
+		load_information = LoadInformation()
+		load_information.allocations = allocations
+
+		# Try loading the executable into memory
+		if not load_executable(allocator, memory.paging_table, file, load_information) {
+			allocations.clear()
+			return ENOEXEC
+		}
+
+		# Add the allocations from the load information to the process memory
+		add_allocations_to_process_memory(memory, load_information)
+
+		# The local allocation list is no longer needed
+		allocations.clear()
+
+		# Todo: Reset the registers and other stuff
+
+		# Allocate register state for the process so that we can configure the registers before starting
+		configure_process_before_startup(allocator, registers, memory, load_information)
+		return 0
+	}
+
+	destruct(allocator: Allocator): _ {
 		# Dispose the register state
 		if registers !== none KernelHeap.deallocate(registers)
 

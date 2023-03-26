@@ -74,7 +74,6 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 		mapped_unaligned_physical_page = mapper.map_kernel_region(existing_physical_page, size)
 
 	} else {
-		# Todo: Remove?
 		# Compute the address of the page where we will copy data
 		virtual_page: link = memory.page_of(unaligned_virtual_destination)
 
@@ -164,10 +163,14 @@ export load_executable(allocator: Allocator, paging_table: PagingTable, file: Ar
 		debug.write_address(destination_virtual_address)
 		debug.write_line()
 
+		# Determine the type of this segment
+		segment_type = PROCESS_ALLOCATION_PROGRAM_DATA
+		if has_flag(program_header.flags, ELF_SEGMENT_FLAG_EXECUTE) { segment_type = PROCESS_ALLOCATION_PROGRAM_TEXT }
+
 		# Add the memory mapping to allocations
 		start_virtual_address = memory.page_of(destination_virtual_address) as link
 		end_virtual_address = memory.round_to_page(destination_virtual_address + remaining) as link
-		output.allocations.add(Segment.new(start_virtual_address, end_virtual_address))
+		output.allocations.add(Segment.new(segment_type, start_virtual_address, end_virtual_address))
 
 		# Copy pages from the executable until there is no data left
 		loop (remaining > 0) {

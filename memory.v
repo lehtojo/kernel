@@ -27,8 +27,8 @@ panic(error: link) {
 namespace memory
 
 namespace sorted {
-	# Summary: Inserts the specified element into the sorted list
-	insert<T>(elements: List<T>, element: T, comparator: (T, T) -> i64) {
+	# Summary: Finds the index where the specified element should be inserted
+	find_insertion_index<T>(elements: List<T>, element: T, comparator: (T, T) -> i64): i64 {
 		start = 0
 		end = elements.size
 
@@ -51,7 +51,13 @@ namespace sorted {
 			}
 		}
 
-		elements.insert(start, element)
+		return start
+	}
+
+	# Summary: Inserts the specified element into the sorted list
+	insert<T>(elements: List<T>, element: T, comparator: (T, T) -> i64) {
+		index = find_insertion_index<T>(elements, element, comparator)
+		elements.insert(index, element)
 	}
 
 	# Summary: Finds an element from the sorted list using the specified comparator

@@ -149,8 +149,46 @@ plain ProcessMemory {
 
 	# Summary: Adds the specified allocation into the sorted allocation list
 	add_allocation(type: u8, allocation: Segment): _ {
-		allocation.type = type
-		memory.sorted.insert<Segment>(allocations, allocation, (a: Segment, b: Segment) -> (a.start - b.start) as i64)
+		# Todo: Use a better algorithm to find the allocations for merging
+
+		# Go over all allocations and find the indices of 
+		# the first and the last allocation that must be merged with the specified allocation
+		first_index = -1
+		last_index = -1
+
+		loop (i = 0, i < allocations.size, i++) {
+			other_allocation = allocations[i]
+
+			# If the current allocation ends before or at the same address as the specified allocation starts, set the start index
+			if other_allocation.end <= allocation.start {
+				first_index = i
+				last_index = i + 1
+			}
+
+			# If the current allocation starts after or at the same address as the specified allocation ends, move the last index over it
+			if other_allocation.start >= allocation.end { last_index = i + 1 }
+		}
+
+		# Find out the start and end address of the merged allocation.
+		# Choose the addresses based on the first and the last allocation and with the specified allocation.
+		# If no allocations are found, use the start and end address of the specified allocation.
+		start_address = allocation.start
+		end_address = allocation.end
+
+		if first_index >= 0 { start_address = math.min(start_address, allocations[first_index].start) }
+		if last_index >= 0 { end_address = math.max(end_address, allocations[last_index - 1].end) }
+
+		# Create the merged allocation
+		merged_allocation = Segment.new(type, start_address, end_address)
+
+		# 1. Remove the allocations that are merged into the new allocation.
+		# 2. Insert the merged allocation
+		if first_index >= 0 {
+			allocations.remove_all(first_index, last_index)
+			allocations.insert(first_index, merged_allocation)
+		} else {
+			allocations.add(merged_allocation)
+		}
 	}
 
 	reserve_specific_region(virtual_address: u64, size: u64): bool {
@@ -323,10 +361,11 @@ plain ProcessMemory {
 			page = allocation.start
 
 			loop (page < allocation.end) {
+				# Get the physical page backing the current virtual page
 				if paging_table.to_physical_address(page as link) has not physical_address {
 					page += PAGE_SIZE
 					continue
-				} 
+				}
 
 				debug.write('Process: Deallocating physical page ')
 				debug.write_address(physical_address)

@@ -112,6 +112,25 @@ List<T> {
 		shrink()
 	}
 
+	remove_all(start: u64, end: u64): _ {
+		require(start >= 0 and start <= size, 'Start index out of bounds')
+		require(end >= 0 and end <= size, 'End index out of bounds')
+		require(start <= end, 'Start index must be less than or equal to end index')
+		
+		count = end - start
+		if count == 0 return
+
+		destination = data + strideof(T) * start
+		source = data + strideof(T) * end
+		memory.copy(destination, source, count * strideof(T))
+
+		# Zero out the moved last elements for safety
+		memory.zero(data + (size - count) * strideof(T), strideof(T) * count)
+
+		size -= count
+		shrink()
+	}
+
 	get(i: u64): T {
 		require(i >= 0 and i < size, 'Index out of bounds')
 		return data[i]

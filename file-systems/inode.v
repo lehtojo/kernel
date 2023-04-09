@@ -9,6 +9,8 @@ Inode {
 		this.index = index
 	}
 
+	identifier => InodeIdentifier.new(file_system.index, index)
+
 	open is_directory(): bool { return false }
 
 	open can_read(description: OpenFileDescription): bool { return false }

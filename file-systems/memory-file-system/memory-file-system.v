@@ -346,7 +346,7 @@ export test(allocator: Allocator, memory_information: SystemMemoryInformation) {
 
 	lorem_raw_data = 'Lorem ipsum dolor sit amet'
 	lorem_data_size = length_of(lorem_raw_data)
-	lorem_data = List<u8>(allocator, lorem_raw_data, lorem_data_size) using allocator
+	lorem_data = Array<u8>(lorem_raw_data, lorem_data_size)
 	lorem_index = file_system.allocate_inode_index()
 	lorem_inode = MemoryInode(allocator, file_system, lorem_index, String.new('lorem.txt'), lorem_data) using allocator
 	lorem_file = InodeFile(lorem_inode) using allocator

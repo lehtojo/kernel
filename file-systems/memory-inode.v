@@ -1,24 +1,27 @@
 namespace kernel.file_systems
 
 Inode MemoryInode {
+	private constant BLOCK_SIZE = 0x20000
+
 	allocator: Allocator
 	name: String
-	data: List<u8>
+	data: BlockBuffer<u8>
 
 	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String) {
 		Inode.init(file_system, index)
 
 		this.allocator = allocator
 		this.name = name
-		this.data = List<u8>(allocator) using allocator
+		this.data = BlockBuffer<u8>(allocator, BLOCK_SIZE) using allocator
 	}
 
-	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String, data: List<u8>) {
+	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String, data: Array<u8>) {
 		Inode.init(file_system, index)
 
 		this.allocator = allocator
 		this.name = name
-		this.data = data
+		this.data = BlockBuffer<u8>(allocator, BLOCK_SIZE) using allocator
+		this.data.write(0, data)
 	}
 
 	override can_read(description: OpenFileDescription) { return true }
@@ -38,13 +41,7 @@ Inode MemoryInode {
 
 		debug.write('Memory inode: Writing ') debug.write(bytes.size) debug.write(' byte(s) to offset ') debug.write_line(offset)
 
-		# Ensure the new data will fit into the file data
-		data.reserve(offset + bytes.size)
-
-		# Todo: Is this a bit hacky?
-		data.size = math.max(data.size, offset + bytes.size)
-
-		memory.copy_into(data, offset, bytes, 0, bytes.size)
+		data.write(offset, bytes)
 		return bytes.size
 	}
 
@@ -57,12 +54,12 @@ Inode MemoryInode {
 
 		debug.write('Memory inode: Reading ') debug.write(size) debug.write(' byte(s) from offset ') debug.write_line(offset)
 
-		memory.copy(destination, data.data + offset, size)
+		data.read(offset, destination, size)
 		return size
 	}
 
 	destruct() {
-		data.destruct(allocator)
+		data.destruct()
 		allocator.deallocate(this as link)
 	}
 }

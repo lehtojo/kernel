@@ -1,6 +1,7 @@
 namespace kernel.file_systems
 
 File {
+	open is_inode(): bool { return false }
 	open is_directory(description: OpenFileDescription): bool { return false }
 
 	open can_read(description: OpenFileDescription): bool { return false }

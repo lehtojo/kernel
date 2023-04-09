@@ -19,6 +19,7 @@ DirectoryIterator {
 
 FileSystem {
 	shared root: FileSystem
+	readable index: u32
 
 	open mount_root()
 	open mount()

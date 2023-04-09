@@ -491,7 +491,7 @@ PhysicalMemoryManager {
 	# Summary:
 	# Deallocates the slab that starts the specified physical address.
 	# Use deallocation, which allows for fragmentation when, for example, you deallocate a region in the middle of an allocation.
-	# Parameter "add" controls whether the deallocated region is added to avalailable memory.
+	# Parameter "add" controls whether the deallocated region is added to available memory.
 	deallocate_all(address: link, add: bool): u64 {
 		require((address & (L7_SIZE - 1)) == 0, 'Physical address was not aligned correctly')
 

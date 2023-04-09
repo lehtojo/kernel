@@ -39,11 +39,8 @@ Process {
 			allocation = allocations[i]
 
 			# Reserve the allocation from the process memory
-			require(memory.reserve_specific_region(allocation.start as u64, allocation.size), 'Failed to reserve memory region before starting the process')
-
-			# Register the allocation into the process memory.
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.add_allocation(allocation.type, allocation)
+			memory.add_allocation(allocation.type, ProcessMemoryRegion.new(allocation))
 
 			# Set the program break after all loaded segments
 			memory.break = math.max(memory.break, allocation.end as u64)
@@ -74,11 +71,12 @@ Process {
 		arguments = List<String>(allocator)
 		arguments.add(String.new('/bin/test2')) # Todo: Add executable path
 		# arguments.add(String.new('--help'))
-		# arguments.add(String.new('/bin/hello'))
-		arguments.add(String.new('/bin/startup'))
+		arguments.add(String.new('/bin/hello'))
+		# arguments.add(String.new('/bin/startup'))
 
 		environment_variables = List<String>(allocator)
-		environment_variables.add(String.new('PATH=/bin/')) # Todo: Load proper environment variables
+		environment_variables.add(String.new('PATH=/bin/:/lib/')) # Todo: Load proper environment variables
+		# environment_variables.add(String.new('LD_DEBUG=all'))
 
 		startup_data_size = load_stack_startup_data(program_stack_physical_address_top, program_stack_virtual_address_top, arguments, environment_variables)
 		program_stack_pointer = program_stack_virtual_address_top - startup_data_size

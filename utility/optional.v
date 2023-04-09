@@ -14,6 +14,12 @@ pack Optional<T> {
 		if empty panic(message)
 		return value
 	}
+
+	equals(other: Optional<T>): bool {
+		if empty and other.empty return true
+		if empty or other.empty return false
+		return value == other.value
+	}
 }
 
 namespace Optionals {

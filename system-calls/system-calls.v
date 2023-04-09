@@ -133,6 +133,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_brk(registers[].rdi as u64)
 	} else system_call_number == 0x14 {
 		result = system_writev(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
+	} else system_call_number == 0x27 {
+		result = system_getpid()
 	} else system_call_number == 0x3b {
 		result = system_execve(registers[].rdi as link, registers[].rsi as link, registers[].rdx as link)
 	} else system_call_number == 0x3c {
@@ -143,6 +145,7 @@ export process(frame: TrapFrame*): u64 {
 		# System call: exit_group
 	} else system_call_number == 0x9e {
 		# System call: arch_prctl
+		result = EINVAL
 	} else system_call_number == 0x101 {
 		result = system_openat(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u64)
 	} else {

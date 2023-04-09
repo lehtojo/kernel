@@ -1,15 +1,112 @@
 namespace kernel.scheduler
 
+constant DEFAULT_MIN_MEMORY_MAP_ADDRESS = 0x1000000
+
 constant PROCESS_ALLOCATION_PROGRAM_TEXT = 1
 constant PROCESS_ALLOCATION_PROGRAM_DATA = 2
 constant PROCESS_ALLOCATION_RUNTIME_DATA = 4
+
+pack ProcessMemoryRegionOptions {
+	# Summary: Stores an inode if this region is mapped to an inode
+	inode: Optional<Inode>
+
+	# Summary: Stores an offset
+	offset: u64
+
+	shared new(): ProcessMemoryRegionOptions {
+		return pack {
+			inode: Optionals.empty<Inode>(),
+			offset: 0 as u64
+		} as ProcessMemoryRegionOptions
+	}
+}
+
+pack ProcessMemoryRegion {
+	# Summary: Stores the virtual address region of this memory region
+	region: Segment
+
+	# Summary: Stores an inode if this region is mapped to an inode
+	inode: Optional<Inode>
+
+	# Summary: Stores an offset
+	offset: u64
+
+	# Summary: Returns a process memory region mapped to the specified inode
+	shared new(region: Segment, inode: Inode, offset: u64): ProcessMemoryRegion {
+		return pack {
+			region: region,
+			inode: Optionals.new<Inode>(inode),
+			offset: offset
+		} as ProcessMemoryRegion
+	}
+
+	# Summary: Returns a process memory region mapped to the specified inode
+	shared new(region: Segment, inode: Optional<Inode>, offset: u64): ProcessMemoryRegion {
+		return pack {
+			region: region,
+			inode: inode,
+			offset: offset
+		} as ProcessMemoryRegion
+	}
+
+	# Summary: Returns a normal process memory region
+	shared new(region: Segment): ProcessMemoryRegion {
+		return pack {
+			region: region,
+			inode: Optionals.empty<Inode>(),
+			offset: 0 as u64
+		} as ProcessMemoryRegion
+	}
+
+	# Summary: Returns a process memory region based on the specified options
+	shared new(region: Segment, options: ProcessMemoryRegionOptions): ProcessMemoryRegion {
+		return pack {
+			region: region,
+			inode: options.inode,
+			offset: options.offset
+		} as ProcessMemoryRegion
+	}
+
+	# Summary: Returns a slice of this region
+	slice(slice: Segment): ProcessMemoryRegion {
+		require(slice.start >= region.start, 'Slice start must be greater than or equal to region start')
+		require(slice.end <= region.end, 'Slice end must be less than or equal to region end')
+		require(slice.start <= slice.end, 'Slice start must be less than slice end')
+
+		return ProcessMemoryRegion.new(slice, inode, offset)
+	}
+
+	# Summary: Returns a slice of this region
+	slice(start, end): ProcessMemoryRegion {
+		return slice(Segment.new(start, end))
+	}
+
+	# Summary: Returns whether this region can be merged with the specified region
+	can_merge(other: ProcessMemoryRegion): bool {
+		# Regions can not be merged if they have different inodes
+		if not (inode == other.inode) return false
+
+		# If there is inode, merge only if the inode regions are adjecent
+		if not inode.empty and offset + region.size != other.offset return false
+
+		# Regions can be merged if they are adjacent
+		return region.end == other.region.start
+	}
+
+	# Summary: Merges this region with the specified region
+	merge(other: ProcessMemoryRegion): this {
+		require(can_merge(other), 'Can not merge regions')
+
+		region.end = other.region.end
+	}
+}
 
 plain ProcessMemory {
 	# Summary: Stores the allocator used by this structure
 	allocator: Allocator
 
 	# Summary: Sorted list of virtual memory mappings (smallest virtual address to largest).
-	allocations: List<Segment>
+	allocations: List<ProcessMemoryRegion>
 
 	# Summary: Available virtual address regions by address (sorted)
 	available_regions_by_address: List<Segment>
@@ -30,10 +127,10 @@ plain ProcessMemory {
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
-		this.allocations = List<MemoryMapping>(allocator) using allocator
+		this.allocations = List<ProcessMemoryRegion>(allocator) using allocator
 		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
-		this.min_memory_map_address = 0x1000000 # Todo: Use a constant
+		this.min_memory_map_address = DEFAULT_MIN_MEMORY_MAP_ADDRESS
 		this.break = 0
 		this.max_break = mapper.PAGE_MAP_VIRTUAL_BASE
 
@@ -49,180 +146,176 @@ plain ProcessMemory {
 		available_regions_by_address.add(Segment.new(min_memory_map_address as link, mapper.PAGE_MAP_VIRTUAL_BASE as link))
 
 		# Reserve the GDTR page
-		require(
-			reserve_specific_region(GDTR_VIRTUAL_ADDRESS, PAGE_SIZE),
-			'Failed to reserve GDTR page from process memory'
-		)
+		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(GDTR_VIRTUAL_ADDRESS, GDTR_VIRTUAL_ADDRESS + PAGE_SIZE)))
 
 		# Reserve the kernel mapping region
-		require(
-			reserve_specific_region(KERNEL_MAP_BASE, KERNEL_MAP_END - KERNEL_MAP_BASE),
-			'Failed to reserve kernel mapping region from process memory'
+		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(KERNEL_MAP_BASE, KERNEL_MAP_END)))
+	}
+
+	# Summary: Removes intersecting regions from the allocation list
+	private remove_intersecting_allocations(allocation: ProcessMemoryRegion): _ {
+		region = allocation.region
+
+		# Find the last intersecting region
+		# Todo: Later this could be optimized with binary search?
+		intersecting_index = allocations.find_last_index<Segment>(
+			region, 
+			(i: ProcessMemoryRegion, region: Segment) -> i.region.intersects(region)
 		)
+
+		# Remove all intersecting regions
+		loop (i = intersecting_index, i >= 0, i--) {
+			intersecting = allocations[i]
+
+			# Check if the region is intersecting
+			if not intersecting.region.intersects(region) stop
+
+			# Subtract the allocation region from the current region
+			remaining = intersecting.region.subtract(region)
+
+			# Remove the current region from the allocations
+			allocations.remove_at(i)
+
+			# Add the remaining right region
+			if remaining.right.size > 0 {
+				allocations.insert(i, intersecting.slice(remaining.right))
+			}
+
+			# Add the remaining left region
+			if remaining.left.size > 0 {
+				allocations.insert(i, intersecting.slice(remaining.left))
+			}
+		}
 	}
 
-	# Summary:
-	# Attempts to finds a region from the specified regions, which contains the specified address.
-	# If no such region is found, this function returns -1.
-	private find_containing_region(regions: List<Segment>, address: link): i64 {
-		debug.write('Process memory: Finding an available region that contains ') debug.write_address(address) debug.write_line()
+	# Summary: Removes intersecting regions from the available regions
+	private remove_intersecting_available_regions(allocation: ProcessMemoryRegion): _ {
+		region = allocation.region
 
-		loop (i = 0, i < regions.size, i++) {
+		# Find the last intersecting region
+		# Todo: Later this could be optimized with binary search?
+		intersecting_index = available_regions_by_address.find_last_index<Segment>(
+			region, 
+			(i: Segment, region: Segment) -> i.intersects(region)
+		)
+
+		# Remove all intersecting regions
+		loop (i = intersecting_index, i >= 0, i--) {
+			intersecting = available_regions_by_address[i]
+
+			# Check if the region is intersecting
+			if not intersecting.intersects(region) stop
+
+			# Subtract the allocation region from the current region
+			remaining = intersecting.subtract(region)
+
+			# Remove the current region from the available regions
+			available_regions_by_address.remove_at(i)
+
+			# Add the remaining right region
+			if remaining.right.size > 0 {
+				available_regions_by_address.insert(i, remaining.right)
+			}
+
+			# Add the remaining left region
+			if remaining.left.size > 0 {
+				available_regions_by_address.insert(i, remaining.left)
+			}
+		}
+	}
+
+	# Summary: Merges regions in the specified list
+	private merge_regions(regions: List<ProcessMemoryRegion>): _ {
+		# Iterate all regions and merge them if possible
+		loop (i = regions.size - 2, i >= 0, i--) {
 			region = regions[i]
+			other = regions[i + 1]
 
-			debug.write('Process memory: Processing region ')
-			debug.write_address(region.start) debug.put(`-`) debug.write_address(region.end)
+			# Check if the regions can be merged
+			if not region.can_merge(other) continue
+
+			# Merge the regions
+			region.merge(other)
+
+			# Remove the other region
+			regions.remove_at(i + 1)
+		
+			# Place the merged region at the same index
+			regions[i] = region
+		}
+	}
+
+	# Summary: Writes the current allocations to debug console
+	print_allocations(): _ {
+		debug.write_line('Process memory allocations: ')
+
+		loop (i = 0, i < allocations.size, i++) {
+			allocation = allocations[i]
+
+			# Output the region
+			debug.write('  ')
+			debug.write_address(allocation.region.start)
+			debug.put(`-`)
+			debug.write_address(allocation.region.end)
+
+			# Output the inode
+			if not allocation.inode.empty {
+				debug.write(' inode=')
+				allocation.inode.get_value().identifier.print()
+				debug.write(', offset=')
+				debug.write_address(allocation.offset)
+			}
+
 			debug.write_line()
-
-			if region.contains(address) return i
 		}
-
-		debug.write_line('Process memory: No available region contained the specified address')
-		return -1
-	}
-
-	private try_find_region_for_specific_virtual_address(virtual_address: u64, size: u64): i64 {
-		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
-		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address must be multiple of pages')
-
-		# Find an available region, which contains the specified virtual address
-		address_list_index = find_containing_region(available_regions_by_address, virtual_address as link)
-		if address_list_index < 0 return -1
-
-		address_list_region = available_regions_by_address[address_list_index]
-
-		# Warning: Overflow seems possible here: (virtual_address + size)
-		# Ensure the allocation will not go over the available region
-		if virtual_address + size > address_list_region.end return -1
-
-		return address_list_index
-	}
-
-	private allocate_specific_region(address_list_index: i64, virtual_address: u64, size: u64) {
-		require((size % PAGE_SIZE) == 0, 'Allocation size must be multiple of pages')
-		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address must be multiple of pages')
-
-		address_list_region = available_regions_by_address[address_list_index]
-
-		# Todo: Look for possible overflows
-		margin_left: u64 = virtual_address - address_list_region.start as u64
-		margin_right: u64 = address_list_region.end - virtual_address
-
-		# Case 1: Containing region is consumed perfectly
-		if margin_left == 0 and margin_right == 0 {
-			# Remove the available region entry
-			available_regions_by_address.remove_at(address_list_index)
-			return
-		}
-
-		# Case 2: Space is consumed from the middle of the region
-		if margin_left > 0 and margin_right > 0 {
-			# The region will be split into two regions:
-			left_region = Segment.new(address_list_region.start, address_list_region.start + margin_left)
-			right_region = Segment.new(address_list_region.end - margin_right, address_list_region.end)
-
-			# Remove the available region entry
-			available_regions_by_address.remove_at(address_list_index)
-
-			# Insert the left and right region at the index of the removed address list entry.
-			# The order will remain correct, because both the left and right region are inside the removed region.
-			available_regions_by_address.insert(address_list_index, right_region)
-			available_regions_by_address.insert(address_list_index, left_region)
-			return
-		}
-
-		if margin_left == 0 {
-			# Case 3: Space is only consumed from the start of the region
-
-			# Consume the specified amount of bytes from the end of the region
-			address_list_region.start += size
-		} else {
-			# Case 4: Space is only consumed from the end of the region:
-
-			# Consume the specified amount of bytes from the end of the region
-			address_list_region.end -= size
-		}
-
-		# Update the entry
-		available_regions_by_address[address_list_index] = address_list_region
 	}
 
 	# Summary: Adds the specified allocation into the sorted allocation list
-	add_allocation(type: u8, allocation: Segment): _ {
-		# Todo: Use a better algorithm to find the allocations for merging
+	add_allocation(type: u8, allocation: ProcessMemoryRegion): _ {
+		# Update the type of the region
+		allocation.region.type = type
 
-		# Go over all allocations and find the indices of 
-		# the first and the last allocation that must be merged with the specified allocation
-		first_index = -1
-		last_index = -1
+		# Remove intersecting available regions
+		remove_intersecting_available_regions(allocation)
 
-		loop (i = 0, i < allocations.size, i++) {
-			other_allocation = allocations[i]
+		# Remove intersecting regions from allocations
+		remove_intersecting_allocations(allocation)
 
-			# If the current allocation ends before or at the same address as the specified allocation starts, set the start index
-			if other_allocation.end <= allocation.start {
-				first_index = i
-				last_index = i + 1
-			}
+		# Now the allocation can be inserted safely, because all intersections have been removed
+		memory.sorted.insert<ProcessMemoryRegion>(
+			allocations,
+			allocation,
+			(a: ProcessMemoryRegion, b: ProcessMemoryRegion) -> (a.region.start - b.region.start) as i64
+		)
 
-			# If the current allocation starts after or at the same address as the specified allocation ends, move the last index over it
-			if other_allocation.start >= allocation.end { last_index = i + 1 }
-		}
+		# Merge the allocated region with the existing allocations
+		merge_regions(allocations)
 
-		# Find out the start and end address of the merged allocation.
-		# Choose the addresses based on the first and the last allocation and with the specified allocation.
-		# If no allocations are found, use the start and end address of the specified allocation.
-		start_address = allocation.start
-		end_address = allocation.end
-
-		if first_index >= 0 { start_address = math.min(start_address, allocations[first_index].start) }
-		if last_index >= 0 { end_address = math.max(end_address, allocations[last_index - 1].end) }
-
-		# Create the merged allocation
-		merged_allocation = Segment.new(type, start_address, end_address)
-
-		# 1. Remove the allocations that are merged into the new allocation.
-		# 2. Insert the merged allocation
-		if first_index >= 0 {
-			allocations.remove_all(first_index, last_index)
-			allocations.insert(first_index, merged_allocation)
-		} else {
-			allocations.add(merged_allocation)
-		}
+		# Output debug information
+		print_allocations()
 	}
 
-	reserve_specific_region(virtual_address: u64, size: u64): bool {
-		debug.write('Process: Reserving virtual region ')
-		debug.write_address(virtual_address)
-		debug.put(`-`)
-		debug.write_address(virtual_address + size)
+	# Summary: Allocates or updates the specified virtual region
+	allocate_specific_region(allocation: ProcessMemoryRegion): bool {
+		# Output debug information
+		debug.write('Process memory: Allocating a specific region ')
+		allocation.region.print()
 		debug.write_line()
 
-		# Try to find an available region that can contain the specified virtual region
-		address_list_index = try_find_region_for_specific_virtual_address(virtual_address, size)
-		if address_list_index < 0 return false
-
-		# Reserve the virtual region
-		allocate_specific_region(address_list_index, virtual_address, size)
-		return true
-	}
-
-	allocate_specific_region(virtual_address: u64, size: u64): bool {
-		# Try to find an available region that can contain the specified virtual region
-		address_list_index = try_find_region_for_specific_virtual_address(virtual_address, size)
-		if address_list_index < 0 return false
-
-		# Allocate the virtual region now that we have the physical memory
-		allocate_specific_region(address_list_index, virtual_address, size)
-
-		add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, Segment.new(virtual_address as link, virtual_address as link + size))
-		return true
+		add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, allocation)
 	}
 
 	# Summary:
 	# Attempts to allocate a new memory region of the specified size from anywhere in the virtual address space.
 	# The returned region will respect the specified alignment.
-	allocate_region_anywhere(size: u64, alignment: u32): Optional<u64> {
+	allocate_region_anywhere(options: ProcessMemoryRegionOptions, size: u64, alignment: u32): Optional<u64> {
+		# Output debug information
+		debug.write('Process memory: Allocating a region from anywhere size=')
+		debug.write(size)
+		debug.write(' alignment=')
+		debug.write(alignment)
+		debug.write_line()
+
 		require(size % PAGE_SIZE == 0, 'Allocation size was not multiple of pages')
 		require(alignment % PAGE_SIZE == 0, 'Allocation alignment was not multiple of pages')
 
@@ -235,27 +328,67 @@ plain ProcessMemory {
 			# Skip regions that are not suitable for storing the specified amount of bytes
 			if address_list_region.size < size + alignment continue
 
+			# Output debug information
+			debug.write('Process memory: Found available region ')
+			address_list_region.print()
+			debug.write_line()
+
 			unaligned_virtual_address_start = address_list_region.start
 			aligned_virtual_address_start = memory.round_to(unaligned_virtual_address_start, alignment)
 			aligned_virtual_address_end = aligned_virtual_address_start + size
 
 			# Insert the allocation being made into the sorted allocation list
-			add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end))
+			allocation = ProcessMemoryRegion.new(
+				Segment.new(unaligned_virtual_address_start, aligned_virtual_address_end),
+				options
+			)
 
-			# Consume the allocated region from the available region
-			if aligned_virtual_address_end == address_list_region.end {
-				# The available region is consumed completely, so remove it from the list
-				available_regions_by_address.remove_at(i)
-			} else {
-				# The available region is not consumed completely, so consume the allocated region from the start
-				address_list_region.start = aligned_virtual_address_end
-				available_regions_by_address[i] = address_list_region
-			}
-
-			return aligned_virtual_address_start
+			# Add the allocation and return it
+			add_allocation(PROCESS_ALLOCATION_RUNTIME_DATA, allocation)
+			return Optionals.new<u64>(aligned_virtual_address_start as u64)
 		}
 
 		return Optionals.empty<u64>()
+	}
+
+	# Summary: Initializes the specified physical page based on the allocation
+	private initialize_physical_page(allocation: ProcessMemoryRegion, virtual_page: link, physical_page: link): _ {
+		# Map the physical page, so that we can write to it
+		mapped_physical_page = mapper.map_kernel_page(physical_page)
+
+		# Zero the allocated physical page
+		memory.zero(mapped_physical_page, PAGE_SIZE)
+
+		# Compute the offset inside the allocation
+		internal_offset: u64 = virtual_page - allocation.region.start
+
+		if not allocation.inode.empty {
+			debug.write_line('Process memory: Initializing physical page from inode')
+			inode = allocation.inode.get_value()
+
+			# Compute the offset where we should read
+			offset = allocation.offset + internal_offset
+
+			# Todo: Remove
+			debug.write('allocation.start=')
+			debug.write_address(allocation.region.start)
+			debug.write(', virtual_page=')
+			debug.write_address(virtual_page)
+			debug.write(', allocation.offset=')
+			debug.write(allocation.offset)
+			debug.write(', internal_offset=')
+			debug.write(internal_offset)
+			debug.write(', inode.size=')
+			debug.write(inode.size())
+			debug.write_line()
+
+			# Compute how many bytes should be read
+			read_size = math.min(inode.size() - offset, PAGE_SIZE)
+
+			# Initialize the contents of the page based on the inode
+			inode.read_bytes(mapped_physical_page, offset, read_size)
+			return
+		}
 	}
 
 	# Summary:
@@ -266,12 +399,13 @@ plain ProcessMemory {
 	# this function returns false.
 	process_page_fault(virtual_address: u64, write: bool): bool {
 		# Attempt to find the allocation that contains the specified address
+		allocation = none as ProcessMemoryRegion
 		i = -1
 
 		loop (j = 0, j < allocations.size, j++) {
 			allocation = allocations[j]
 
-			if virtual_address >= allocation.start and virtual_address < allocation.end {
+			if virtual_address >= allocation.region.start and virtual_address < allocation.region.end {
 				i = j
 				stop
 			}
@@ -283,14 +417,17 @@ plain ProcessMemory {
 		# Todo: Verify access rights here?
 
 		# Align the virtual address to pages, so we know which page to map
-		virtual_page = virtual_address & (-PAGE_SIZE)
+		virtual_page: link = virtual_address & (-PAGE_SIZE)
 
 		# Attempt to allocate a physical page for the virtual page
 		physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
 		if physical_page === none return false
 
+		# Initialize the contents of the accessed page
+		initialize_physical_page(allocation, virtual_page, physical_page)
+
 		# Map the new physical page to the accessed virtual page and continue as normal
-		paging_table.map_page(allocator, virtual_page as link, physical_page)
+		paging_table.map_page(allocator, virtual_page, physical_page)
 		return true
 	}
 
@@ -298,12 +435,12 @@ plain ProcessMemory {
 	deallocate_program_allocations() {
 		loop (i = allocations.size - 1, i >= 0, i--) {
 			# Skip runtime allocations
-			allocation = allocations[i]
-			if allocation.type != PROCESS_ALLOCATION_PROGRAM_TEXT and allocation.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
+			region = allocations[i].region
+			if region.type != PROCESS_ALLOCATION_PROGRAM_TEXT and region.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
 
 			# Deallocate the program allocation and remove it from the allocations
 			allocations.remove_at(i)
-			deallocate(allocation)
+			deallocate(region)
 		}
 	}
  
@@ -311,16 +448,21 @@ plain ProcessMemory {
 	deallocate(virtual_region: Segment): i64 {
 		# Validate the specified region before doing anything with it
 		require(virtual_region.start % PAGE_SIZE == 0 and virtual_region.size % PAGE_SIZE == 0, 'Virtual region was not aligned')
+		print_allocations()
 
 		# Empty regions can not be deallocated
 		if virtual_region.size == 0 return EINVAL
 
 		# Find the index of the allocation that contains the virtual region that should be deallocated 
-		containing_virtual_region_index = find_containing_region(allocations, virtual_region.start)
+		containing_virtual_region_index = allocations.find_index<link>(
+			virtual_region.start,
+			(i: ProcessMemoryRegion, start: link) -> i.region.contains(start)
+		)
 		if containing_virtual_region_index < 0 return EINVAL # Todo: Error might not be correct
 		
 		# Load the containing virtual region that we found
-		containing_virtual_region = allocations[containing_virtual_region_index]
+		containing_virtual_allocation = allocations[containing_virtual_region_index]
+		containing_virtual_region = containing_virtual_allocation.region
 
 		# Verify the specified region actually fits inside the "containing region"
 		if not containing_virtual_region.contains(virtual_region) return EINVAL # Todo: Error might not be correct
@@ -332,16 +474,18 @@ plain ProcessMemory {
 		}
 
 		# Compute the regions that will remain after the deallocation
-		remaining_left_region = Segment.new(containing_virtual_region.start, virtual_region.start)
-		remaining_right_region = Segment.new(virtual_region.end, containing_virtual_region.end)
+		remaining_left_region = containing_virtual_allocation.slice(containing_virtual_region.start, virtual_region.start)
+		remaining_right_region = containing_virtual_allocation.slice(virtual_region.end, containing_virtual_region.end)
 
 		# Remove the allocation from the list
 		allocations.remove_at(containing_virtual_region_index)
 
 		# Insert back the remaining regions in order if they are not empty
-		if remaining_right_region.size > 0 allocations.insert(containing_virtual_region_index, remaining_right_region)
-		if remaining_left_region.size > 0 allocations.insert(containing_virtual_region_index, remaining_left_region)
+		if remaining_right_region.region.size > 0 allocations.insert(containing_virtual_region_index, remaining_right_region)
+		if remaining_left_region.region.size > 0 allocations.insert(containing_virtual_region_index, remaining_left_region)
 
+		# Output debug information about the remaining allocations
+		print_allocations()
 		return 0
 	}
 
@@ -350,17 +494,17 @@ plain ProcessMemory {
 		debug.write_line('Process: Deallocating all process memory')
 
 		loop (i = 0, i < allocations.size, i++) {
-			allocation = allocations[i]
+			region = allocations[i].region
 
 			debug.write('Process: Deallocating virtual region ')
-			debug.write_address(allocation.start)
+			debug.write_address(region.start)
 			debug.put(`-`)
-			debug.write_address(allocation.end)
+			debug.write_address(region.end)
 			debug.write_line()
 
-			page = allocation.start
+			page = region.start
 
-			loop (page < allocation.end) {
+			loop (page < region.end) {
 				# Get the physical page backing the current virtual page
 				if paging_table.to_physical_address(page as link) has not physical_address {
 					page += PAGE_SIZE

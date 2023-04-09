@@ -149,7 +149,7 @@ export load_executable(allocator: Allocator, paging_table: PagingTable, file: Ar
 	loop (i = 0, i < program_header_count, i++) {
 		# Load only the loadable segments into memory
 		program_header = program_headers[i]
-		if program_header.type != ELF_SEGMENT_TYPE_LOADABLE continue
+		if program_header.type != ELF_SEGMENT_TYPE_LOADABLE and program_header.type != ELF_SEGMENT_TYPE_DYNAMIC continue
 
 		destination_virtual_address = program_header.virtual_address
 		source_data = file.data + program_header.offset

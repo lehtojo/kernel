@@ -388,7 +388,7 @@ kernel_entry:
 incbin "build/kernel.bin"
 
 application_start:
-incbin "app"
+incbin "ld"
 application_end:
 
 memory_file_system_start:
@@ -398,6 +398,12 @@ dq memory_file_system_start_ld_end - memory_file_system_start_ld_start
 memory_file_system_start_ld_start:
 incbin "ld"
 memory_file_system_start_ld_end:
+
+dq memory_file_system_start_libc_path
+dq memory_file_system_start_libc_end - memory_file_system_start_libc_start
+memory_file_system_start_libc_start:
+incbin "libc.so.6"
+memory_file_system_start_libc_end:
 
 dq memory_file_system_start_startup_path
 dq memory_file_system_start_startup_end - memory_file_system_start_startup_start
@@ -414,6 +420,7 @@ memory_file_system_start_hello_end:
 memory_file_system_end:
 
 memory_file_system_start_ld_path: db "/lib/ld", 0
+memory_file_system_start_libc_path: db "/lib/libc.so.6", 0
 memory_file_system_start_startup_path: db "/bin/startup", 0
 memory_file_system_start_hello_path: db "/bin/hello", 0
 

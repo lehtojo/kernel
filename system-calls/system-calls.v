@@ -139,6 +139,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_execve(registers[].rdi as link, registers[].rsi as link, registers[].rdx as link)
 	} else system_call_number == 0x3c {
 		system_exit(frame, registers[].rdi as i32)
+	} else system_call_number == 0x3f {
+		system_uname(registers[].rdi as link)
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0xe7 {

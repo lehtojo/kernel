@@ -28,7 +28,7 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 
 	if directory_descriptor == AT_FDCWD {
 		# User wants we to use the current working directory of the process
-		custody = FileSystem.root.open_path(local_allocator, Custody.root, process.working_directory, 0)
+		custody = FileSystem.root.open_path(local_allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
 	} else {
 		# Find the directory description associated with the specified descriptor
 		directory_description = process.file_descriptors.try_get_description(directory_descriptor)

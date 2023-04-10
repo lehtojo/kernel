@@ -142,15 +142,15 @@ FileSystem MemoryFileSystem {
 
 		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
 
-		custody = open_path(local_allocator, base, path, get_create_options(flags, false))
+		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
-		if custody === none {
+		if result.has_error {
 			debug.write_line('Memory file system: Failed to open the specified path')
 			local_allocator.deallocate()
-			return Results.error<OpenFileDescription, u32>(ENOENT)
+			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, custody)
+		description = OpenFileDescription.try_create(allocator, result.value)
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
@@ -159,14 +159,14 @@ FileSystem MemoryFileSystem {
 	override create_file(base: Custody, path: String, flags: i32, mode: u32) {
 		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
 
-		custody = open_path(local_allocator, base, path, get_create_options(flags, false))
+		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
-		if custody === none {
+		if result.has_error {
 			local_allocator.deallocate()
-			return Results.error<OpenFileDescription, u32>(-1)
+			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, custody)
+		description = OpenFileDescription.try_create(allocator, result.value)
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
@@ -175,17 +175,57 @@ FileSystem MemoryFileSystem {
 	override make_directory(base: Custody, path: String, flags: i32, mode: u32) {
 		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
 
-		custody = open_path(local_allocator, base, path, CREATE_OPTION_DIRECTORY)
+		result = open_path(local_allocator, base, path, CREATE_OPTION_DIRECTORY)
 
-		if custody === none {
+		if result.has_error {
 			local_allocator.deallocate()
-			return Results.error<OpenFileDescription, u32>(-1)
+			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, custody)
+		description = OpenFileDescription.try_create(allocator, result.value)
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
+	}
+
+	override access(base: Custody, path: String, mode: u32) {
+		debug.write('Memory file system: Accessing path ') debug.write_line(path)
+
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
+
+		if result.has_error {
+			debug.write_line('Memory file system: Failed to access the path')
+			local_allocator.deallocate()
+			return result.error
+		}
+
+		debug.write_line('Memory file system: Accessed the path successfully')
+		local_allocator.deallocate()
+		return F_OK
+	}
+
+	override lookup_status(base: Custody, path: String, metadata: FileMetadata) {
+		debug.write_line('Memory file system: Lookup metadata')
+
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		# Attempt to open the specified path
+		open_result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
+
+		if open_result.has_error {
+			debug.write_line('Memory file system: Failed to lookup metadata')
+			local_allocator.deallocate()
+			return open_result.error
+		}
+
+		# Load file status using the inode from the custody
+		custody = open_result.value
+		result = custody.inode.load_status(metadata)
+
+		# Deallocate and return the result code
+		local_allocator.deallocate()
+		return result
 	}
 
 	override iterate_directory(allocator: Allocator, inode: Inode) {
@@ -216,7 +256,7 @@ FileSystem MemoryFileSystem {
 
 			# If the child does not exist, we must create it if it is allowed or return none
 			if inode === none {
-				if create_options == CREATE_OPTION_NONE return none as Custody
+				if create_options == CREATE_OPTION_NONE return Results.error<Custody, u32>(ENOENT)
 
 				# Create a directory when:
 				# - We have not reached the last part in the path (only directories can have childs)
@@ -230,7 +270,7 @@ FileSystem MemoryFileSystem {
 				}
 
 				# Ensure we succeeded at creating the child
-				if inode === none return none as Custody
+				if inode === none return Results.error<Custody, u32>(EIO)
 			}
 
 			# Create custody for the current inode
@@ -239,7 +279,7 @@ FileSystem MemoryFileSystem {
 			container = custody
 		}
 
-		return container
+		return Results.new<Custody, u32>(container)
 	}
 }
 

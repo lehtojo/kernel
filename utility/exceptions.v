@@ -13,6 +13,11 @@ pack Result<V, E> {
 	get_value(): V {
 		return value
 	}
+
+	value_or(fallback: V): V {
+		if error == 0 return value
+		return fallback
+	}
 }
 
 namespace Results {

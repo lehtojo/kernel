@@ -27,4 +27,6 @@ Inode {
 	create_file(name: String): Inode { return create_child(name, false) }
 
 	open lookup(name: String): Inode { return none as Inode }
+
+	open load_status(metadata: FileMetadata): u32 { return -1 }
 }

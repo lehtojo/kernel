@@ -29,4 +29,8 @@ File InodeFile {
 	override seek(description: OpenFileDescription, offset: u64) {
 		return 0
 	}
+
+	override load_status(metadata: FileMetadata) {
+		return inode.load_status(metadata)
+	}
 }

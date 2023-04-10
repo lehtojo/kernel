@@ -13,6 +13,7 @@ File {
 	open write(description: OpenFileDescription, data: Array<u8>, offset: u64): u64 { return -1 }
 	open read(description: OpenFileDescription, destination: link, offset: u64, size: u64): u64 { return -1 }
 	open seek(description: OpenFileDescription, offset: u64): i32 { return -1 }
+	open load_status(metadata: FileMetadata): u32 { return -1 }
 
 	open close(): u32 { return 0 }
 }

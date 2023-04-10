@@ -4,7 +4,10 @@ import kernel.scheduler
 
 import 'C' get_system_call_handler(): link
 
+constant F_OK = 0
+
 constant ENOENT = -2
+constant EIO = -5
 constant ENOEXEC = -8
 constant EBADF = -9
 constant ENOMEM = -12
@@ -23,7 +26,11 @@ constant DT_REG = 8
 constant DT_LNK = 10
 constant DT_SOCK = 12
 
+constant AT_EMPTY_PATH = 0x1000
 constant AT_FDCWD = 4294967196
+
+constant ARCH_SET_FS = 0x1002
+constant ARCH_GET_FS = 0x1003
 
 constant MSR_EFER = 0xc0000080
 constant MSR_STAR = 0xc0000081
@@ -116,6 +123,10 @@ export process(frame: TrapFrame*): u64 {
 		result = system_open(registers[].rdi as link, registers[].rsi as i32, registers[].rdx as u32)
 	} else system_call_number == 0x03 {
 		result = system_close(registers[].rdi as u32)
+	} else system_call_number == 0x04 {
+		result = system_stat(registers[].rdi as link, registers[].rsi as link)
+	} else system_call_number == 0x05 {
+		result = system_fstat(registers[].rdi as u32, registers[].rsi as link)
 	} else system_call_number == 0x08 {
 		result = system_seek(registers[].rdi as u32, registers[].rsi as i64, registers[].rdx as i32)
 	} else system_call_number == 0x09 {
@@ -129,6 +140,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_pread64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64, registers[].r10 as u64)
 	} else system_call_number == 0x12 {
 		result = system_pwrite64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64, registers[].r10 as u64)
+	} else system_call_number == 0x15 {
+		result = system_access(registers[].rdi as link, registers[].rsi as u64)
 	} else system_call_number == 0x0c {
 		result = system_brk(registers[].rdi as u64)
 	} else system_call_number == 0x14 {
@@ -146,10 +159,11 @@ export process(frame: TrapFrame*): u64 {
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
 	} else system_call_number == 0x9e {
-		# System call: arch_prctl
-		result = EINVAL
+		result = system_arch_prctl(registers[].rdi as u32, registers[].rsi as u64)
 	} else system_call_number == 0x101 {
 		result = system_openat(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u64)
+	} else system_call_number == 0x106 {
+		result = system_fstatat(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as link, registers[].r10 as u32)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')

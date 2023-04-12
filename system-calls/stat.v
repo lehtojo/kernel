@@ -46,6 +46,7 @@ export system_fstat(file_descriptor: u32, buffer: link): u32 {
 export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: link, flags: u32): u32 {
 	debug.write('System call: Fstatat: ')
 	debug.write('directory_descriptor=') debug.write(directory_descriptor)
+	debug.write(', path=') debug.write_address(path_argument)
 	debug.write(', buffer=') debug.write_address(buffer)
 	debug.write(', flags=') debug.write(flags)
 	debug.write_line()
@@ -55,6 +56,7 @@ export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: li
 	allocator = BufferAllocator(allocator_buffer: u8[PATH_MAX], PATH_MAX)
 
 	# Load the path argument into a string object
+	# Todo: Runtime linker crashes us here, because an unmapped virtual address is passed. We must handle these situations inside load_string.
 	if load_string(allocator, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Fstatat: Invalid path argument')
 		return EFAULT

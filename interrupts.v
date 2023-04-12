@@ -181,14 +181,18 @@ export process_page_fault(frame: TrapFrame*) {
 	address = read_cr2()
 	process = scheduler.current
 
+	# Load the code location where the page fault occurred
+	rip = frame[].registers[].rip 
+	is_user_space = (rip as i64) >= 0
+
 	# If the current process determines the page fault was legal, then continue
 	# Todo: Continue
-	if process !== none and process.memory !== none and process.memory.process_page_fault(address, false) return
+	if is_user_space and process !== none and process.memory !== none and process.memory.process_page_fault(address, false) return
 
 	debug.write('Attempted to access address ')
 	debug.write_address(address)
 	debug.write(' at ')
-	debug.write_address(frame[].registers[].rip)
+	debug.write_address(rip)
 	debug.write_line()
 	panic('Page fault')
 }
@@ -204,8 +208,10 @@ export process(frame: TrapFrame*): u64 {
 	} else code == 0x0e {
 		process_page_fault(frame)
 	} else code == 0x0d {
-		debug.write('General protection fault at address ')
-		debug.write_address(frame[].registers[].cs)
+		debug.write('General protection fault at ')
+		debug.write_address(frame[].registers[].rip)
+		debug.write(' for address ')
+		debug.write_address(read_cr2())
 		debug.write_line()
 		panic('General protection fault')
 	} else code == 0x80 {

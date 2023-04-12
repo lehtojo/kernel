@@ -71,6 +71,16 @@ write_gdtr:
 lgdt [rdi]
 ret
 
+.global write_fs_base
+write_fs_base:
+wrfsbase rdi
+ret
+
+.global read_fs_base
+read_fs_base:
+rdfsbase rax
+ret
+
 .global flush_tlb_local
 flush_tlb_local:
 invlpg [rdi]

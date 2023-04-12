@@ -21,6 +21,8 @@ namespace kernel {
 	import 'C' write_cr2(value: u64)
 	import 'C' write_cr3(value: u64)
 	import 'C' write_cr4(value: u64)
+	import 'C' write_fs_base(value: u64)
+	import 'C' read_fs_base(): u64
 
 	import 'C' read_cr0(): u64
 	import 'C' read_cr1(): u64

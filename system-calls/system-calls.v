@@ -74,6 +74,16 @@ export is_error_code(code: u64) {
 	return (code as i64) < 0
 }
 
+# Summary: Enables instructions that edit FS and GS segment registers
+export enable_general_purpose_segment_instructions(): _ {
+	write_cr4(read_cr4() | 0x10000)
+}
+
+# Summary: Disables instructions that edit FS and GS segment registers
+export disable_general_purpose_segment_instructions(): _ {
+	write_cr4(read_cr4() & (!0x10000))
+}
+
 export initialize() {
 	debug.write_line('System calls: Initializing system calls')
 
@@ -103,7 +113,7 @@ export initialize() {
 
 	# Disable instructions that can interact with the GS and FS registers.
 	# GS register is used to save the user stack and switch to kernel stack during system calls.
-	write_cr4(read_cr4() & (!0x10000))
+	disable_general_purpose_segment_instructions()
 }
 
 export process(frame: TrapFrame*): u64 {

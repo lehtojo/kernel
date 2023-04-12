@@ -8,10 +8,17 @@ export system_arch_prctl(code: u32, address: u64): u64 {
 	debug.write_line()
 
 	if code == ARCH_SET_FS {
-		# Todo: Implement
+		debug.write_line('System call: Set architecture-specific thread state: Setting the value of register fs')
+		enable_general_purpose_segment_instructions()
+		write_fs_base(address)
+		disable_general_purpose_segment_instructions()
 		return 0
 	} else code == ARCH_GET_FS {
-		# Todo: Implement
+		debug.write_line('System call: Set architecture-specific thread state: Loading the value of register fs')
+		enable_general_purpose_segment_instructions()
+		result = read_fs_base()
+		disable_general_purpose_segment_instructions()
+		return result
 	}
 
 	return EINVAL

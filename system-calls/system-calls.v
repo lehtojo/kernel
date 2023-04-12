@@ -166,14 +166,20 @@ export process(frame: TrapFrame*): u64 {
 		system_uname(registers[].rdi as link)
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
+	} else system_call_number == 0xda {
+		result = system_set_tid_address(registers[].rdi as u64)
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
 	} else system_call_number == 0x9e {
 		result = system_arch_prctl(registers[].rdi as u32, registers[].rsi as u64)
 	} else system_call_number == 0x101 {
 		result = system_openat(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u64)
+	} else system_call_number == 0x111 {
+		result = system_set_robust_list(registers[].rdi as link, registers[].rsi as u64)
 	} else system_call_number == 0x106 {
 		result = system_fstatat(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as link, registers[].r10 as u32)
+	} else system_call_number == 0x14e {
+		result = system_faccessat(registers[].rdi as u64, registers[].rdi as link, registers[].rdx as u64)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')

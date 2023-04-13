@@ -12,10 +12,11 @@ export system_open(path_argument: link, flags: i32, mode: u32): i32 {
 	debug.write(', mode=') debug.write(mode)
 	debug.write_line()
 
+	process = get_process()
 	allocator = BufferAllocator(buffer: u8[PATH_MAX], PATH_MAX)
 
 	# Load the path argument into a string object
-	if load_string(allocator, path_argument, PATH_MAX) has not path {
+	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Open: Invalid path argument')
 		return EFAULT
 	}

@@ -153,7 +153,7 @@ plain ProcessMemory {
 	}
 
 	# Summary: Removes intersecting regions from the allocation list
-	private remove_intersecting_allocations(allocation: ProcessMemoryRegion): _ {
+	private remove_intersecting_allocations(allocation: ProcessMemoryRegion, deallocate_physical_pages: bool): _ {
 		region = allocation.region
 
 		# Find the last intersecting region
@@ -166,9 +166,19 @@ plain ProcessMemory {
 		# Remove all intersecting regions
 		loop (i = intersecting_index, i >= 0, i--) {
 			intersecting = allocations[i]
+			intersection = intersecting.region.intersection(region)
 
 			# Check if the region is intersecting
-			if not intersecting.region.intersects(region) stop
+			if intersection.size == 0 stop
+
+			# Deallocate all physical pages inside the intersection if requested
+			if deallocate_physical_pages {
+				# Deallocate all pages in the specified virtual region
+				loop (virtual_page = intersection.start, virtual_page < intersection.end, virtual_page += PAGE_SIZE) {
+					if paging_table.to_physical_address(virtual_page as link) has not physical_page continue
+					PhysicalMemoryManager.instance.deallocate_all(physical_page)
+				}
+			}
 
 			# Subtract the allocation region from the current region
 			remaining = intersecting.region.subtract(region)
@@ -279,7 +289,7 @@ plain ProcessMemory {
 		remove_intersecting_available_regions(allocation)
 
 		# Remove intersecting regions from allocations
-		remove_intersecting_allocations(allocation)
+		remove_intersecting_allocations(allocation, false)
 
 		# Now the allocation can be inserted safely, because all intersections have been removed
 		memory.sorted.insert<ProcessMemoryRegion>(
@@ -391,6 +401,25 @@ plain ProcessMemory {
 		}
 	}
 
+	# Summary: Returns whether the page of the specified virtual address is accessible
+	is_accessible(virtual_address: link): bool {
+		return not paging_table.to_physical_address(virtual_address).empty
+	}
+
+	# Summary: Returns whether the specified virtual region is accessible
+	is_accessible(region: Segment): bool {
+		# Verify all pages in the region are accessible
+		# Note: Virtual region can be unaligned to pages
+		start_page = memory.page_of(region.start)
+		end_page = memory.round_to_page(region.end)
+
+		loop (virtual_page = start_page, virtual_page < end_page, virtual_page += PAGE_SIZE) {
+			if not is_accessible(virtual_page) return false
+		}
+
+		return true
+	}
+
 	# Summary:
 	# Processes page fault at the specified address.
 	# If the specified address is in an allocated page that is accessible for 
@@ -453,36 +482,15 @@ plain ProcessMemory {
 		# Empty regions can not be deallocated
 		if virtual_region.size == 0 return EINVAL
 
-		# Find the index of the allocation that contains the virtual region that should be deallocated 
-		containing_virtual_region_index = allocations.find_index<link>(
-			virtual_region.start,
-			(i: ProcessMemoryRegion, start: link) -> i.region.contains(start)
+		# Deallocate all the allocations inside the specified virtual region
+		remove_intersecting_allocations(ProcessMemoryRegion.new(virtual_region), true)	
+
+		# Add virtual region back to available regions
+		memory.sorted.insert<Segment>(
+			available_regions_by_address,
+			virtual_region,
+			(a: Segment, b: Segment) -> (a.start - b.start) as i64
 		)
-		if containing_virtual_region_index < 0 return EINVAL # Todo: Error might not be correct
-		
-		# Load the containing virtual region that we found
-		containing_virtual_allocation = allocations[containing_virtual_region_index]
-		containing_virtual_region = containing_virtual_allocation.region
-
-		# Verify the specified region actually fits inside the "containing region"
-		if not containing_virtual_region.contains(virtual_region) return EINVAL # Todo: Error might not be correct
-
-		# Deallocate all pages in the specified virtual region
-		loop (virtual_page = virtual_region.start, virtual_page < virtual_region.end, virtual_page += PAGE_SIZE) {
-			if paging_table.to_physical_address(virtual_page as link) has not physical_page continue
-			PhysicalMemoryManager.instance.deallocate_all(physical_page)
-		}
-
-		# Compute the regions that will remain after the deallocation
-		remaining_left_region = containing_virtual_allocation.slice(containing_virtual_region.start, virtual_region.start)
-		remaining_right_region = containing_virtual_allocation.slice(virtual_region.end, containing_virtual_region.end)
-
-		# Remove the allocation from the list
-		allocations.remove_at(containing_virtual_region_index)
-
-		# Insert back the remaining regions in order if they are not empty
-		if remaining_right_region.region.size > 0 allocations.insert(containing_virtual_region_index, remaining_right_region)
-		if remaining_left_region.region.size > 0 allocations.insert(containing_virtual_region_index, remaining_left_region)
 
 		# Output debug information about the remaining allocations
 		print_allocations()

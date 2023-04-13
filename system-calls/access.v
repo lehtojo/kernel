@@ -7,10 +7,11 @@ export system_access(path_argument: link, mode: u64): i64 {
 	debug.write(', mode=') debug.write(mode)
 	debug.write_line()
 
+	process = get_process()
 	allocator = BufferAllocator(buffer: u8[PATH_MAX], PATH_MAX)
 
 	# Load the path argument into a string object
-	if load_string(allocator, path_argument, PATH_MAX) has not path {
+	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Access: Invalid path argument')
 		return EFAULT
 	}
@@ -31,7 +32,7 @@ export system_faccessat(directory_descriptor: u64, path_argument: link, mode: u6
 	allocator = LocalHeapAllocator(HeapAllocator.instance)
 
 	# Load the path argument into a string object
-	if load_string(allocator, path_argument, PATH_MAX) has not path {
+	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Faccessat: Invalid path argument')
 		return EFAULT
 	}

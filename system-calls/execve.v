@@ -8,10 +8,11 @@ export system_execve(path_argument: link, arguments: link, environment_variables
 	debug.write(', environment_variables=') debug.write_address(environment_variables)
 	debug.write_line()
 
+	process = get_process()
 	allocator = BufferAllocator(buffer: u8[PATH_MAX], PATH_MAX)
 
 	# Load the path argument into a string object
-	if load_string(allocator, path_argument, PATH_MAX) has not path {
+	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Execute: Invalid path argument')
 		return EFAULT
 	}

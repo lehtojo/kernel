@@ -13,7 +13,7 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 	allocator = BufferAllocator(buffer: u8[PATH_MAX], PATH_MAX)
 
 	# Load the filename argument into a string object
-	if load_string(allocator, filename_argument, PATH_MAX) has not filename {
+	if load_string(allocator, process, filename_argument, PATH_MAX) has not filename {
 		debug.write_line('System call: Open at: Invalid filename argument')
 		return EFAULT
 	}

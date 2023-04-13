@@ -44,15 +44,27 @@ export get_process(): Process {
 	return process
 }
 
-export load_string(allocator, string: link, limit: u32): Optional<String> {
-	# Todo:
-	# - Verify the address is mapped before loading bytes from it
-	# - Verify passed pointers are accessible to this process
+export load_string(allocator, process: Process, string: link, limit: u32): Optional<String> {
+	process_memory = process.memory
 	length = 0
-	loop (length < limit and string[length] != 0, length++) {}
 
-	# If we reached the limit length, return none
-	if length == limit return Optionals.empty<String>()
+	loop {
+		address = string + length
+
+		# If we have reached the limit, return none string
+		if length == limit return Optionals.empty<String>()
+
+		# If the character is not accessible, return none string
+		if not process_memory.is_accessible(address) and 
+			not process_memory.process_page_fault(address as u64, false) {
+			return Optionals.empty<String>()
+		}
+
+		# If we have found the end of the string, stop
+		if address[] == 0 stop
+
+		length++
+	}
 
 	# Allocate a new buffer for copying the characters
 	data = allocator.allocate(length)
@@ -66,7 +78,7 @@ export load_string(allocator, string: link, limit: u32): Optional<String> {
 
 # Summary: Returns whether the specified memory region is mapped and usable by the specified process
 export is_valid_region(process: Process, start: link, size: u64): bool {
-	return true
+	return process.memory.is_accessible(Segment.new(start, start + size)) 
 }
 
 # Summary: Returns whether the specified system call code is an error

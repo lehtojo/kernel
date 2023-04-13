@@ -11,8 +11,11 @@ export system_getdents64(file_descriptor: u32, output_entries: link, output_entr
 	process = get_process()
 
 	# Validate the output entry list region
-	if not is_valid_region(process, output_entries, output_entries_size) return EFAULT
-
+	if not is_valid_region(process, output_entries, output_entries_size, true) {
+		debug.write_line('System call: Get directory entries: Invalid entry list')
+		return EFAULT
+	}
+ 
 	# Try getting the file description associated with the specified descriptor
 	file_description = process.file_descriptors.try_get_description(file_descriptor)
 

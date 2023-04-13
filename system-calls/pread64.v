@@ -12,7 +12,7 @@ export system_pread64(file_descriptor: u32, buffer: link, size: u64, position: u
 	process = get_process()
 
 	# Verify the specified buffer is valid
-	if not is_valid_region(process, buffer, size) {
+	if not is_valid_region(process, buffer, size, true) {
 		debug.write_line('System call: Positional read (pread): Invalid memory region')
 		return EFAULT
 	}

@@ -12,7 +12,7 @@ export system_pwrite64(file_descriptor: u32, buffer: link, size: u64, position: 
 	process = get_process()
 
 	# Verify the specified buffer is valid
-	if not is_valid_region(process, buffer, size) {
+	if not is_valid_region(process, buffer, size, false) {
 		debug.write_line('System call: Positional write (pwrite): Invalid memory region')
 		return EFAULT
 	}

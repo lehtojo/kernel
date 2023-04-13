@@ -23,7 +23,7 @@ export system_writev(file_descriptor: u32, argument_vectors: link, vector_count:
 	if vector_count > MAX_VECTORS return EINVAL
 
 	# Verify the vector list is valid
-	if not is_valid_region(process, vectors, vector_count * sizeof(IoVector)) {
+	if not is_valid_region(process, vectors, vector_count * sizeof(IoVector), false) {
 		debug.write_line('System call: Write vector: Invalid vector list')
 		return EINVAL
 	}
@@ -37,7 +37,7 @@ export system_writev(file_descriptor: u32, argument_vectors: link, vector_count:
 	loop (i = 0, i < vector_count, i++) {
 		vector = vectors[i]
 
-		if not is_valid_region(process, vector.start, vector.size) {
+		if not is_valid_region(process, vector.start, vector.size, false) {
 			debug.write_line('System call: Write vector: Invalid vector')
 			return EINVAL
 		}

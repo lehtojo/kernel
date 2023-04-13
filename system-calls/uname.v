@@ -31,7 +31,7 @@ export system_uname(buffer: link): u64 {
 	process = get_process()
 
 	# Verify the specified buffer is large enough
-	if not is_valid_region(process, buffer, sizeof(SystemInformation)) {
+	if not is_valid_region(process, buffer, sizeof(SystemInformation), true) {
 		debug.write_line('System call: Uname: Buffer is not large enough')
 		return EFAULT
 	}

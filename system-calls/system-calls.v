@@ -77,8 +77,21 @@ export load_string(allocator, process: Process, string: link, limit: u32): Optio
 }
 
 # Summary: Returns whether the specified memory region is mapped and usable by the specified process
-export is_valid_region(process: Process, start: link, size: u64): bool {
-	return process.memory.is_accessible(Segment.new(start, start + size)) 
+export is_valid_region(process: Process, start: link, size: u64, write: bool): bool {
+	start_page = memory.page_of(start)
+	end_page = memory.round_to_page(start + size)
+
+	loop (virtual_page = start_page, virtual_page < end_page, virtual_page += PAGE_SIZE) {
+		# If the page is accessible or becomes accessible after page fault, there is no problem
+		if process.memory.is_accessible(Segment.new(virtual_page, virtual_page + PAGE_SIZE)) or 
+			process.memory.process_page_fault(virtual_page as u64, write) {
+			continue
+		}
+
+		return false
+	}
+	
+	return true		 
 }
 
 # Summary: Returns whether the specified system call code is an error

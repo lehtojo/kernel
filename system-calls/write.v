@@ -11,7 +11,7 @@ export system_write(file_descriptor: u32, buffer: link, size: u64): u64 {
 	process = get_process()
 
 	# Verify the specified buffer is valid
-	if not is_valid_region(process, buffer, size) {
+	if not is_valid_region(process, buffer, size, false) {
 		debug.write_line('System call: Write: Invalid memory region')
 		return EFAULT
 	}

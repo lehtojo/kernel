@@ -220,6 +220,9 @@ export process(frame: TrapFrame*): u64 {
 		default_handler()
 	}
 
+	# Ensure interrupt flag is set after ending this interrupt
+	frame[].registers[].rflags |= RFLAGS_INTERRUPT_FLAG
+
 	interrupts.end()
 	return result
 }

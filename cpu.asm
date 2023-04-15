@@ -282,7 +282,8 @@ pop r15
 
 add rsp, 16 # Remove the interrupt number and padding
 pop rcx
-add rsp, 16
+add rsp, 8
+pop r11 # Load rflags
 
 pop rsp
 sysretq # Enables interrupts

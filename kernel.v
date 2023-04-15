@@ -62,6 +62,7 @@ namespace kernel {
 }
 
 import kernel
+import kernel.devices
 
 export start(
 	multiboot_information: link,
@@ -109,7 +110,8 @@ export start(
 
 	apic.initialize(allocator)
 
-	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information)
+	devices = Devices(HeapAllocator.instance)
+	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
 
 	system_calls.initialize()
 

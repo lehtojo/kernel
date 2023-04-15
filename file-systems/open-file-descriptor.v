@@ -15,30 +15,6 @@ pack DirectoryEntry64 {
 	}
 }
 
-pack TimeSpecification {
-	seconds: u64
-	nanoseconds: u32
-}
-
-plain FileMetadata {
-	device_id: u32
-	padding_1: u32
-	inode: u64
-	mode: u16
-	padding_2: u16
-	hard_link_count: u32
-	uid: u32
-	gid: u32
-	rdev: u32
-	padding_3: u32
-	size: u64
-	block_size: u32
-	blocks: u32
-	last_access_time: TimeSpecification
-	last_modification_time: TimeSpecification
-	last_change_time: TimeSpecification
-}
-
 plain OpenFileDescription {
 	import kernel.system_calls
 

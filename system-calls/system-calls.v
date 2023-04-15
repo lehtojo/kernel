@@ -8,6 +8,7 @@ constant F_OK = 0
 
 constant ENOENT = -2
 constant EIO = -5
+constant ENXIO = -6
 constant ENOEXEC = -8
 constant EBADF = -9
 constant ENOMEM = -12

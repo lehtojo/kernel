@@ -49,7 +49,7 @@ Inode MemoryInode {
 	override read_bytes(destination: link, offset: u64, size: u64) {
 		if data.bounds.outside(offset, size) {
 			debug.write_line('Memory inode: Specified offset out of bounds (read)')
-			return -1
+			return 0
 		}
 
 		debug.write('Memory inode: Reading ') debug.write(size) debug.write(' byte(s) from offset ') debug.write_line(offset)
@@ -65,7 +65,7 @@ Inode MemoryInode {
 		# Todo: Fill in correct data
 		metadata.device_id = 1
 		metadata.inode = index
-		metadata.mode = 0b111111111
+		metadata.mode = this.metadata.mode 
 		metadata.hard_link_count = 1
 		metadata.uid = 1
 		metadata.gid = 1

@@ -1,6 +1,7 @@
 namespace kernel.file_systems.memory_file_system
 
 import kernel.system_calls
+import kernel.devices
 
 Inode MemoryDirectoryInode {
 	private allocator: Allocator
@@ -20,7 +21,7 @@ Inode MemoryDirectoryInode {
 	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
 	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
-	override create_child(name: String, is_directory: bool) {
+	override create_child(name: String, mode: u16) {
 		debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
 
 		# Allocate an inode index for the child
@@ -28,6 +29,7 @@ Inode MemoryDirectoryInode {
 		if child_index == -1 return none as Inode
 
 		inode = none as Inode
+		is_directory = (mode & S_IFMT) == S_IFDIR
 
 		# Create a directory or a normal inode based on the arguments
 		if is_directory { inode = MemoryDirectoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator }
@@ -40,6 +42,9 @@ Inode MemoryDirectoryInode {
 
 	override lookup(name: String) {
 		debug.write('Memory directory inode: Looking for ') debug.write_line(name)
+
+		# If the name is ".", return this directory
+		if name == '.' return this
 
 		# Look for an inode with the specified name
 		loop (i = 0, i < inodes.size, i++) {
@@ -123,10 +128,12 @@ constant CREATE_OPTION_DIRECTORY = 2
 
 FileSystem MemoryFileSystem {
 	allocator: Allocator
+	devices: Devices
 	inode_index: u64
 
-	init(allocator: Allocator) {
+	init(allocator: Allocator, devices: Devices) {
 		this.allocator = allocator
+		this.devices = devices
 	}
 
 	# Summary: Produces create options from the specified flags
@@ -150,7 +157,25 @@ FileSystem MemoryFileSystem {
 			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, result.value)
+		custody = result.value
+		description = none as OpenFileDescription
+
+		# Extract metadata of the inode
+		metadata = custody.inode.metadata
+
+		# If the inode represents a device, let the device handle the opening
+		if metadata.is_device {
+			# Find the device represented by the inode
+			if devices.find(metadata.major_device, metadata.minor_device) has not device {
+				return Results.error<OpenFileDescription, u32>(ENXIO)
+			}
+
+			description = device.create_file_description(allocator, custody)
+
+		} else {
+			# Create the file description using the custody
+			description = OpenFileDescription.try_create(allocator, custody)
+		}
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
@@ -376,8 +401,8 @@ export load_boot_files(allocator: Allocator, file_system: FileSystem, memory_inf
 	loader_allocator.deallocate()
 }
 
-export test(allocator: Allocator, memory_information: SystemMemoryInformation) {
-	file_system = MemoryFileSystem(allocator) using allocator
+export test(allocator: Allocator, memory_information: SystemMemoryInformation, devices: Devices) {
+	file_system = MemoryFileSystem(allocator, devices) using allocator
 
 	root = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.empty) using allocator
 	bin = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('bin')) using allocator
@@ -394,6 +419,9 @@ export test(allocator: Allocator, memory_information: SystemMemoryInformation) {
 	root.inodes.add(bin) root.inodes.add(home)
 	home.inodes.add(user)
 	user.inodes.add(lorem_file.inode)
+
+	# Add terminal device file
+
 
 	Custody.root = Custody(String.empty, none as Custody, root) using allocator
 	FileSystem.root = file_system

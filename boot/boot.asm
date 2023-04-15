@@ -417,12 +417,19 @@ memory_file_system_start_hello_start:
 incbin "hello"
 memory_file_system_start_hello_end:
 
+dq memory_file_system_start_sh_path
+dq memory_file_system_start_sh_end - memory_file_system_start_sh_start
+memory_file_system_start_sh_start:
+incbin "sh"
+memory_file_system_start_sh_end:
+
 memory_file_system_end:
 
 memory_file_system_start_ld_path: db "/lib/ld", 0
 memory_file_system_start_libc_path: db "/lib/libc.so.6", 0
 memory_file_system_start_startup_path: db "/bin/startup", 0
 memory_file_system_start_hello_path: db "/bin/hello", 0
+memory_file_system_start_sh_path: db "/bin/sh", 0
 
 section .bss
 align 0x1000

@@ -10,7 +10,8 @@
 				"./utility/",
 				"./system-calls/",
 				"./file-systems/",
-				"./file-systems/memory-file-system"
+				"./file-systems/memory-file-system/",
+				"./devices/"
 			]
 		}
 	]

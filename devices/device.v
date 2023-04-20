@@ -22,6 +22,9 @@ File Device {
 
 	override is_device() { return true }
 
+	# Summary: Returns the name of this device
+	open get_name(): String
+
 	# Summary: Creates an open file description for this device
 	create_file_description(allocator: Allocator, custody: Custody): OpenFileDescription {
 		panic('Todo: Device file descriptions')

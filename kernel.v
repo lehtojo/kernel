@@ -111,6 +111,9 @@ export start(
 	apic.initialize(allocator)
 
 	devices = Devices(HeapAllocator.instance)
+	teletype_device = TeletypeDevice(42, 42)
+	devices.add(teletype_device)
+
 	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
 
 	system_calls.initialize()

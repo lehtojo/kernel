@@ -14,9 +14,14 @@ plain Devices {
 		devices.add(device.identifier, device)
 	}
 
-	# Summary: Attempts to find a device with the specified identifier numbers
-	find(major: u32, minor: u32): Optional<Device> {
-		return devices.try_get(Device.get_identifier(major, minor))
+	# Summary: Attempts to find a device with the specified device identifier
+	find(device: u64): Optional<Device> {
+		return devices.try_get(device)
+	}
+
+	# Summary: Returns all devices into the specified list
+	get_all(devices: List<Device>): _ {
+		this.devices.get_values(devices)
 	}
 
 	# Summary: Destructs this object

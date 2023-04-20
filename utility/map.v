@@ -265,6 +265,30 @@ export plain Map<K, V> {
 		add(key, value)
 	}
 
+	# Summary: Returns the keys associated with the values into the specified list
+	get_keys(keys: List<K>): _ {
+		index = first
+
+		loop (index >= 0) {
+			slot = slots[index]
+			keys.add(slot.key)
+
+			index = slot.next - 1
+		}
+	}
+
+	# Summary: Returns the values associated with the keys into the specified list
+	get_values(values: List<V>): _ {
+		index = first
+
+		loop (index >= 0) {
+			slot = slots[index]
+			values.add(slot.value)
+
+			index = slot.next - 1
+		}
+	}
+
 	# Summary: Removes all values from this map
 	clear(): _ {
 		if slots !== none {

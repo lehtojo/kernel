@@ -3,6 +3,14 @@ namespace kernel.devices
 import kernel.file_systems
 
 CharacterDevice TeletypeDevice {
+	init(major: u32, minor: u32) {
+		CharacterDevice.init(major, minor)
+	}
+
+	override get_name() {
+		return String.new('tty')
+	}
+
 	open can_read(description: OpenFileDescription): bool { return true }
 	open can_write(description: OpenFileDescription): bool { return true }
 

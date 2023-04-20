@@ -2,8 +2,7 @@ namespace kernel.file_systems
 
 plain InodeMetadata {
 	mode: u32
-	major_device: u32
-	minor_device: u32
+	device: u64 
 
 	is_directory => (mode & S_IFMT) == S_IFDIR
 	is_character_device => (mode & S_IFMT) == S_IFCHR

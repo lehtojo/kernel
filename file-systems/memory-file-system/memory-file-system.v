@@ -21,8 +21,18 @@ Inode MemoryDirectoryInode {
 	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
 	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
-	override create_child(name: String, mode: u16) {
-		debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
+	override create_child(name: String, mode: u16, device: u64) {
+		# Output debug information
+		is_device = has_flag(mode, S_IFCHR) or has_flag(mode, S_IFBLK)
+
+		if is_device {
+			debug.write('Memory directory inode: Creating a device ')
+			debug.write(device)
+			debug.write(' with name ')
+			debug.write_line(name)
+		} else {
+			debug.write('Memory directory inode: Creating a child with name ') debug.write_line(name)
+		}
 
 		# Allocate an inode index for the child
 		child_index = file_system.allocate_inode_index()
@@ -34,7 +44,13 @@ Inode MemoryDirectoryInode {
 		# Create a directory or a normal inode based on the arguments
 		if is_directory { inode = MemoryDirectoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator }
 		else { inode = MemoryInode(allocator, file_system, child_index, name.copy(allocator)) using allocator }
-		
+
+		# Save metadata
+		inode.metadata.mode = mode
+
+		# If we are creating a device, write the device major and minor numbers
+		if is_device { inode.metadata.device = device }
+
 		inodes.add(inode)
 
 		return inode
@@ -166,7 +182,7 @@ FileSystem MemoryFileSystem {
 		# If the inode represents a device, let the device handle the opening
 		if metadata.is_device {
 			# Find the device represented by the inode
-			if devices.find(metadata.major_device, metadata.minor_device) has not device {
+			if devices.find(metadata.device) has not device {
 				return Results.error<OpenFileDescription, u32>(ENXIO)
 			}
 
@@ -401,6 +417,16 @@ export load_boot_files(allocator: Allocator, file_system: FileSystem, memory_inf
 	loader_allocator.deallocate()
 }
 
+# Summary: Adds all the specified devices to the specified device directory
+export add_devices_to_folder(device_directory: MemoryDirectoryInode, devices: List<Device>): _ {
+	loop (i = 0, i < devices.size, i++) {
+		device = devices[i]
+
+		# Todo: Support other device types
+		device_directory.create_character_device(device.get_name(), device.identifier)	
+	}	
+}
+
 export test(allocator: Allocator, memory_information: SystemMemoryInformation, devices: Devices) {
 	file_system = MemoryFileSystem(allocator, devices) using allocator
 
@@ -408,6 +434,7 @@ export test(allocator: Allocator, memory_information: SystemMemoryInformation, d
 	bin = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('bin')) using allocator
 	home = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('home')) using allocator
 	user = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('user')) using allocator
+	dev = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('dev')) using allocator
 
 	lorem_raw_data = 'Lorem ipsum dolor sit amet'
 	lorem_data_size = length_of(lorem_raw_data)
@@ -416,12 +443,15 @@ export test(allocator: Allocator, memory_information: SystemMemoryInformation, d
 	lorem_inode = MemoryInode(allocator, file_system, lorem_index, String.new('lorem.txt'), lorem_data) using allocator
 	lorem_file = InodeFile(lorem_inode) using allocator
 
-	root.inodes.add(bin) root.inodes.add(home)
+	root.inodes.add(bin) root.inodes.add(home) root.inodes.add(dev)
 	home.inodes.add(user)
 	user.inodes.add(lorem_file.inode)
 
-	# Add terminal device file
-
+	# Add all the devices to the device directory
+	device_list = List<Device>(allocator)
+	devices.get_all(device_list)
+	add_devices_to_folder(dev, device_list)
+	device_list.clear()
 
 	Custody.root = Custody(String.empty, none as Custody, root) using allocator
 	FileSystem.root = file_system

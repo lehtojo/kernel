@@ -46,6 +46,7 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 
 	# Abort if we failed to get the custody
 	if custody === none {
+		debug.write_line('System call: Open at: Failed to open the path')
 		local_allocator.deallocate()
 		return EINVAL
 	}
@@ -72,5 +73,7 @@ export system_openat(allocator, process: Process, custody: Custody, filename: St
 	}
 
 	require(process.file_descriptors.attach(descriptor, description), 'Failed to attach file description to descriptor')
+
+	debug.write('System call: Open at: Opening succeeded, returning descriptor ') debug.write_line(descriptor)
 	return descriptor
 }

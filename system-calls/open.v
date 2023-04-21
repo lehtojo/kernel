@@ -41,5 +41,7 @@ export system_open(process: Process, path: String, flags: i32, mode: u32): i32 {
 	}
 
 	require(process.file_descriptors.attach(descriptor, description), 'Failed to attach file description to descriptor')
+
+	debug.write('System call: Open: Opening succeeded, returning descriptor ') debug.write_line(descriptor)
 	return descriptor
 }

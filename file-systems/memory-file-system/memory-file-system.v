@@ -72,6 +72,27 @@ Inode MemoryDirectoryInode {
 
 		return none as Inode
 	}
+
+	override load_status(metadata: FileMetadata) {
+		# Output debug information
+		debug.write('Memory directory inode: Loading status of inode ') debug.write_line(index)
+
+		# Todo: Fill in correct data
+		metadata.device_id = 1
+		metadata.inode = index
+		metadata.mode = this.metadata.mode 
+		metadata.hard_link_count = 1
+		metadata.uid = 1
+		metadata.gid = 1
+		metadata.rdev = 0
+		metadata.size = 0
+		metadata.block_size = PAGE_SIZE
+		metadata.blocks = 1 
+		metadata.last_access_time = none as TimeSpecification
+		metadata.last_modification_time = none as TimeSpecification
+		metadata.last_change_time = none as TimeSpecification
+		return 0
+	}
 }
 
 DirectoryIterator MemoryDirectoryIterator {

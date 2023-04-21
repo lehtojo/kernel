@@ -379,19 +379,6 @@ plain ProcessMemory {
 			# Compute the offset where we should read
 			offset = allocation.offset + internal_offset
 
-			# Todo: Remove
-			debug.write('allocation.start=')
-			debug.write_address(allocation.region.start)
-			debug.write(', virtual_page=')
-			debug.write_address(virtual_page)
-			debug.write(', allocation.offset=')
-			debug.write(allocation.offset)
-			debug.write(', internal_offset=')
-			debug.write(internal_offset)
-			debug.write(', inode.size=')
-			debug.write(inode.size())
-			debug.write_line()
-
 			# Compute how many bytes should be read
 			read_size = math.min(inode.size() - offset, PAGE_SIZE)
 

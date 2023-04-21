@@ -27,6 +27,6 @@ File Device {
 
 	# Summary: Creates an open file description for this device
 	create_file_description(allocator: Allocator, custody: Custody): OpenFileDescription {
-		panic('Todo: Device file descriptions')
+		return OpenFileDescription.try_create(allocator, this)
 	}
 }

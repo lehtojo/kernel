@@ -206,7 +206,7 @@ export process(frame: TrapFrame*): u64 {
 		result = system_set_robust_list(registers[].rdi as link, registers[].rsi as u64)
 	} else system_call_number == 0x106 {
 		result = system_fstatat(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as link, registers[].r10 as u32)
-	} else {
+	} else system_call_number == 0x12e {
 		result = system_prlimit(registers[].rdi as u64, registers[].rsi as u64, registers[].rdx as link, registers[].r10 as link)
 	} else system_call_number == 0x14e {
 		result = system_faccessat(registers[].rdi as u64, registers[].rdi as link, registers[].rdx as u64)

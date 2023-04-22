@@ -9,11 +9,22 @@ Scheduler {
 	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.processes = List<Process>(allocator, 256, false) using allocator
+		this.next_process_id = 1
 	}
 
 	add(process: Process) {
 		process.id = next_process_id++
 		processes.add(process)
+	}
+
+	# Summary: Attempts to find a process by the specified pid
+	find(pid: u32): Optional<Process> {
+		loop (i = 0, i < processes.size, i++) {
+			process = processes[i]
+			if process.id == pid return Optionals.new<Process>(process)
+		}
+
+		return Optionals.empty<Process>()
 	}
 
 	pick(): Process {

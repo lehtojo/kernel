@@ -6,7 +6,10 @@ import 'C' get_system_call_handler(): link
 
 constant F_OK = 0
 
+constant F_DUPFD = 0
+
 constant ENOENT = -2
+constant ESRCH = -3
 constant EIO = -5
 constant ENXIO = -6
 constant ENOEXEC = -8
@@ -14,6 +17,7 @@ constant EBADF = -9
 constant ENOMEM = -12
 constant EFAULT = -14
 constant EINVAL = -22
+constant ENOTTY = -25
 constant ESPIPE = -29
 constant ENOTDIR = -20
 constant ERANGE = -34
@@ -177,6 +181,10 @@ export process(frame: TrapFrame*): u64 {
 		result = system_munmap(registers[].rdi as link, registers[].rsi)
 	} else system_call_number == 0x0d {
 		result = system_rt_sigaction(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as link)
+	} else system_call_number == 0x0e {
+		result = system_rt_sigprocmask(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as link, registers[].r10 as u64)
+	} else system_call_number == 0x10 {
+		result = system_ioctl(registers[].rdi as u32, registers[].rsi as u32, registers[].rdx as u64)
 	} else system_call_number == 0x11 {
 		result = system_pread64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64, registers[].r10 as u64)
 	} else system_call_number == 0x12 {
@@ -195,6 +203,8 @@ export process(frame: TrapFrame*): u64 {
 		system_exit(frame, registers[].rdi as i32)
 	} else system_call_number == 0x3f {
 		system_uname(registers[].rdi as link)
+	} else system_call_number == 0x48 {
+		result = system_fcntl(registers[].rdi as u32, registers[].rsi as u32, registers[].rdx as u64)
 	} else system_call_number == 0x4f {
 		result = system_getcwd(registers[].rdi as link, registers[].rsi as u64)
 	} else system_call_number == 0x66 {
@@ -205,8 +215,12 @@ export process(frame: TrapFrame*): u64 {
 		result = system_geteuid()
 	} else system_call_number == 0x6c {
 		result = system_getegid()
+	} else system_call_number == 0x6d {
+		result = system_setpgrp(registers[].rdi as u32, registers[].rsi as u32)
 	} else system_call_number == 0x6e {
 		result = system_getppid()
+	} else system_call_number == 0x6f {
+		result = system_getpgrp()
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0xda {

@@ -25,6 +25,9 @@ File Device {
 	# Summary: Returns the name of this device
 	open get_name(): String
 
+	# Summary: Controls this devices
+	open control(request: u32, argument: u64): i32
+
 	# Summary: Creates an open file description for this device
 	create_file_description(allocator: Allocator, custody: Custody): OpenFileDescription {
 		return OpenFileDescription.try_create(allocator, this)

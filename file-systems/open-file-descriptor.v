@@ -38,6 +38,12 @@ plain OpenFileDescription {
 		this.file = file
 	}
 
+	init(other: OpenFileDescriptor) {
+		this.file = other.file
+		this.offset = other.offset
+		this.custody = other.custody
+	}
+
 	is_directory(): bool { return file.is_directory(this) }
 
 	can_read(): bool { return file.can_read(this) }
@@ -168,6 +174,12 @@ plain OpenFileDescription {
 
 		# Return the number of bytes written to the output
 		return output.position
+	}
+
+	# Summary: Attempts to clone this file description
+	try_duplicate(allocator: Allocator): Optional<OpenFileDescription> {
+		duplicate = OpenFileDescription(this) using allocator
+		return Optionals.new<OpenFileDescription>(duplicate)
 	}
 
 	close(): u32 {

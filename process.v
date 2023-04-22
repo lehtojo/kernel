@@ -137,6 +137,8 @@ Process {
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
 	working_directory: String
+	credentials: Credentials
+	parent: Process
 
 	init(registers: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0

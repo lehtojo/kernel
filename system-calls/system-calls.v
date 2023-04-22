@@ -15,7 +15,8 @@ constant ENOMEM = -12
 constant EFAULT = -14
 constant EINVAL = -22
 constant ESPIPE = -29
-constant ENOTDIR = 20
+constant ENOTDIR = -20
+constant ERANGE = -34
 constant EOVERFLOW = -75
 
 constant DT_UNKNOWN = 0
@@ -174,6 +175,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_mprotect(registers[].rdi as u64, registers[].rsi as u64, registers[].rdx as u64)
 	} else system_call_number == 0x0b {
 		result = system_munmap(registers[].rdi as link, registers[].rsi)
+	} else system_call_number == 0x0d {
+		result = system_rt_sigaction(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as link)
 	} else system_call_number == 0x11 {
 		result = system_pread64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64, registers[].r10 as u64)
 	} else system_call_number == 0x12 {
@@ -192,6 +195,18 @@ export process(frame: TrapFrame*): u64 {
 		system_exit(frame, registers[].rdi as i32)
 	} else system_call_number == 0x3f {
 		system_uname(registers[].rdi as link)
+	} else system_call_number == 0x4f {
+		result = system_getcwd(registers[].rdi as link, registers[].rsi as u64)
+	} else system_call_number == 0x66 {
+		result = system_getuid()
+	} else system_call_number == 0x68 {
+		result = system_getgid()
+	} else system_call_number == 0x6b {
+		result = system_geteuid()
+	} else system_call_number == 0x6c {
+		result = system_getegid()
+	} else system_call_number == 0x6e {
+		result = system_getppid()
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0xda {
@@ -208,6 +223,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_fstatat(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as link, registers[].r10 as u32)
 	} else system_call_number == 0x12e {
 		result = system_prlimit(registers[].rdi as u64, registers[].rsi as u64, registers[].rdx as link, registers[].r10 as link)
+	} else system_call_number == 0x13e {
+		result = system_getrandom(registers[].rdi as link, registers[].rsi as u64, registers[].rdx as u32)
 	} else system_call_number == 0x14e {
 		result = system_faccessat(registers[].rdi as u64, registers[].rdi as link, registers[].rdx as u64)
 	} else {

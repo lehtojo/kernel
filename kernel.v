@@ -105,15 +105,15 @@ export start(
 	interrupts.initialize()
 	keyboard.initialize(allocator)
 
+	devices = Devices(HeapAllocator.instance)
+	boot_console = BootConsoleDevice(HeapAllocator.instance, 42, 42)
+	devices.add(boot_console)
+
 	scheduler.test(allocator)
 	scheduler.test(allocator)
-	scheduler.test2(HeapAllocator.instance, memory_information)
+	scheduler.test2(HeapAllocator.instance, memory_information, boot_console)
 
 	apic.initialize(allocator)
-
-	devices = Devices(HeapAllocator.instance)
-	console = ConsoleDevice(HeapAllocator.instance, 42, 42)
-	devices.add(console)
 
 	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
 

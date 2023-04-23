@@ -77,38 +77,48 @@ constant TCGETS = 0x5401
 constant TIOCSPGRP = 0x5410
 constant TIOCGPGRP = 0x540F
 
+pack Viewport {
+	width: u32
+	height: u32
+	line: u32
+}
+
 CharacterDevice ConsoleDevice {
-	private constant DEFAULT_WIDTH = 80
-	private constant DEFAULT_HEIGHT = 25
+	protected constant DEFAULT_WIDTH = 80
+	protected constant DEFAULT_HEIGHT = 25
+	protected constant DEFAULT_BUFFER_HEIGHT = 100
 
-	private cells: Array<Cell>
-	private lines: Array<Line>
+	protected width: u32
+	protected height: u32
+	protected cursor: u32
+	protected cells: Array<Cell>
+	protected lines: Array<Line>
 
-	private width: u32
-	private height: u32
-	private position: u32
+	protected viewport: Viewport
 
-	private background: u32
-	private foreground: u32
+	protected background: u32
+	protected foreground: u32
 
-	private information: TerminalInformation
+	protected information: TerminalInformation
 
 	init(allocator: Allocator, major: u32, minor: u32) {
 		CharacterDevice(major, minor)
 		this.width = DEFAULT_WIDTH
-		this.height = DEFAULT_HEIGHT
+		this.height = DEFAULT_BUFFER_HEIGHT
+		this.viewport.width = DEFAULT_WIDTH
+		this.viewport.height = DEFAULT_HEIGHT
 		initialize_lines(allocator)
 		initialize_terminal_information()
 	}
 
 	# Summary: Creates lines and their cells with the specified allocator
-	private initialize_lines(allocator: Allocator): _ {
+	protected initialize_lines(allocator: Allocator): _ {
 		this.cells = Array<Cell>(allocator, width * height) using allocator
 		this.lines = Array<Line>(allocator, height) using allocator
 	}
 
 	# Summary: Initializes terminal information with default values
-	private initialize_terminal_information(): _ {
+	protected initialize_terminal_information(): _ {
 		information.iflag = TERMINAL_DEFAULT_IFLAG
 		information.oflag = TERMINAL_DEFAULT_OFLAG
 		information.cflag = TERMINAL_DEFAULT_CFLAG
@@ -142,36 +152,36 @@ CharacterDevice ConsoleDevice {
 	override can_write(description: OpenFileDescription) { return true }
 
 	# Summary: Moves to the next line
-	private next_line(): _ {
-		new_position = position + position % width
+	protected next_line(): _ {
+		new_cursor = (cursor / width + 1) * width
 
 		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_position == cells.size { new_position = 0 }
+		if new_cursor == cells.size { new_cursor = 0 }
 
-		# Update the position
-		position = new_position
+		# Update the cursor
+		cursor = new_cursor
 	}
 
 	# Summary: Moves to the next character
-	private next_character(): _ {
-		new_position = position + 1
+	protected next_character(): _ {
+		new_cursor = cursor + 1
 
 		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_position == cells.size { new_position = 0 }
+		if new_cursor == cells.size { new_cursor = 0 }
 
-		# Update the position
-		position = new_position
+		# Update the cursor
+		cursor = new_cursor
 	}
 
 	# Summary: Writes the specified character
-	private write_character(character: u8): _ {
-		cells[position] = Cell.new(character, background, foreground)
+	protected write_character(character: u8): _ {
+		cells[cursor] = Cell.new(character, background, foreground)
 
 		# Move over the written character
 		next_character()
 
 		# If we are at start of a line, no need to do anything
-		if position % width == 0 return
+		if cursor % width == 0 return
 
 		# If a line ending was written, move to the next line
 		if character == `\n` next_line()
@@ -184,6 +194,7 @@ CharacterDevice ConsoleDevice {
 			write_character(data[i])	
 		}
 
+		update()
 		return data.size
 	}
 	
@@ -197,6 +208,7 @@ CharacterDevice ConsoleDevice {
 		if not test_read {
 			test_read = true
 			memory.copy(destination, 'meme', 4)
+			next_line()
 			return 4
 		}
 
@@ -204,7 +216,7 @@ CharacterDevice ConsoleDevice {
 	}
 
 	# Summary: Returns information about this terminal to the specified buffer
-	private get_terminal_information(argument: link): i32 {
+	protected get_terminal_information(argument: link): i32 {
 		debug.write_line('Console device: Getting information')
 
 		# If the specified output buffer can not receive the information, return error code
@@ -225,12 +237,12 @@ CharacterDevice ConsoleDevice {
 		return 0
 	}
 
-	private set_terminal_process_gid(argument: u32*): i32 {
+	protected set_terminal_process_gid(argument: u32*): i32 {
 		debug.write_line('Console device: Set process gid')
 		return 0
 	}
 
-	private get_terminal_process_gid(argument: u32*): i32 {
+	protected get_terminal_process_gid(argument: u32*): i32 {
 		debug.write_line('Console device: Get process gid')
 		return 0
 	}
@@ -247,4 +259,7 @@ CharacterDevice ConsoleDevice {
 			}
 		}
 	}
+
+	# Summary: Called when the console content is updated
+	open update() {}
 }

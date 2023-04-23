@@ -195,7 +195,19 @@ test(allocator: Allocator) {
 	interrupts.scheduler.add(process)
 }
 
-export test2(allocator: Allocator, memory_information: SystemMemoryInformation) {
+# Summary: Attaches the specified console to the process
+export attach_console_to_process(process: Process, console: Device): _ {
+	# Replace the devices of standard input, output and error
+	loop (file_descriptor = 0, file_descriptor <= 2, file_descriptor++) {
+		file_description = process.file_descriptors.try_get_description(file_descriptor)
+		require(file_description !== none, 'Process did not have required standard file')
+
+		# Replace the device of the file description
+		file_description.file = console
+	}	
+}
+
+export test2(allocator: Allocator, memory_information: SystemMemoryInformation, boot_console: BootConsoleDevice) {
 	symbols = memory_information.symbols
 	application_start = none as link
 	application_end = none as link
@@ -227,6 +239,9 @@ export test2(allocator: Allocator, memory_information: SystemMemoryInformation) 
 
 	process = Process.from_executable(allocator, application_data)
 	if process === none panic('Scheduler (test 2): Failed to create the process')
+
+	# Attach the boot console to the process
+	attach_console_to_process(process, boot_console)
 
 	debug.write_line('Scheduler (test 2): Process created')
 

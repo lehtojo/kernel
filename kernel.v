@@ -106,7 +106,9 @@ export start(
 	keyboard.initialize(allocator)
 
 	devices = Devices(HeapAllocator.instance)
-	boot_console = BootConsoleDevice(HeapAllocator.instance, 42, 42)
+	Devices.instance = devices
+
+	boot_console = BootConsoleDevice(HeapAllocator.instance)
 	devices.add(boot_console)
 
 	scheduler.test(allocator)

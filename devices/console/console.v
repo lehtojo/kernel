@@ -102,7 +102,7 @@ CharacterDevice ConsoleDevice {
 	protected information: TerminalInformation
 
 	init(allocator: Allocator, major: u32, minor: u32) {
-		CharacterDevice(major, minor)
+		CharacterDevice.init(major, minor)
 		this.width = DEFAULT_WIDTH
 		this.height = DEFAULT_BUFFER_HEIGHT
 		this.viewport.width = DEFAULT_WIDTH
@@ -258,6 +258,12 @@ CharacterDevice ConsoleDevice {
 				(-1 as i32)
 			}
 		}
+	}
+
+	# Summary: Processes the specified character
+	emit(character: u8): _ {
+		write_character(character)
+		update()
 	}
 
 	# Summary: Called when the console content is updated

@@ -1,5 +1,8 @@
 namespace kernel.keyboard
 
+import kernel.devices
+import kernel.devices.console
+
 constant KEYCODE_COUNT = 128
 
 layout: u8*
@@ -76,6 +79,7 @@ export process() {
 	states[scancode] = down
 
 	if keycode !== 0 and not state {
-		debug.put(keycode)
+		require(Devices.instance.find(BootConsoleDevice.MAJOR, BootConsoleDevice.MINOR) has boot_console, 'Missing boot console device')
+		boot_console.(ConsoleDevice).emit(keycode)
 	}
 }

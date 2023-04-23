@@ -1,6 +1,8 @@
 namespace kernel.devices
 
 plain Devices {
+	shared instance: Devices
+
 	private allocator: Allocator
 	private devices: Map<u64, Device>
 
@@ -17,6 +19,12 @@ plain Devices {
 	# Summary: Attempts to find a device with the specified device identifier
 	find(device: u64): Optional<Device> {
 		return devices.try_get(device)
+	}
+
+	# Summary: Attempts to find a device with the specified major and minor number
+	find(major: u64, minor: u64): Optional<Device> {
+		identifier = Device.get_identifier(major, minor)
+		return find(identifier)
 	}
 
 	# Summary: Returns all devices into the specified list

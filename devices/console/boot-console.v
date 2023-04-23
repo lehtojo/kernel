@@ -1,10 +1,13 @@
 namespace kernel.devices.console
 
 ConsoleDevice BootConsoleDevice {
+	constant MAJOR = 42
+	constant MINOR = 42
+
 	protected framebuffer: link
 
-	init(allocator: Allocator, major: u32, minor: u32) {
-		ConsoleDevice.init(allocator, major, minor)
+	init(allocator: Allocator) {
+		ConsoleDevice.init(allocator, MAJOR, MINOR)
 		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link)
 		clear()
 	}

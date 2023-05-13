@@ -148,9 +148,7 @@ export initialize() {
 }
 
 export process(frame: TrapFrame*): u64 {
-	# Save all the registers so that they can be modified
 	process = get_process()
-	process.save(frame)
 
 	registers = frame[].registers
 	system_call_number = registers[].rax
@@ -251,6 +249,7 @@ export process(frame: TrapFrame*): u64 {
 
 	# Load updated registers
 	process = get_process()
+	process.registers[].rax = result
 	frame[].registers[] = process.registers[]
 
 	return result

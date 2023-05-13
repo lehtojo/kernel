@@ -201,6 +201,10 @@ export process(frame: TrapFrame*): u64 {
 	code = frame[].registers[].interrupt
 	result = 0 as u64
 
+	# Save all the registers so that they can be modified
+	process = scheduler.current
+	if process !== none { process.save(frame) }
+
 	if code == 0x21 {
 		keyboard.process()
 	} else code == 0x24 {
@@ -223,7 +227,13 @@ export process(frame: TrapFrame*): u64 {
 	# Ensure interrupt flag is set after ending this interrupt
 	frame[].registers[].rflags |= RFLAGS_INTERRUPT_FLAG
 
+	# Report that we have processed the interrupt
 	interrupts.end()
+
+	# If the current process no longer runs, let the scheduler decide the next action
+	process = scheduler.current
+	if not process.is_running { scheduler.tick(frame) }
+
 	return result
 }
 

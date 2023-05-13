@@ -98,6 +98,14 @@ List<T> {
 		size++
 	}
 
+	remove(element: T): bool {
+		i = index_of(element)
+		if i < 0 return false
+
+		remove_at(i)
+		return true
+	}
+
 	remove_at(i: u64) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 
@@ -139,6 +147,14 @@ List<T> {
 	set(i: u64, element: T) {
 		require(i >= 0 and i < size, 'Index out of bounds')
 		data[i] = element
+	}
+
+	index_of(element: T): i64 {
+		loop (i = 0, i < size, i++) {
+			if data[i] == element return i
+		}
+
+		return -1
 	}
 
 	find_index(filter: (T) -> bool): i64 {
@@ -183,8 +199,12 @@ List<T> {
 		size = 0
 	}
 
-	destruct(allocator: Allocator) {
+	destruct(allocator: Allocator): _ {
 		clear()
 		allocator.deallocate(this as link)
+	}
+
+	destruct(): _ {
+		destruct(allocator)
 	}
 }

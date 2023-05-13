@@ -1,6 +1,11 @@
 namespace kernel.file_systems
 
+import kernel.scheduler
+
 File {
+	open subscribe(blocker: Blocker): _ { panic('File does not support subscribing') }
+	open unsubscribe(blocker: Blocker): _ { panic('File does not support unsubscribing') }
+
 	open is_device(): bool { return false }
 	open is_inode(): bool { return false }
 	open is_directory(description: OpenFileDescription): bool { return false }

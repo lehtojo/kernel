@@ -40,6 +40,7 @@ export initialize(allocator: Allocator) {
 	layout[25] = `p`
 	layout[26] = `[`
 	layout[27] = `]`
+	layout[28] = `\n`
 
 	layout[30] = `a`
 	layout[31] = `s`

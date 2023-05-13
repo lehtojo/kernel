@@ -80,7 +80,7 @@ export start(
 	boot.console.write_line('...')
 
 	interrupts.tables = interrupt_tables
-	interrupts.scheduler = scheduler.Scheduler(allocator)
+	interrupts.scheduler = scheduler.Scheduler()
 
 	memory_information = SystemMemoryInformation()
 	memory_information.regions = List<Segment>(allocator)
@@ -97,7 +97,7 @@ export start(
 	KernelHeap.initialize()
 	HeapAllocator.initialize(allocator)
 
-	interrupts.scheduler.processes = List<scheduler.Process>(HeapAllocator.instance) using KernelHeap
+	interrupts.scheduler.initialize_processes()
 
 	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
 	mapper.remap()

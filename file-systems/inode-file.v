@@ -1,14 +1,19 @@
 namespace kernel.file_systems
 
 File InodeFile {
-	inode: Inode
+	readable inode: Inode
+	readable subscribers: Subscribers
 
 	init(inode: Inode) {
 		this.inode = inode
+		this.subscribers = Subscribers.new(HeapAllocator.instance)
 	}
 
 	override is_inode() { return true }
 	override is_directory(description: OpenFileDescription) { return inode.is_directory() }
+
+	override subscribe(blocker: Blocker) { subscribers.subscribe(blocker) }
+	override unsubscribe(blocker: Blocker) { subscribers.unsubscribe(blocker) }
 
 	override size(description: OpenFileDescription) { return inode.size() }
 
@@ -18,15 +23,24 @@ File InodeFile {
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {
 		debug.write_line('Inode file: Writing bytes...')
-		return inode.write_bytes(data, offset)
+
+		result = inode.write_bytes(data, offset)
+
+		subscribers.update()
+		return result
 	}
 	
 	override read(description: OpenFileDescription, destination: link, offset: u64, size: u64) {
 		debug.write_line('Inode file: Reading bytes...')
-		return inode.read_bytes(destination, offset, size)
+
+		result = inode.read_bytes(destination, offset, size)
+
+		subscribers.update()
+		return result
 	}
 
 	override seek(description: OpenFileDescription, offset: u64) {
+		subscribers.update()
 		return 0
 	}
 

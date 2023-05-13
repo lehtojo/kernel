@@ -1,36 +1,76 @@
 namespace kernel.scheduler
 
+constant THREAD_STATE_RUNNING = 0
+constant THREAD_STATE_BLOCKED = 1
+constant THREAD_STATE_SLEEPING = 2
+constant THREAD_STATE_TERMINATED = 3
+
+pack SchedulerProcesses {
+	running: List<Process>
+	blocked: List<Process>
+
+	add(process: Process): _ {
+		if process.state == THREAD_STATE_RUNNING {
+			debug.write('Scheduler: Process ') debug.write(process.id) debug.write_line(' is running')
+			running.add(process)
+		} else process.state == THREAD_STATE_BLOCKED {
+			debug.write('Scheduler: Process ') debug.write(process.id) debug.write_line(' is blocked')
+			blocked.add(process)
+		} else {
+			panic('Invalid process state')
+		}
+	}
+
+	remove(process: Process): bool {
+		debug.write('Scheduler: Removing process ') debug.write_line(process.id)
+		return running.remove(process) or blocked.remove(process)
+	}
+}
+
 Scheduler {
-	allocator: Allocator
 	current: Process
-	processes: List<Process>
+	processes: SchedulerProcesses
 	next_process_id: u32
 
-	init(allocator: Allocator) {
-		this.allocator = allocator
-		this.processes = List<Process>(allocator, 256, false) using allocator
+	init() {
 		this.next_process_id = 1
+	}
+
+	initialize_processes() {
+		this.processes.running = List<Process>(HeapAllocator.instance, 256, false) using KernelHeap
+		this.processes.blocked = List<Process>(HeapAllocator.instance, 256, false) using KernelHeap
 	}
 
 	add(process: Process) {
 		process.id = next_process_id++
-		processes.add(process)
+		processes.running.add(process)
 	}
 
 	# Summary: Attempts to find a process by the specified pid
 	find(pid: u32): Optional<Process> {
-		loop (i = 0, i < processes.size, i++) {
-			process = processes[i]
+		loop (i = 0, i < processes.running.size, i++) {
+			process = processes.running[i]
+			if process.id == pid return Optionals.new<Process>(process)
+		}
+
+		loop (i = 0, i < processes.blocked.size, i++) {
+			process = processes.blocked[i]
 			if process.id == pid return Optionals.new<Process>(process)
 		}
 
 		return Optionals.empty<Process>()
 	}
 
+	change_process_state(process: Process, to: u32): _ {
+		processes.remove(process)
+		process.state = to
+		processes.add(process)
+	}
+
 	pick(): Process {
-		result = processes[0]
-		processes.remove_at(0)
-		processes.add(result)
+		result = processes.running[0]
+		processes.running.remove_at(0)
+		processes.running.add(result)
 
 		return result
 	}
@@ -97,11 +137,7 @@ Scheduler {
 		debug.write('Scheduler: Exiting process ') debug.write_line(process.id)
 
 		# Remove the specified process from the process list
-		loop (i = 0, i < processes.size, i++) {
-			if processes[i] != process continue
-			processes.remove_at(i)
-			stop
-		}
+		require(processes.remove(process), 'Attempted to exit a process that was not in the process list')
 
 		debug.write('Scheduler: Destructing process ') debug.write_line(process.id)
 		process.destruct(HeapAllocator.instance)

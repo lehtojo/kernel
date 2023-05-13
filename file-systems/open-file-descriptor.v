@@ -15,12 +15,15 @@ pack DirectoryEntry64 {
 	}
 }
 
+constant FILE_DESCRIPTION_FLAG_BLOCKING = 1
+
 plain OpenFileDescription {
 	import kernel.system_calls
 
 	file: File
 	offset: u64 = 0
 	custody: Custody
+	flags: u64 = 0
 
 	shared try_create(allocator, custody: Custody) {
 		file: InodeFile = InodeFile(custody.inode) using allocator
@@ -43,6 +46,13 @@ plain OpenFileDescription {
 		this.offset = other.offset
 		this.custody = other.custody
 	}
+
+	set_blocking(blocking: bool): _ {
+		if blocking { flags |= FILE_DESCRIPTION_FLAG_BLOCKING }
+		else { flags &= (!FILE_DESCRIPTION_FLAG_BLOCKING) }
+	}
+
+	is_blocking => has_flag(flags, FILE_DESCRIPTION_FLAG_BLOCKING)
 
 	is_directory(): bool { return file.is_directory(this) }
 

@@ -46,8 +46,20 @@ ConsoleDevice BootConsoleDevice {
 		}
 	}
 
-	override update() {
-		debug.write_line('Boot console device: Updating lines')
+	# Summary: Processes the specified character
+	override emit(character: u8) {
+		debug.write('Boot console: Emiting ') debug.write_address(character) debug.write_line()
+
+		input.emit(character)
+		write_character(character)
 		render_viewport()
+
+		if character == `\n` { update() }
+	}
+
+	# Summary: Called when the console content is updated
+	override update() {
+		render_viewport()
+		subscribers.update()
 	}
 }

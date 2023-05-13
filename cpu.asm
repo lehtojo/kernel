@@ -225,11 +225,11 @@ system_call_entry:
 mov qword [gs:16], rsp
 mov rsp, [gs:8]
 
-pushq 0x18 # User ss
+pushq 0x1b # User ss (0x18 | 3)
 push qword [gs:16] # User rsp
 
 push r11 # RFLAGS
-pushq 0x20 # User cs
+pushq 0x23 # User cs (0x20 | 3)
 push rcx # User RIP
 pushq 0 # Padding
 pushq 0x80 # "System call interrupt"

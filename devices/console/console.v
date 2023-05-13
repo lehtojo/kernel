@@ -83,6 +83,29 @@ pack Viewport {
 	line: u32
 }
 
+pack ConsoleInputBuffer {
+	private data: List<u8>
+	private capacity: u64
+
+	shared new(allocator: Allocator, capacity: u64): ConsoleInputBuffer {
+		return pack { data: List<u8>(allocator, capacity, false) using allocator, capacity: capacity } as ConsoleInputBuffer
+	}
+
+	emit(value: u8): _ {
+		# If we are at the least character, allow only line ending
+		if value != `\n` and data.size + 1 == capacity return
+
+		data.add(value)
+	}
+
+	read(destination: link, size: u64): u64 {		
+		read = math.min(data.size, size)
+		memory.copy(destination, data.data, read)
+		data.remove_all(0, read)
+		return read
+	}
+}
+
 CharacterDevice ConsoleDevice {
 	protected constant DEFAULT_WIDTH = 80
 	protected constant DEFAULT_HEIGHT = 25
@@ -93,6 +116,7 @@ CharacterDevice ConsoleDevice {
 	protected cursor: u32
 	protected cells: Array<Cell>
 	protected lines: Array<Line>
+	protected input: ConsoleInputBuffer
 
 	protected viewport: Viewport
 
@@ -115,6 +139,7 @@ CharacterDevice ConsoleDevice {
 	protected initialize_lines(allocator: Allocator): _ {
 		this.cells = Array<Cell>(allocator, width * height) using allocator
 		this.lines = Array<Line>(allocator, height) using allocator
+		this.input = ConsoleInputBuffer.new(allocator, PAGE_SIZE * 2)
 	}
 
 	# Summary: Initializes terminal information with default values
@@ -194,25 +219,15 @@ CharacterDevice ConsoleDevice {
 			write_character(data[i])	
 		}
 
+		description.offset = cursor
+
 		update()
 		return data.size
 	}
-	
-	# Todo: Remove
-	test_read: bool
 
 	override read(description: OpenFileDescription, destination: link, offset: u64, size: u64) {
 		debug.write_line('Console device: Reading bytes...')
-
-		# Todo: Remove
-		if not test_read {
-			test_read = true
-			memory.copy(destination, 'meme', 4)
-			next_line()
-			return 4
-		}
-
-		return 0
+		return input.read(destination, size)
 	}
 
 	# Summary: Returns information about this terminal to the specified buffer
@@ -261,11 +276,16 @@ CharacterDevice ConsoleDevice {
 	}
 
 	# Summary: Processes the specified character
-	emit(character: u8): _ {
+	open emit(character: u8): _ {
+		debug.write('Console device: Emiting ') debug.write_address(character) debug.write_line()
+
+		input.emit(character)
 		write_character(character)
 		update()
 	}
 
 	# Summary: Called when the console content is updated
-	open update() {}
+	open update() {
+		subscribers.update()
+	}
 }

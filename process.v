@@ -13,17 +13,17 @@ Process {
 		standard_input_descriptor = file_descriptors.allocate().or_panic('Failed to create standard input descriptor for a process')
 		require(standard_input_descriptor == 0, 'Created invalid standard input descriptor')
 		standard_input_file = ConsoleDevice(allocator, 0, 0) using allocator
-		file_descriptors.attach(standard_input_descriptor, OpenFileDescription.try_create(allocator, standard_input_file))
+		file_descriptors.attach(standard_input_descriptor, standard_input_file.create_file_description(allocator, none as Custody))
 	
 		standard_output_descriptor = file_descriptors.allocate().or_panic('Failed to create standard output descriptor for a process')
 		require(standard_output_descriptor == 1, 'Created invalid standard output descriptor')
 		standard_output_file = ConsoleDevice(allocator, 0, 0) using allocator
-		file_descriptors.attach(standard_output_descriptor, OpenFileDescription.try_create(allocator, standard_output_file))
+		file_descriptors.attach(standard_output_descriptor, standard_input_file.create_file_description(allocator, none as Custody))
 		
 		standard_error_descriptor = file_descriptors.allocate().or_panic('Failed to create standard error descriptor for a process')
 		require(standard_error_descriptor == 2, 'Created invalid standard error descriptor')
 		standard_error_file = ConsoleDevice(allocator, 0, 0) using allocator
-		file_descriptors.attach(standard_error_descriptor, OpenFileDescription.try_create(allocator, standard_error_file))
+		file_descriptors.attach(standard_error_descriptor, standard_input_file.create_file_description(allocator, none as Custody))
 	}
 
 	# Summary: Adds the allocations in the specified load information to the specified process memory
@@ -133,7 +133,14 @@ Process {
 	file_descriptors: ProcessFileDescriptors
 	working_directory: String
 	credentials: Credentials
+	blocker: Blocker
+	state: u32
 	parent: Process
+
+	is_running => state == THREAD_STATE_RUNNING
+	is_blocked => state == THREAD_STATE_BLOCKED
+	is_sleeping => state == THREAD_STATE_SLEEPING
+	is_terminated => state == THREAD_STATE_TERMINATED
 
 	init(registers: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0
@@ -187,6 +194,28 @@ Process {
 		# Allocate register state for the process so that we can configure the registers before starting
 		configure_process_before_startup(allocator, registers, memory, load_information)
 		return 0
+	}
+
+	# Summary: Blocks the process
+	block(blocker: Blocker): _ {
+		debug.write_line('Process: Blocking...')
+
+		require(this.blocker === none and state == THREAD_STATE_RUNNING, 'Invalid thread state')
+		this.blocker = blocker
+		this.blocker.process = this
+
+		interrupts.scheduler.change_process_state(this, THREAD_STATE_BLOCKED)
+	}
+
+	# Summary: Unblocks the process
+	unblock(): _ {
+		debug.write_line('Process: Unblocking...')
+
+		require(this.blocker !== none and state == THREAD_STATE_BLOCKED, 'Invalid thread state')
+		this.blocker = none as Blocker
+		this.blocker.process = none as Process
+
+		interrupts.scheduler.change_process_state(this, THREAD_STATE_RUNNING)
 	}
 
 	destruct(allocator: Allocator): _ {

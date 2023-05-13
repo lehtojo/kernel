@@ -1,5 +1,27 @@
 namespace kernel.system_calls
 
+# Summary: Attempts to read data from the specified description while considering blocking
+read_from_description(process: Process, description: OpenFileDescription, buffer: link, size: u64): i64 {
+	# Attempt to read data from the description
+	result = description.read(buffer, size)
+
+	# If there is no data available and the description is blocking, block the current thread
+	if result == 0 and description.is_blocking {
+		blocker = FileBlocker.try_create(HeapAllocator.instance, description, buffer, size)
+		if blocker === none return EIO # Todo: Correct error code
+
+		process.block(blocker.then((blocker: FileBlocker) -> {
+			result = blocker.description.read(blocker.buffer, blocker.size)
+			if result == 0 return false
+
+			blocker.set_system_call_result(result)
+			return true
+		}))
+	}
+
+	return result
+}
+
 # System call: Read
 export system_read(file_descriptor: u32, buffer: link, size: u64): u64 {
 	debug.write('System call: Read: ')
@@ -24,5 +46,5 @@ export system_read(file_descriptor: u32, buffer: link, size: u64): u64 {
 		return EBADF
 	}
 
-	return file_description.read(buffer, size)
+	return read_from_description(process, file_description, buffer, size)
 }

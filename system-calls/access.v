@@ -41,7 +41,10 @@ export system_faccessat(directory_descriptor: u64, path_argument: link, mode: u6
 	# Note: Duplicated from openat system call
 	custody = none as Custody
 
-	if directory_descriptor == AT_FDCWD {
+	# Todo: Duplicate?
+	if path.starts_with(`/`) {
+		custody = Custody.root
+	} else directory_descriptor == AT_FDCWD {
 		# User wants we to use the current working directory of the process
 		custody = FileSystem.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
 	} else {

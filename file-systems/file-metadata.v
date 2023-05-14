@@ -12,23 +12,23 @@ constant S_IFSOCK = 0xc000
 constant S_ISUID = 0x800
 constant S_ISGID = 0x400
 constant S_ISVTX = 0x200
-constant S_IRUSR = 0x100
-constant S_IWUSR = 0x80
-constant S_IXUSR = 0x40
+constant S_IRUSR = 0x100     # User (owner) read
+constant S_IWUSR = 0x80      # User (owner) write
+constant S_IXUSR = 0x40      # User (owner) execute 
 constant S_IREAD = S_IRUSR
 constant S_IWRITE = S_IWUSR
 constant S_IEXEC = S_IXUSR
-constant S_IRGRP = 0x20
-constant S_IWGRP = 0x10
-constant S_IXGRP = 0x8
-constant S_IROTH = 0x4
-constant S_IWOTH = 0x2
-constant S_IXOTH = 0x1
+constant S_IRGRP = 0x20      # Group read
+constant S_IWGRP = 0x10      # Group write
+constant S_IXGRP = 0x8       # Group execute
+constant S_IROTH = 0x4       # Others read
+constant S_IWOTH = 0x2       # Others write
+constant S_IXOTH = 0x1       # Others execute
 
-constant S_IRWXU = S_IRUSR | S_IWUSR | S_IXUSR
+constant S_IRWXU = S_IRUSR | S_IWUSR | S_IXUSR # User (owner) read, write, execute
 
-constant S_IRWXG = S_IRWXU |> 3
-constant S_IRWXO = S_IRWXG |> 3
+constant S_IRWXG = S_IRWXU |> 3  # Group read, write, execute
+constant S_IRWXO = S_IRWXG |> 3  # Others read, write, execute
 
 pack TimeSpecification {
 	seconds: u64

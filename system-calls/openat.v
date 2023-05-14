@@ -26,7 +26,10 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 	# Figure out the custody of the specified directory, so that we can look for the file
 	custody = none as Custody
 
-	if directory_descriptor == AT_FDCWD {
+	# Todo: Duplicate?
+	if filename.starts_with(`/`) {
+		custody = Custody.root
+	} else directory_descriptor == AT_FDCWD {
 		# User wants we to use the current working directory of the process
 		custody = FileSystem.root.open_path(local_allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
 	} else {

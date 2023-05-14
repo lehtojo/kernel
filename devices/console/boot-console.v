@@ -17,6 +17,8 @@ ConsoleDevice BootConsoleDevice {
 		loop (i = 0, i < viewport.width * viewport.height, i++) {
 			framebuffer.(u16*)[i] = 0x0020 # Clear with black spaces
 		}
+
+		# Todo: Consider the cursor
 	}
 
 	# Summary: Renders the specified viewport line
@@ -35,7 +37,7 @@ ConsoleDevice BootConsoleDevice {
 			if character == `\n` { character = ` ` }
 
 			framebuffer_line[i * 2] = character
-			framebuffer_line[i * 2 + 1] = 0b00001111
+			framebuffer_line[i * 2 + 1] = 0b00000111 # Light gray
 		}
 	}
 

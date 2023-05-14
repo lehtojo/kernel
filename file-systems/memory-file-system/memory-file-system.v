@@ -228,7 +228,13 @@ FileSystem MemoryFileSystem {
 			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, result.value)
+		custody = result.value
+		inode = custody.inode
+		require(inode !== none, 'Created file did not have an inode')
+	
+		inode.metadata.mode = mode
+
+		description = OpenFileDescription.try_create(allocator, custody)
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
@@ -244,7 +250,13 @@ FileSystem MemoryFileSystem {
 			return Results.error<OpenFileDescription, u32>(result.error)
 		}
 
-		description = OpenFileDescription.try_create(allocator, result.value)
+		custody = result.value
+		inode = custody.inode
+		require(inode !== none, 'Created directory did not have an inode')
+	
+		inode.metadata.mode = mode
+
+		description = OpenFileDescription.try_create(allocator, custody)
 
 		local_allocator.deallocate()
 		return Results.new<OpenFileDescription, u32>(description)
@@ -312,6 +324,9 @@ FileSystem MemoryFileSystem {
 
 			# Load the current part of the path
 			part = parts.part
+
+			# Skip empty path parts
+			if part.length == 0 continue
 
 			# Find a child inode whose name matches the current part
 			inode = container.inode.lookup(part)
@@ -391,12 +406,14 @@ load_boot_file_headers(allocator, start: link, end: link): List<BootFileHeader> 
 load_files_into_memory(file_system: FileSystem, headers: List<BootFileHeader>) {
 	debug.write_line('Memory file system: Copying the boot files into memory...')
 
+	mode = S_IRWXU | S_IRWXG | S_IRWXO # Read, write, execute for all
+
 	loop (i = 0, i < headers.size, i++) {
 		header = headers[i]
 		path = String.new(header.path)
 
 		# Create the file and then write its contents
-		if file_system.create_file(Custody.root, path, O_CREAT | O_WRONLY, 777) has not descriptor {
+		if file_system.create_file(Custody.root, path, O_CREAT | O_WRONLY, mode) has not descriptor {
 			panic('Failed to create boot file')
 		}
 

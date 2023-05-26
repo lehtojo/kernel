@@ -30,7 +30,7 @@ plain MemoryRegion {
 		return true
 	}
 
-	write_memory(value: T): bool {
+	write_memory<T>(value: T): bool {
 		# Verify we do not write outside of bounds
 		if position + sizeof(T) >= size return false
 		memory.copy(address + position, value as link, sizeof(T))

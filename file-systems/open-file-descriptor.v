@@ -41,7 +41,7 @@ plain OpenFileDescription {
 		this.file = file
 	}
 
-	init(other: OpenFileDescriptor) {
+	init(other: OpenFileDescription) {
 		this.file = other.file
 		this.offset = other.offset
 		this.custody = other.custody

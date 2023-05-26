@@ -11,8 +11,8 @@ CharacterDevice TeletypeDevice {
 		return String.new('tty')
 	}
 
-	open can_read(description: OpenFileDescription): bool { return true }
-	open can_write(description: OpenFileDescription): bool { return true }
+	override can_read(description: OpenFileDescription) { return true }
+	override can_write(description: OpenFileDescription) { return true }
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {
 		debug.write_line('Teletype device: Writing bytes...')

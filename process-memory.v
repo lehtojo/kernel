@@ -370,7 +370,7 @@ plain ProcessMemory {
 		memory.zero(mapped_physical_page, PAGE_SIZE)
 
 		# Compute the offset inside the allocation
-		internal_offset: u64 = virtual_page - allocation.region.start
+		internal_offset = (virtual_page - allocation.region.start) as u64
 
 		if not allocation.inode.empty {
 			debug.write_line('Process memory: Initializing physical page from inode')
@@ -433,7 +433,7 @@ plain ProcessMemory {
 		# Todo: Verify access rights here?
 
 		# Align the virtual address to pages, so we know which page to map
-		virtual_page: link = virtual_address & (-PAGE_SIZE)
+		virtual_page: link = (virtual_address & (-PAGE_SIZE)) as link
 
 		# Attempt to allocate a physical page for the virtual page
 		physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)

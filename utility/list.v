@@ -38,7 +38,7 @@ List<T> {
 
 		if size == 0 {
 			allocator.deallocate(data)
-			data = none
+			data = none as T*
 			capacity = 0
 			size = 0
 			return

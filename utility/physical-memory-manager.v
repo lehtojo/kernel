@@ -19,7 +19,7 @@ PhysicalMemoryManagerLayer {
 	# Allocates the lowest slab containing the specified physical address.
 	# In manual mode, this function just sets the bits correctly and does not add or remove slabs from lists.
 	split(physical_address: link, to: u32, manual: bool, allocate: bool): link {
-		slab: link = (physical_address as u64) & (-size)
+		slab: link = ((physical_address as u64) & (-size)) as link
 
 		# Stop when the target depth is reached
 		if depth == to {
@@ -176,9 +176,9 @@ PhysicalMemoryManagerLayer {
 	# Takes the next available entry.
 	# Returns the physical address of the taken entry.
 	take(): link {
-		if next === none return none as PhysicalMemoryManagerAvailableLayerElement
+		if next === none return none as link
 
-		result = next
+		result = next as link
 
 		# Load the available element from the element we take
 		next = kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(result as link).next
@@ -188,7 +188,7 @@ PhysicalMemoryManagerLayer {
 			kernel.mapper.quickmap<PhysicalMemoryManagerAvailableLayerElement>(next as link).previous = none as PhysicalMemoryManagerAvailableLayerElement
 		} else {
 			# Update the last available page to none if we have used all the pages
-			last = none as link
+			last = none as PhysicalMemoryManagerAvailableLayerElement
 		}
 
 		return result
@@ -279,7 +279,7 @@ PhysicalMemoryManager {
 
 		# Setup the layers
 		loop (i = 0, i < LAYER_COUNT, i++) {
-			layers[i] = this as link + sizeof(PhysicalMemoryManager) + i * sizeof(PhysicalMemoryManagerLayer)
+			layers[i] = (this as link + sizeof(PhysicalMemoryManager) + i * sizeof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
 		}
 
 		states = this as link + sizeof(PhysicalMemoryManager) + LAYER_COUNT * sizeof(PhysicalMemoryManagerLayer)

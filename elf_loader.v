@@ -75,7 +75,7 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 
 	} else {
 		# Compute the address of the page where we will copy data
-		virtual_page: link = memory.page_of(unaligned_virtual_destination)
+		virtual_page = memory.page_of(unaligned_virtual_destination) as link
 
 		# Compute the offset inside virtual page
 		offset = unaligned_virtual_destination as u64 - virtual_page as u64
@@ -289,7 +289,7 @@ export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_ad
 		memory.copy(mapped_environment_variable_data, environment_variable.data, environment_variable.length + 1)
 
 		# Add pointer to the environment variable pointers that points to the copied data
-		mapped_environment_variable_pointers.(link*)[] = virtual_environment_variable_data
+		mapped_environment_variable_pointers.(link*)[] = virtual_environment_variable_data as link
 
 		# Move over the copied data and the added pointer
 		mapped_environment_variable_data += environment_variable.length + 1
@@ -305,7 +305,7 @@ export load_stack_startup_data(stack_physical_address_top: u64, stack_virtual_ad
 		memory.copy(mapped_argument_data, argument.data, argument.length + 1)
 
 		# Add pointer to the argument pointers that points to the copied data
-		mapped_argument_pointers.(link*)[] = virtual_argument_data
+		mapped_argument_pointers.(link*)[] = virtual_argument_data as link
 
 		# Move over the copied data and the added pointer
 		mapped_argument_data += argument.length + 1

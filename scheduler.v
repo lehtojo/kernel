@@ -225,8 +225,8 @@ test(allocator: Allocator) {
 	file_descriptors = ProcessFileDescriptors(allocator, 256) using KernelHeap
 
 	process = Process(registers, memory, file_descriptors) using KernelHeap
-	process.registers[].rip = program_text_section_virtual_address
-	process.registers[].userspace_rsp = program_stack_virtual_address + 0x100
+	process.registers[].rip = program_text_section_virtual_address as u64
+	process.registers[].userspace_rsp = (program_stack_virtual_address + 0x100) as u64
 
 	interrupts.scheduler.add(process)
 }

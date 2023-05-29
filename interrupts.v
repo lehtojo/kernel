@@ -118,7 +118,7 @@ export write_interrupt_entry(address: link, to: link, interrupt: i32) {
 		offset = to - from
 
 		address[0] = 0xe9 # jmp to
-		(address + 1).(i32*)[] = offset
+		(address + 1).(i32*)[] = offset as i32
 		address += strideof(i32) + 1
 
 		return address + 6 # Align to 16 bytes
@@ -139,7 +139,7 @@ export write_interrupt_entry(address: link, to: link, interrupt: i32) {
 	offset = to - from
 
 	address[0] = 0xe9 # jmp to
-	(address + 1).(i32*)[] = offset
+	(address + 1).(i32*)[] = offset as i32
 	address += strideof(i32) + 1
 
 	return address + 1 # Align to 16 bytes

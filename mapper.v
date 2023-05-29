@@ -17,10 +17,10 @@ constant L4_COUNT = 512
 
 # 0xFFFFFF8000000000
 # 0xFF8000000000
-constant L4_BASE: link = 0xFFFFFF8000000000
-constant L3_BASE: link = 0xFFFFFF8000000000 + L4_COUNT * 8
-constant L2_BASE: link = 0xFFFFFF8000000000 + (L4_COUNT + L3_COUNT) * 8
-constant L1_BASE: link = 0xFFFFFF8000000000 + (L4_COUNT + L3_COUNT + L2_COUNT) * 8
+constant L4_BASE: link = 0xFFFFFF8000000000 as link
+constant L3_BASE: link = (0xFFFFFF8000000000 + L4_COUNT * 8) as link
+constant L2_BASE: link = (0xFFFFFF8000000000 + (L4_COUNT + L3_COUNT) * 8) as link
+constant L1_BASE: link = (0xFFFFFF8000000000 + (L4_COUNT + L3_COUNT + L2_COUNT) * 8) as link
 
 constant PAGE_MAP_PHYSICAL_ADDRESS = 0x10000000
 constant PAGE_MAP_BYTES = (L1_COUNT + L2_COUNT + L3_COUNT + L4_COUNT) * 8
@@ -28,10 +28,10 @@ constant PAGE_MAP_BYTES = (L1_COUNT + L2_COUNT + L3_COUNT + L4_COUNT) * 8
 constant PAGE_MAP_VIRTUAL_BASE = 0xFFFFFF8000000000
 constant PAGE_MAP_VIRTUAL_MAP_PHYSICAL_ADDRESS = 0xF000000
 
-constant L4_PHYSICAL_BASE: link = PAGE_MAP_PHYSICAL_ADDRESS
-constant L3_PHYSICAL_BASE: link = PAGE_MAP_PHYSICAL_ADDRESS + L4_COUNT * 8
-constant L2_PHYSICAL_BASE: link = PAGE_MAP_PHYSICAL_ADDRESS + (L4_COUNT + L3_COUNT) * 8
-constant L1_PHYSICAL_BASE: link = PAGE_MAP_PHYSICAL_ADDRESS + (L4_COUNT + L3_COUNT + L2_COUNT) * 8
+constant L4_PHYSICAL_BASE: link = (PAGE_MAP_PHYSICAL_ADDRESS) as link
+constant L3_PHYSICAL_BASE: link = (PAGE_MAP_PHYSICAL_ADDRESS + L4_COUNT * 8) as link
+constant L2_PHYSICAL_BASE: link = (PAGE_MAP_PHYSICAL_ADDRESS + (L4_COUNT + L3_COUNT) * 8) as link
+constant L1_PHYSICAL_BASE: link = (PAGE_MAP_PHYSICAL_ADDRESS + (L4_COUNT + L3_COUNT + L2_COUNT) * 8) as link
 
 constant ENTRIES = 512
 
@@ -98,8 +98,8 @@ remap() {
 
 # Summary: Returns the memory region that the mapper uses
 region(): Segment {
-	start: link = PAGE_MAP_VIRTUAL_MAP_PHYSICAL_ADDRESS
-	end: link = PAGE_MAP_PHYSICAL_ADDRESS + PAGE_MAP_BYTES
+	start = (PAGE_MAP_VIRTUAL_MAP_PHYSICAL_ADDRESS) as link
+	end = (PAGE_MAP_PHYSICAL_ADDRESS + PAGE_MAP_BYTES) as link
 	return Segment.new(REGION_RESERVED, start, end)
 }
 
@@ -132,12 +132,12 @@ set_present(entry: u64*) {
 
 # Summary: Returns the physical address stored inside the specified page entry
 address_from_page_entry(entry: u64): u64* {
-	return entry & 0x7fffffffff000
+	return (entry & 0x7fffffffff000) as u64*
 }
 
 # Summary: Returns the physical address stored inside the specified page entry
 virtual_address_from_page_entry(entry: u64): u64* {
-	physical_address: link = entry & 0x7fffffffff000
+	physical_address = (entry & 0x7fffffffff000) as link
 	return map_kernel_page(physical_address) as u64*
 }
 
@@ -164,10 +164,10 @@ set_address(entry: u64*, physical_address: link) {
 to_physical_address(virtual_address: link): link {
 	# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 	offset = virtual_address & 0xFFF
-	l1: u32 = (virtual_address |> 12) & 0b111111111
-	l2: u32 = (virtual_address |> 21) & 0b111111111
-	l3: u32 = (virtual_address |> 30) & 0b111111111
-	l4: u32 = (virtual_address |> 39) & 0b111111111
+	l1 = ((virtual_address |> 12) & 0b111111111) as u32
+	l2 = ((virtual_address |> 21) & 0b111111111) as u32
+	l3 = ((virtual_address |> 30) & 0b111111111) as u32
+	l4 = ((virtual_address |> 39) & 0b111111111) as u32
 
 	l4_base = L4_BASE
 	l4_entry = l4_base.(u64*)[l4]
@@ -203,7 +203,7 @@ map_page(virtual_address: link, physical_address: link, cache: bool, flush: bool
 	l3: u32 = ((virtual_address as u64) |> 30) & 0x1FF
 	l4: u32 = ((virtual_address as u64) |> 39) & 0x1FF
 
-	if l1 >= L1_COUNT or l2 >= L2_COUNT or l3 >= L3_COUNT or l4 >= L4_COUNT return ERROR_INVALID_VIRTUAL_ADDRESS
+	if l1 >= L1_COUNT or l2 >= L2_COUNT or l3 >= L3_COUNT or l4 >= L4_COUNT return ERROR_INVALID_VIRTUAL_ADDRESS as link
 
 	l4_physical_base = L4_PHYSICAL_BASE
 	l3_physical_base = L3_PHYSICAL_BASE + l4 * 0x1000

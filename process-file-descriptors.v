@@ -43,7 +43,7 @@ plain ProcessFileDescriptors {
 		# Allocate a new file descriptor
 		descriptors.add(FileDescriptorState.new())
 
-		return descriptors.size - 1
+		return Optionals.new<u32>(descriptors.size - 1)
 	}
 
 	# Summary: Attempts to allocate a file descriptor for usage

@@ -183,7 +183,7 @@ plain HostController {
 		this.domain = domain
 		this.physical_address = physical_address
 		this.mapped_bus = -1
-		this.mapped_bus_address = 0
+		this.mapped_bus_address = none as link
 	}
 
 	map_bus_region(bus: u8) {

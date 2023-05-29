@@ -87,10 +87,10 @@ plain PagingTable {
 		debug.write_line()
 
 		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
-		l1_index: u32 = (virtual_address |> 12) & 0b111111111
-		l2_index: u32 = (virtual_address |> 21) & 0b111111111
-		l3_index: u32 = (virtual_address |> 30) & 0b111111111
-		l4_index: u32 = (virtual_address |> 39) & 0b111111111
+		l1_index = ((virtual_address |> 12) & 0b111111111) as u32
+		l2_index = ((virtual_address |> 21) & 0b111111111) as u32
+		l3_index = ((virtual_address |> 30) & 0b111111111) as u32
+		l4_index = ((virtual_address |> 39) & 0b111111111) as u32
 
 		l1 = none as PagingTable
 		l2 = none as PagingTable
@@ -195,10 +195,10 @@ plain PagingTable {
 		offset = virtual_address & 0xFFF
 
 		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
-		l1_index: u32 = (virtual_address |> 12) & 0b111111111
-		l2_index: u32 = (virtual_address |> 21) & 0b111111111
-		l3_index: u32 = (virtual_address |> 30) & 0b111111111
-		l4_index: u32 = (virtual_address |> 39) & 0b111111111
+		l1_index = ((virtual_address |> 12) & 0b111111111) as u32
+		l2_index = ((virtual_address |> 21) & 0b111111111) as u32
+		l3_index = ((virtual_address |> 30) & 0b111111111) as u32
+		l4_index = ((virtual_address |> 39) & 0b111111111) as u32
 
 		# Load the L4 paging table
 		entry = entries[l4_index]

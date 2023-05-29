@@ -44,7 +44,7 @@ export system_memory_map(
 	flags: u32,
 	file_descriptor: u32,
 	offset: u64
-): link {
+): u64 {
 	debug.write('System call: Memory map: ')
 	debug.write('address=') debug.write_address(address)
 	debug.write(', length=') debug.write(length)

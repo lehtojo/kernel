@@ -1,7 +1,7 @@
 namespace kernel.system_calls
 
 # System call: getcwd
-export system_getcwd(buffer: link, size: u64): i32 {
+export system_getcwd(buffer: link, size: u64): u64 {
 	debug.write('System call: getcwd: ')
 	debug.write('buffer=') debug.write_address(buffer)
 	debug.write(', size=') debug.write(size)
@@ -26,5 +26,5 @@ export system_getcwd(buffer: link, size: u64): i32 {
 
 	# Copy the working directory string into the buffer including the null terminator
 	memory.copy(buffer, working_directory.data, working_directory.length + 1)
-	return buffer
+	return buffer as u64
 }

@@ -88,9 +88,9 @@ Inode MemoryDirectoryInode {
 		metadata.size = 0
 		metadata.block_size = PAGE_SIZE
 		metadata.blocks = 1 
-		metadata.last_access_time = none as TimeSpecification
-		metadata.last_modification_time = none as TimeSpecification
-		metadata.last_change_time = none as TimeSpecification
+		metadata.last_access_time = 0
+		metadata.last_modification_time = 0
+		metadata.last_change_time = 0
 		return 0
 	}
 }

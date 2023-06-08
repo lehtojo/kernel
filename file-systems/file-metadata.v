@@ -30,26 +30,21 @@ constant S_IRWXU = S_IRUSR | S_IWUSR | S_IXUSR # User (owner) read, write, execu
 constant S_IRWXG = S_IRWXU |> 3  # Group read, write, execute
 constant S_IRWXO = S_IRWXG |> 3  # Others read, write, execute
 
-pack TimeSpecification {
-	seconds: u64
-	nanoseconds: u32
-}
-
 plain FileMetadata {
-	device_id: u32
-	padding_1: u32
+	device_id: u64
 	inode: u64
-	mode: u16
-	padding_2: u16
-	hard_link_count: u32
+	hard_link_count: u64
+	mode: u32
 	uid: u32
 	gid: u32
-	rdev: u32
-	padding_3: u32
+	padding_1: u32
+	rdev: u64
 	size: u64
-	block_size: u32
-	blocks: u32
-	last_access_time: TimeSpecification
-	last_modification_time: TimeSpecification
-	last_change_time: TimeSpecification
+	block_size: u64
+	blocks: u64
+	last_access_time: u64
+	padding_2: u64
+	last_modification_time: u64
+	padding_3: u64
+	last_change_time: u64
 }

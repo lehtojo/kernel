@@ -65,17 +65,17 @@ Inode MemoryInode {
 		# Todo: Fill in correct data
 		metadata.device_id = 1
 		metadata.inode = index
-		metadata.mode = this.metadata.mode 
+		metadata.mode = this.metadata.mode | S_IFREG
 		metadata.hard_link_count = 1
-		metadata.uid = 1
-		metadata.gid = 1
+		metadata.uid = 0
+		metadata.gid = 0
 		metadata.rdev = 0
 		metadata.size = data.size
 		metadata.block_size = PAGE_SIZE
 		metadata.blocks = (data.size + metadata.block_size - 1) / metadata.block_size
-		metadata.last_access_time = none as TimeSpecification
-		metadata.last_modification_time = none as TimeSpecification
-		metadata.last_change_time = none as TimeSpecification
+		metadata.last_access_time = 0
+		metadata.last_modification_time = 0
+		metadata.last_change_time = 0
 		return 0
 	}
 

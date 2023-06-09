@@ -54,3 +54,22 @@ Blocker FileBlocker {
 		description.file.unsubscribe(this)
 	}
 }
+
+Blocker ProcessBlocker {
+	# Summary: Stores the process that was subscribed to
+	subscribed: Process
+
+	shared try_create(allocator: Allocator, process: Process): ProcessBlocker {
+		blocker = ProcessBlocker(process) using allocator
+		process.subscribe(blocker)
+		return blocker
+	}
+
+	private init(subscribed: Process) {
+		this.subscribed = subscribed
+	}
+
+	override unblock() {
+		process.unsubscribe(this)
+	}
+}

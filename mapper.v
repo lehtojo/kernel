@@ -3,6 +3,9 @@ namespace kernel.mapper
 import 'C' flush_tlb()
 import 'C' flush_tlb_local(virtual_address: link)
 
+constant PAGE_CONFIGURATION_PRESENT = 1
+constant PAGE_CONFIGURATION_WRITABLE = 0b10
+
 constant INVALID_PHYSICAL_ADDRESS = -1
 
 constant ERROR_INVALID_VIRTUAL_ADDRESS = -1
@@ -117,12 +120,12 @@ map_kernel_entry(entries: u64*) {
 
 # Summary: Returns whether the specified page entry is present
 is_present(entry: u64): bool {
-	return entry & 1
+	return entry & PAGE_CONFIGURATION_PRESENT
 }
 
 # Summary: Marks the specified page entry present
 set_present(entry: u64*) {
-	entry[] |= 1
+	entry[] |= PAGE_CONFIGURATION_PRESENT
 
 	# Todo: Remove
 	entry[] |= 4
@@ -143,7 +146,12 @@ virtual_address_from_page_entry(entry: u64): u64* {
 
 # Summary: Sets the specified page entry writable
 set_writable(entry: u64*) {
-	entry[] |= 2
+	entry[] |= PAGE_CONFIGURATION_WRITABLE
+}
+
+# Summary: Returns whether the page is writable
+is_writable(entry: u64): bool {
+	return (entry & PAGE_CONFIGURATION_WRITABLE) != 0
 }
 
 # Summary: Controls caching of the specified page entry
@@ -153,6 +161,11 @@ set_cached(entry: u64*, cache: bool) {
 	} else {
 		entry[] |= 0b10000
 	}
+}
+
+# Summary: Sets the address of the specified page entry
+set_address(entry: u64, physical_address: link) {
+	return (entry & (!0x7fffffffff000)) | ((physical_address as u64) & 0x7fffffffff000)
 }
 
 # Summary: Sets the address of the specified page entry

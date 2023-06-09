@@ -136,6 +136,7 @@ Process {
 	blocker: Blocker
 	state: u32
 	parent: Process
+	subscribers: Subscribers
 
 	is_running => state == THREAD_STATE_RUNNING
 	is_blocked => state == THREAD_STATE_BLOCKED
@@ -216,6 +217,27 @@ Process {
 		this.blocker.process = none as Process
 
 		interrupts.scheduler.change_process_state(this, THREAD_STATE_RUNNING)
+	}
+
+	subscribe(subscriber: Blocker): _ { subscribers.subscribe(subscriber) }
+	unsubscribe(subscriber: Blocker): _ { subscribers.unsubscribe(subscriber) }
+
+	# Summary: Creates a child process that shares the resources of this process
+	create_child_with_shared_resources(allocator: Allocator): Process {
+		# Clone the registers from this process
+		registers: RegisterState* = allocator.allocate<RegisterState>()
+		registers[] = this.registers[]
+
+		# Create a new child process with the same resources and state
+		child = Process(registers, memory, file_descriptors) using allocator
+		child.priority = priority
+		child.working_directory = working_directory
+		child.credentials = credentials
+
+		# Set the parent of the child process
+		child.parent = this
+
+		return child
 	}
 
 	destruct(allocator: Allocator): _ {

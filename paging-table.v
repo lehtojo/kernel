@@ -190,6 +190,101 @@ plain PagingTable {
 		}
 	}
 
+	# Summary:
+	# Returns the configuration of the page the contains the specified virtual address.
+	# If there is no configuration, zero is returned.
+	get_page_configuration(virtual_address: link): u64 {
+		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
+		l1_index = ((virtual_address |> 12) & 0b111111111) as u32
+		l2_index = ((virtual_address |> 21) & 0b111111111) as u32
+		l3_index = ((virtual_address |> 30) & 0b111111111) as u32
+		l4_index = ((virtual_address |> 39) & 0b111111111) as u32
+
+		l1 = none as PagingTable
+		l2 = none as PagingTable
+		l3 = none as PagingTable
+		l4 = none as PagingTable
+
+		# Load the L4 paging table
+		entry = entries[l4_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l4 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return 0
+		}
+
+		# Load the L3 paging table
+		entry = l4.entries[l3_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l3 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return 0
+		}
+
+		# Load the L2 paging table
+		entry = l3.entries[l2_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l2 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return 0
+		}
+
+		return l2.entries[l1_index]
+	}
+
+	# Summary: Sets the configuration of the page the contains the specified virtual address.
+	set_page_configuration(virtual_address: link, configuration: u64): bool {
+		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
+		l1_index = ((virtual_address |> 12) & 0b111111111) as u32
+		l2_index = ((virtual_address |> 21) & 0b111111111) as u32
+		l3_index = ((virtual_address |> 30) & 0b111111111) as u32
+		l4_index = ((virtual_address |> 39) & 0b111111111) as u32
+
+		l1 = none as PagingTable
+		l2 = none as PagingTable
+		l3 = none as PagingTable
+		l4 = none as PagingTable
+
+		# Load the L4 paging table
+		entry = entries[l4_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l4 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return false
+		}
+
+		# Load the L3 paging table
+		entry = l4.entries[l3_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l3 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return false
+		}
+
+		# Load the L2 paging table
+		entry = l3.entries[l2_index]
+
+		if mapper.is_present(entry) {
+			# Load the paging table from entry 
+			l2 = mapper.virtual_address_from_page_entry(entry) as PagingTable
+		} else {
+			return false
+		}
+
+		l2.entries[l1_index] = configuration
+		return true
+	}
+
 	# Summary: Returns the physical address to which the specified virtual address is mapped.
 	to_physical_address(virtual_address: link): Optional<link> {
 		offset = virtual_address & 0xFFF

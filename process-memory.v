@@ -6,6 +6,20 @@ constant PROCESS_ALLOCATION_PROGRAM_TEXT = 1
 constant PROCESS_ALLOCATION_PROGRAM_DATA = 2
 constant PROCESS_ALLOCATION_RUNTIME_DATA = 4
 
+# Summary: Stores all processes that share the memory region
+plain MemoryRegionOwners {
+	# Summary: Stores the process ids that own this memory region
+	pids: List<u32>
+
+	init(allocator: Allocator) {
+		this.pids = List<u32>(allocator) using allocator
+	}
+
+	add(pid: u32): _ {
+		pids.add(pid)
+	}
+}
+
 pack ProcessMemoryRegionOptions {
 	# Summary: Stores an inode if this region is mapped to an inode
 	inode: Optional<Inode>
@@ -31,12 +45,16 @@ pack ProcessMemoryRegion {
 	# Summary: Stores an offset
 	offset: u64
 
+	# Summary: Stores the owners of this region. If set to none, this process owns ths region.
+	owners: MemoryRegionOwners
+
 	# Summary: Returns a process memory region mapped to the specified inode
 	shared new(region: Segment, inode: Inode, offset: u64): ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: Optionals.new<Inode>(inode),
-			offset: offset
+			offset: offset,
+			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
 	}
 
@@ -45,7 +63,8 @@ pack ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: inode,
-			offset: offset
+			offset: offset,
+			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
 	}
 
@@ -54,7 +73,8 @@ pack ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: Optionals.empty<Inode>(),
-			offset: 0 as u64
+			offset: 0 as u64,
+			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
 	}
 
@@ -63,7 +83,8 @@ pack ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: options.inode,
-			offset: options.offset
+			offset: options.offset,
+			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
 	}
 
@@ -86,6 +107,9 @@ pack ProcessMemoryRegion {
 		# Regions can not be merged if they have different inodes
 		if not (inode == other.inode) return false
 
+		# Regions can not be merged if they have different owners
+		if not (owners == other.owners) return false
+
 		# If there is inode, merge only if the inode regions are adjecent
 		if not inode.empty and offset + region.size != other.offset return false
 
@@ -102,6 +126,9 @@ pack ProcessMemoryRegion {
 }
 
 plain ProcessMemory {
+	# Summary: Stores the pid of the process that owns this memory
+	pid: u32
+
 	# Summary: Stores the allocator used by this structure
 	allocator: Allocator
 
@@ -150,6 +177,35 @@ plain ProcessMemory {
 
 		# Reserve the kernel mapping region
 		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(KERNEL_MAP_BASE, KERNEL_MAP_END)))
+	}
+
+	# Summary:
+	# Inherits all the memory from the specified owners.
+	# Basically just marks all regions as inherited from the specified owners.
+	inherit(owners: MemoryRegionOwners) {
+		# Mark all regions as inherited
+		loop (i = 0, i < allocations.size, i++) {
+			allocations[i].owners = owners
+		}
+
+		# Add this process to the owners
+		owners.add(pid)
+	}
+
+	# Summary: Attempts to find a region that contains the specified address
+	find_region(address: u64): Optional<ProcessMemoryRegion> {
+		# Find the first region that contains the address
+		# Todo: Later this could be optimized with binary search?
+		index = allocations.find_index<u64>(
+			address, 
+			(i: ProcessMemoryRegion, address: u64) -> i.region.contains(address as link)
+		)
+
+		# If no region was found, return none
+		if index == -1 return Optionals.empty<ProcessMemoryRegion>()
+
+		# Return the region
+		return Optionals.new<ProcessMemoryRegion>(allocations[index])
 	}
 
 	# Summary: Removes intersecting regions from the allocation list
@@ -407,6 +463,61 @@ plain ProcessMemory {
 		return true
 	}
 
+	# Summary: Returns whether the page at the specified virtual address is used by other owners.
+	is_page_used_by_other_owners(region: ProcessMemoryRegion, virtual_address: u64): bool {
+		require(region.owners !== none, 'Missing region owners')
+
+		loop (i = 0, i < region.owners.pids.size, i++) {
+			owner_pid = region.owners.pids[i]
+
+			# Only look at other owners 
+			if owner_pid == pid continue
+
+			require(interrupts.scheduler.find(owner_pid) has owner, 'Missing owner process')
+
+			# Find the region from the owner that contains the virtual address.
+			# If the region also has the same owners, the region is used by the owner.
+			if owner.memory.find_region(virtual_address) has owner_region and owner_region.owners === region.owners return true
+		}
+
+		return false
+	}
+
+	process_copy_on_write(region: ProcessMemoryRegion, virtual_address: u64, configuration: u64): bool {
+		# If the accessed page is used by other owners, we really need to copy
+		if is_page_used_by_other_owners(region, virtual_address) {
+			# Attempt to allocate a physical page for the virtual page
+			new_physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
+			if new_physical_page === none return false
+
+			# Extract the physical page that is used by other owners
+			old_physical_page = mapper.address_from_page_entry(configuration)
+
+			# Copy bytes from the shared page to the new page
+			mapped_destination_page = mapper.map_kernel_page(new_physical_page)
+			mapped_source_page = mapper.map_kernel_page(old_physical_page)
+			memory.copy(mapped_destination_page, mapped_source_page, PAGE_SIZE)
+
+			# Place the new physical page in to the configuration
+			configuration = mapper.set_address(configuration, new_physical_page)
+			paging_table.set_page_configuration(virtual_address as link, configuration)
+			return true
+		}
+
+		# Because the accessed page is not used by others, we can just take it
+		paging_table.set_page_configuration(virtual_address as link, configuration | mapper.PAGE_CONFIGURATION_WRITABLE)
+		return true
+	}
+
+	# Summary: Returns whether the specified page is "copy-on-write"
+	is_copy_on_write_region(region: ProcessMemoryRegion, configuration: u64): bool {
+		# If there are not multiple owners, this region can not be "copy-on-write"
+		if region.owners === none return false
+
+		# Ensure the page configuration is present and is set to non-writable
+		return mapper.is_present(configuration) and not mapper.is_writable(configuration)
+	}
+
 	# Summary:
 	# Processes page fault at the specified address.
 	# If the specified address is in an allocated page that is accessible for 
@@ -430,10 +541,23 @@ plain ProcessMemory {
 		# Return false, if no allocated region contained the specified address
 		if i < 0 return false
 
-		# Todo: Verify access rights here?
-
 		# Align the virtual address to pages, so we know which page to map
 		virtual_page: link = (virtual_address & (-PAGE_SIZE)) as link
+
+		# Retrieve the current configuration for the accessed page
+		configuration = paging_table.get_page_configuration(virtual_address as link)
+
+		if is_copy_on_write_region(allocation, configuration) {
+			require(write, 'Copy-on-write page caused page fault without writing')
+
+			if not process_copy_on_write(allocation, virtual_address, configuration) return false
+
+			# Mark the accessed page so that it is no longer owned by others
+			allocate_specific_region(allocation.slice(virtual_page, virtual_page + PAGE_SIZE))
+			return true
+		}
+
+		# Todo: Verify access rights here?
 
 		# Attempt to allocate a physical page for the virtual page
 		physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)

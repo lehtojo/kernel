@@ -484,6 +484,9 @@ plain ProcessMemory {
 	}
 
 	process_copy_on_write(region: ProcessMemoryRegion, virtual_address: u64, configuration: u64): bool {
+		debug.write_line('Process memory: Processing copy-on-write page fault')
+		panic('Todo: Remove')
+
 		# If the accessed page is used by other owners, we really need to copy
 		if is_page_used_by_other_owners(region, virtual_address) {
 			# Attempt to allocate a physical page for the virtual page
@@ -579,6 +582,8 @@ plain ProcessMemory {
 			if region.type != PROCESS_ALLOCATION_PROGRAM_TEXT and region.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
 
 			# Deallocate the program allocation and remove it from the allocations
+			debug.write('Process memory: Deallocating ') region.print() debug.write_line()
+
 			allocations.remove_at(i)
 			deallocate(region)
 		}

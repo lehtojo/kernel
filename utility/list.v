@@ -16,6 +16,7 @@ List<T> {
 		this.allocator = allocator
 		this.data = allocator.allocate(strideof(T) * capacity)
 		this.capacity = capacity
+		this.size = 0
 
 		if fill { this.size = capacity }
 	}

@@ -128,6 +128,19 @@ export write_line(value: bool) {
 	next_line()
 }
 
+# Summary: Writes the specified strings to the console
+export write_line(strings: List<String>) {
+	separator = ''
+
+	loop (i = 0, i < strings.size, i++) {
+		write(separator)
+		write(strings[i])
+		separator = ', '
+	}
+
+	next_line()
+}
+
 # Summary: Writes an empty line to the console
 export write_line() {
 	next_line()

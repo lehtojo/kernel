@@ -273,7 +273,19 @@ export test2(allocator: Allocator, memory_information: SystemMemoryInformation, 
 	mapped_application_start = mapper.map_kernel_region(application_start, application_size)
 	application_data = Array<u8>(mapped_application_start, application_size)
 
-	process = Process.from_executable(allocator, application_data)
+	arguments = List<String>(allocator)
+	arguments.add(String.new('/bin/ld'))
+	arguments.add(String.new('/bin/sh'))
+
+	environment_variables = List<String>(allocator)
+	environment_variables.add(String.new('PATH=/bin/:/lib/'))
+
+	process = Process.from_executable(allocator, application_data, arguments, environment_variables)
+
+	# Remove all the arguments and environment variables, because they are no longer needed here
+	arguments.clear()
+	environment_variables.clear()
+
 	if process === none panic('Scheduler (test 2): Failed to create the process')
 
 	# Attach the boot console to the process

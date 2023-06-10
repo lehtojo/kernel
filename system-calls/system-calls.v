@@ -43,11 +43,48 @@ constant MSR_STAR = 0xc0000081
 constant MSR_LSTAR = 0xc0000082
 constant MSR_SFMASK = 0xc0000084
 
+constant PATH_MAX = 256
+constant MAX_ARGUMENTS = 256
+constant MAX_ENVIRONMENT_VARIABLES = 256
+
 # Summary: Returns the process that invoked the current system call
 export get_process(): Process {
 	process = interrupts.scheduler.current
 	require(process !== none, 'System call required the current process, but the process was missing')
 	return process
+}
+
+# Summary: Returns the number of elements before zero	while taking into account the specified limit
+export count<T>(process: Process, start: T*, limit: u32): i64 {
+	process_memory = process.memory
+	count = 0
+
+	loop {
+		# If we have reached the limit, return -1
+		if count == limit return -1
+
+		# If the first byte of the element is not accessible, return -1
+		if not process_memory.is_accessible(start) and 
+			not process_memory.process_page_fault(start as u64, false) {
+			return -1
+		}
+
+		# If the last byte of the element is not accessible, return -1
+		end = start + strideof(T) - 1
+
+		if not process_memory.is_accessible(end) and 
+			not process_memory.process_page_fault(end as u64, false) {
+			return -1
+		}
+
+		# If we have found the zero, stop
+		if start[] == 0 stop
+
+		start += strideof(T)
+		count++
+	}
+
+	return count
 }
 
 export load_string(allocator, process: Process, string: link, limit: u32): Optional<String> {
@@ -80,6 +117,15 @@ export load_string(allocator, process: Process, string: link, limit: u32): Optio
 	memory.copy(data, string, length)
 
 	return Optionals.new<String>(String.new(data, length))
+}
+
+export load_strings(allocator, process: Process, destination: List<String>, source: link*, size: u64): bool {
+	loop (i = 0, i < size, i++) {
+		if load_string(allocator, process, source[i], PATH_MAX) has not string return false
+		destination.add(string)
+	}
+
+	return true
 }
 
 # Summary: Returns whether the specified memory region is mapped and usable by the specified process

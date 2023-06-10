@@ -43,7 +43,14 @@ Process {
 	}
 
 	# Summary: Configures the specified register state based on the specified load information
-	private shared configure_process_before_startup(allocator: Allocator, register_state: RegisterState*, memory: ProcessMemory, load_information: LoadInformation): _ {
+	private shared configure_process_before_startup(
+		allocator: Allocator,
+		register_state: RegisterState*,
+		memory: ProcessMemory,
+		load_information: LoadInformation,
+		arguments: List<String>,
+		environment_variables: List<String>
+	): _ {
 		debug.write_line('Process: Configuring process before starting...')
 
 		# Set the process to start at the entry point
@@ -62,16 +69,10 @@ Process {
 		program_stack_virtual_address_bottom = program_stack_virtual_address_top - program_initial_stack_size
 		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address_bottom, program_initial_stack_size)
 
-		# Add environment variables and arguments for the application
-		arguments = List<String>(allocator)
-		arguments.add(String.new('/bin/ld')) # Todo: Add executable path
-		# arguments.add(String.new('--help'))
-		arguments.add(String.new('/bin/sh'))
-		# arguments.add(String.new('/bin/startup'))
-
-		environment_variables = List<String>(allocator)
-		environment_variables.add(String.new('PATH=/bin/:/lib/')) # Todo: Load proper environment variables
-		# environment_variables.add(String.new('LD_DEBUG=all'))
+		debug.write('Process: Arguments: ')
+		debug.write_line(arguments)
+		debug.write('Process: Environment variables: ')
+		debug.write_line(environment_variables)
 
 		startup_data_size = load_stack_startup_data(program_stack_physical_address_top, program_stack_virtual_address_top, arguments, environment_variables)
 		program_stack_pointer = program_stack_virtual_address_top - startup_data_size
@@ -84,7 +85,7 @@ Process {
 	}
 
 	# Summary: Creates a process from the specified executable file
-	shared from_executable(allocator: Allocator, file: Array<u8>): Process {
+	shared from_executable(allocator: Allocator, file: Array<u8>, arguments: List<String>, environment_variables: List<String>): Process {
 		debug.write_line('Process: Creating a process from executable...')
 
 		allocations = List<Segment>(allocator)
@@ -114,7 +115,7 @@ Process {
 
 		# Allocate register state for the process so that we can configure the registers before starting
 		register_state = allocator.allocate<RegisterState>()
-		configure_process_before_startup(allocator, register_state, memory, load_information)
+		configure_process_before_startup(allocator, register_state, memory, load_information, arguments, environment_variables)
 
 		# Attach the standard files for the new process
 		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
@@ -170,7 +171,7 @@ Process {
 	}
 
 	# Summary: Loads the specified program into this process
-	load(allocator: Allocator, file: Array<u8>): i32 {
+	load(allocator: Allocator, file: Array<u8>, arguments: List<String>, environment_variables: List<String>): i32 {
 		debug.write_line('Process: Loading program into process...')
 
 		allocations = List<Segment>(allocator)
@@ -192,8 +193,11 @@ Process {
 
 		# Todo: Reset the registers and other stuff
 
+		# Reset all the registers
+		registers[] = 0 as RegisterState
+
 		# Allocate register state for the process so that we can configure the registers before starting
-		configure_process_before_startup(allocator, registers, memory, load_information)
+		configure_process_before_startup(allocator, registers, memory, load_information, arguments, environment_variables)
 		return 0
 	}
 

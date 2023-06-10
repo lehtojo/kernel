@@ -2,8 +2,6 @@ namespace kernel.system_calls
 
 import kernel.file_systems
 
-constant PATH_MAX = 256
-
 # System call: open
 export system_open(path_argument: link, flags: i32, mode: u32): i32 {
 	debug.write('System call: Open: ')

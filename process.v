@@ -69,6 +69,10 @@ Process {
 		program_stack_virtual_address_bottom = program_stack_virtual_address_top - program_initial_stack_size
 		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address_bottom, program_initial_stack_size)
 
+		# Zero out the stack
+		mapped_stack_bottom = mapper.map_kernel_region(program_stack_physical_address_bottom as link, program_initial_stack_size)
+		global.memory.zero(mapped_stack_bottom, program_initial_stack_size as u64)
+
 		debug.write('Process: Arguments: ')
 		debug.write_line(arguments)
 		debug.write('Process: Environment variables: ')
@@ -195,6 +199,9 @@ Process {
 
 		# Reset all the registers
 		registers[] = 0 as RegisterState
+		registers[].cs = USER_CODE_SELECTOR | 3
+		registers[].rflags = RFLAGS_INTERRUPT_FLAG
+		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 
 		# Allocate register state for the process so that we can configure the registers before starting
 		configure_process_before_startup(allocator, registers, memory, load_information, arguments, environment_variables)

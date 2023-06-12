@@ -68,7 +68,7 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 	# Use existing physical memory when possible
 	if paging_table.to_physical_address(unaligned_virtual_destination as link) has existing_physical_page {
 		# Map the exiting physical memory into kernel space, so that we can copy into it
-		debug.write_line('Loader: Using existing physical page for program section ')
+		debug.write('Loader: Using existing physical page for program section ')
 		debug.write_address(existing_physical_page)
 		debug.write_line()
 		mapped_unaligned_physical_page = mapper.map_kernel_region(existing_physical_page, size)
@@ -88,6 +88,10 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 
 		# Map the new physical memory into kernel space, so that we can copy into it
 		mapped_unaligned_physical_page = mapper.map_kernel_region(new_physical_page, size) + offset
+
+		# Zero out the page, because copying below might not cover all bytes
+		# Todo: Write more clearly
+		memory.zero(mapped_unaligned_physical_page - offset, PAGE_SIZE)
 	}
 
 	# Copy the data into the physical memory

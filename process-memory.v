@@ -232,6 +232,11 @@ plain ProcessMemory {
 				# Deallocate all pages in the specified virtual region
 				loop (virtual_page = intersection.start, virtual_page < intersection.end, virtual_page += PAGE_SIZE) {
 					if paging_table.to_physical_address(virtual_page as link) has not physical_page continue
+
+					debug.write('Process memory: Deallocating physical page ') debug.write_address(physical_page) debug.write_line()
+
+					# Reset the page configuration and deallocate the physical page
+					require(paging_table.set_page_configuration(virtual_page, 0), 'Failed to reset page configuration')
 					PhysicalMemoryManager.instance.deallocate_all(physical_page)
 				}
 			}
@@ -345,7 +350,8 @@ plain ProcessMemory {
 		remove_intersecting_available_regions(allocation)
 
 		# Remove intersecting regions from allocations
-		remove_intersecting_allocations(allocation, false)
+		# Todo: More generalized approach here is needed for checking whether the pages should be deallocated
+		remove_intersecting_allocations(allocation, allocation.inode.has_value)
 
 		# Now the allocation can be inserted safely, because all intersections have been removed
 		memory.sorted.insert<ProcessMemoryRegion>(
@@ -579,14 +585,16 @@ plain ProcessMemory {
 		loop (i = allocations.size - 1, i >= 0, i--) {
 			# Skip runtime allocations
 			region = allocations[i].region
-			if region.type != PROCESS_ALLOCATION_PROGRAM_TEXT and region.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
+			# if region.type != PROCESS_ALLOCATION_PROGRAM_TEXT and region.type != PROCESS_ALLOCATION_PROGRAM_DATA continue
 
 			# Deallocate the program allocation and remove it from the allocations
 			debug.write('Process memory: Deallocating ') region.print() debug.write_line()
 
-			allocations.remove_at(i)
 			deallocate(region)
 		}
+
+		# Reset the break as well
+		break = 0
 	}
  
 	# Summary: Deallocates the specified region allowing fragmentation
@@ -599,7 +607,7 @@ plain ProcessMemory {
 		if virtual_region.size == 0 return EINVAL
 
 		# Deallocate all the allocations inside the specified virtual region
-		remove_intersecting_allocations(ProcessMemoryRegion.new(virtual_region), true)	
+		remove_intersecting_allocations(ProcessMemoryRegion.new(virtual_region), true)
 
 		# Add virtual region back to available regions
 		memory.sorted.insert<Segment>(

@@ -55,6 +55,11 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	# Remove all program allocations such as text and data sections
 	process.memory.deallocate_program_allocations()
 
+	# Todo: Use a more generalized approach
+	enable_general_purpose_segment_instructions()
+	write_fs_base(0)
+	disable_general_purpose_segment_instructions()
+
 	# Open the program for loading
 	# Todo: Fix the constants
 	open_result = FileSystem.root.open_file(Custody.root, path, O_RDONLY, 0)
@@ -75,6 +80,8 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 
 	# Deallocate the program buffer
 	allocator.deallocate()
+
+	mapper.flush_tlb()
 
 	return load_result
 }

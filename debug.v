@@ -119,10 +119,10 @@ export write_line(value: decimal) {
 # Summary: Writes the specified bool to the console
 export write_line(value: bool) {
 	if value {
-		write('true', 5)
+		write('true', 4)
 	}
 	else {
-		write('false', 6)
+		write('false', 5)
 	}
 
 	next_line()

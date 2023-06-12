@@ -207,8 +207,7 @@ PhysicalMemoryManagerLayer {
 		return slab
 	}
 
-	# Summary: Deallocates the specified entry
-	deallocate(physical_address: link, add: bool): u64 {
+	unsplit(physical_address: link, add: bool) {
 		require(((physical_address as u64) & (size - 1)) == 0, 'Address was not aligned correctly')
 
 		index = (physical_address as u64) / size
@@ -232,13 +231,19 @@ PhysicalMemoryManagerLayer {
 			# Find out the left slab
 			left = math.min(physical_address as u64, buddy as u64) as link
 
-			# Set the upper slab available that contains the deallocated and the buddy slab
-			if add { upper.add(left) }
+			# Deallocate the upper slab, because the lower two are now available and merged
+			debug.write('Merging into upper slab ') debug.write_address(left) debug.write(' at layer ') debug.write_line(upper.depth)
+			upper.unsplit(left, add)
+
 		} else {
 			# Since we can not merge, add this slab to the available list
 			if add { add(physical_address) }
 		}
+	}
 
+	# Summary: Deallocates the specified entry
+	deallocate(physical_address: link, add: bool): u64 {
+		unsplit(physical_address, add)
 		return size
 	}
 }
@@ -283,7 +288,7 @@ PhysicalMemoryManager {
 		}
 
 		states = this as link + sizeof(PhysicalMemoryManager) + LAYER_COUNT * sizeof(PhysicalMemoryManagerLayer)
-		upper = (this as link + sizeof(PhysicalMemoryManager)) as PhysicalMemoryManagerLayer
+		upper = (this as link + sizeof(PhysicalMemoryManager) - sizeof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
 		lower = (this as link + sizeof(PhysicalMemoryManager) + sizeof(PhysicalMemoryManagerLayer)) as PhysicalMemoryManagerLayer
 		count = L0_COUNT
 		size = L0_SIZE

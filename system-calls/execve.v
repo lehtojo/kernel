@@ -53,7 +53,11 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	process = get_process()
 
 	# Remove all program allocations such as text and data sections
-	process.memory.deallocate_program_allocations()
+	if process.is_sharing_parent_resources {
+		process.detach_parent_resources(HeapAllocator.instance)
+	} else {
+		process.memory.deallocate_program_allocations()
+	}
 
 	# Todo: Use a more generalized approach
 	enable_general_purpose_segment_instructions()

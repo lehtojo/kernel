@@ -139,8 +139,9 @@ Process {
 	working_directory: String
 	credentials: Credentials
 	blocker: Blocker
-	state: u32
+	readable state: u32
 	parent: Process
+	is_sharing_parent_resources: bool = false
 	subscribers: Subscribers
 
 	is_running => state == THREAD_STATE_RUNNING
@@ -154,6 +155,7 @@ Process {
 		this.memory = memory
 		this.file_descriptors = file_descriptors
 		this.working_directory = String.empty
+		this.subscribers = Subscribers.new(HeapAllocator.instance)
 
 		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG
@@ -164,6 +166,7 @@ Process {
 		this.id = id
 		this.registers = registers
 		this.working_directory = String.empty
+		this.subscribers = Subscribers.new(HeapAllocator.instance)
 
 		registers[].cs = USER_CODE_SELECTOR | 3
 		registers[].rflags = RFLAGS_INTERRUPT_FLAG
@@ -224,14 +227,20 @@ Process {
 		debug.write_line('Process: Unblocking...')
 
 		require(this.blocker !== none and state == THREAD_STATE_BLOCKED, 'Invalid thread state')
-		this.blocker = none as Blocker
 		this.blocker.process = none as Process
+		this.blocker = none as Blocker
 
 		interrupts.scheduler.change_process_state(this, THREAD_STATE_RUNNING)
 	}
 
 	subscribe(subscriber: Blocker): _ { subscribers.subscribe(subscriber) }
 	unsubscribe(subscriber: Blocker): _ { subscribers.unsubscribe(subscriber) }
+
+	# Summary: Changes the state of this process and notifies the subscribers as well
+	change_state(state: u32): _ {
+		this.state = state
+		subscribers.update()
+	}
 
 	# Summary: Creates a child process that shares the resources of this process
 	create_child_with_shared_resources(allocator: Allocator): Process {
@@ -247,8 +256,21 @@ Process {
 
 		# Set the parent of the child process
 		child.parent = this
+		child.is_sharing_parent_resources = true
 
 		return child
+	}
+
+	# Summary: Detaches parent resources and creates new resources for this process
+	detach_parent_resources(allocator: Allocator) {
+		# Create paging tables for the process so that it can access memory correctly
+		memory = ProcessMemory(allocator) using allocator
+
+		# Todo: Copy the file_descriptors object, because we do not want future stuff affected
+
+		# Now we no longer use the parent resources
+		is_sharing_parent_resources = false
+		subscribers.update()
 	}
 
 	destruct(allocator: Allocator): _ {

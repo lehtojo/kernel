@@ -63,7 +63,7 @@ Scheduler {
 
 	change_process_state(process: Process, to: u32): _ {
 		processes.remove(process)
-		process.state = to
+		process.change_state(to)
 		processes.add(process)
 	}
 
@@ -135,6 +135,7 @@ Scheduler {
 
 	exit(frame: TrapFrame*, process: Process) {
 		debug.write('Scheduler: Exiting process ') debug.write_line(process.id)
+		process.change_state(THREAD_STATE_TERMINATED)
 
 		# Remove the specified process from the process list
 		require(processes.remove(process), 'Attempted to exit a process that was not in the process list')

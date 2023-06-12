@@ -18,11 +18,13 @@ export system_vfork(): i64 {
 	# Todo: We also need to consider exec() etc.
 	process.block(
 		ProcessBlocker.try_create(HeapAllocator.instance, child).then((blocker: ProcessBlocker) -> {
-			state = blocker.subscribed.state
-			if state != THREAD_STATE_TERMINATED return false
+			child: Process = blocker.subscribed
+
+			# We can let the parent process continue once the child process is terminated or no longer uses parent resources (e.g. exec() system call)
+			if child.state != THREAD_STATE_TERMINATED and child.is_sharing_parent_resources return false
 
 			# Return the child process pid as the result
-			blocker.set_system_call_result(blocker.subscribed.id)
+			blocker.set_system_call_result(child.id)
 			return true
 		})
 	)

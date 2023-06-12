@@ -61,15 +61,15 @@ Blocker ProcessBlocker {
 
 	shared try_create(allocator: Allocator, process: Process): ProcessBlocker {
 		blocker = ProcessBlocker(process) using allocator
-		process.subscribe(blocker)
 		return blocker
 	}
 
 	private init(subscribed: Process) {
 		this.subscribed = subscribed
+		this.subscribed.subscribe(this)
 	}
 
 	override unblock() {
-		process.unsubscribe(this)
+		subscribed.unsubscribe(this)
 	}
 }

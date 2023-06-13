@@ -84,6 +84,11 @@ Scheduler {
 
 		frame[].registers[] = next.registers[]
 
+		# Update fs register
+		enable_general_purpose_segment_instructions()
+		write_fs_base(next.fs)
+		disable_general_purpose_segment_instructions()
+
 		current = next
 
 		# Map the process to memory
@@ -112,22 +117,9 @@ Scheduler {
 		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
 		# TODO: Verify IOPL and RSP
 
-		debug.write('Scheduler: Kernel stack = ')
-		debug.write_address(registers_rsp())
-		debug.write_line()
-
 		# Save the state of the current process
 		if current !== none {
 			current.save(frame)
-
-			debug.write('Scheduler: User process: ')
-			debug.write('rip=')
-			debug.write_address(current.registers[].rip)
-			debug.write(', r8=')
-			debug.write_address(current.registers[].r8)
-			debug.write(', rcx=')
-			debug.write_address(current.registers[].rcx)
-			debug.write_line()
 		}
 
 		pick_and_enter(frame)

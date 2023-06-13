@@ -73,3 +73,30 @@ Blocker ProcessBlocker {
 		subscribed.unsubscribe(this)
 	}
 }
+
+Blocker MultiProcessBlocker {
+	# Summary: Stores the processes that were subscribed to
+	subscribed: List<Process>
+
+	shared try_create(allocator: Allocator, processes: List<Process>): MultiProcessBlocker {
+		blocker = MultiProcessBlocker(processes) using allocator
+		return blocker
+	}
+
+	private init(processes: List<Process>) {
+		this.subscribed = processes
+
+		# Subsribe to all of the specified processes
+		loop (i = 0, i < processes.size, i++) {
+			processes[i].subscribe(this)
+		}
+	}
+
+	override unblock() {
+		loop (i = 0, i < subscribed.size, i++) {
+			subscribed[i].unsubscribe(this)
+		}
+
+		subscribed.destruct()
+	}
+}

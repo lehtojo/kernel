@@ -14,6 +14,7 @@ constant EIO = -5
 constant ENXIO = -6
 constant ENOEXEC = -8
 constant EBADF = -9
+constant ECHILD = -10
 constant ENOMEM = -12
 constant EFAULT = -14
 constant EINVAL = -22
@@ -247,6 +248,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_execve(registers[].rdi as link, registers[].rsi as link, registers[].rdx as link)
 	} else system_call_number == 0x3c {
 		system_exit(frame, registers[].rdi as i32)
+	} else system_call_number == 0x3d {
+		result = system_waitpid(registers[].rdi as u32, registers[].rsi as u32*, registers[].rdx as u32)
 	} else system_call_number == 0x3f {
 		system_uname(registers[].rdi as link)
 	} else system_call_number == 0x48 {

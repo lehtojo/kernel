@@ -7,10 +7,13 @@ export system_arch_prctl(code: u32, address: u64): u64 {
 	debug.write(', address=') debug.write_address(address)
 	debug.write_line()
 
+	process = get_process()
+
 	if code == ARCH_SET_FS {
 		debug.write_line('System call: Set architecture-specific thread state: Setting the value of register fs')
 		enable_general_purpose_segment_instructions()
 		write_fs_base(address)
+		process.fs = address
 		disable_general_purpose_segment_instructions()
 		return 0
 	} else code == ARCH_GET_FS {

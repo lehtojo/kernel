@@ -134,13 +134,15 @@ Process {
 	id: u64
 	priority: u16 = NORMAL_PRIORITY
 	registers: RegisterState*
+	fs: u64 = 0 # Todo: Group with registers?
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
 	working_directory: String
 	credentials: Credentials
 	blocker: Blocker
 	readable state: u32
-	parent: Process
+	parent: Process = none as Process
+	childs: List<Process>
 	is_sharing_parent_resources: bool = false
 	subscribers: Subscribers
 
@@ -155,6 +157,7 @@ Process {
 		this.memory = memory
 		this.file_descriptors = file_descriptors
 		this.working_directory = String.empty
+		this.childs = List<Process>(HeapAllocator.instance) using HeapAllocator.instance
 		this.subscribers = Subscribers.new(HeapAllocator.instance)
 
 		registers[].cs = USER_CODE_SELECTOR | 3
@@ -166,6 +169,7 @@ Process {
 		this.id = id
 		this.registers = registers
 		this.working_directory = String.empty
+		this.childs = List<Process>(HeapAllocator.instance) using HeapAllocator.instance
 		this.subscribers = Subscribers.new(HeapAllocator.instance)
 
 		registers[].cs = USER_CODE_SELECTOR | 3
@@ -281,6 +285,9 @@ Process {
 		if memory !== none {
 			memory.destruct()
 		}
+
+		childs.destruct()
+		subscribers.destruct()
 
 		allocator.deallocate(this as link)
 	}

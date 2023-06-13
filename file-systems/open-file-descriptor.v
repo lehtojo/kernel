@@ -127,7 +127,12 @@ plain OpenFileDescription {
 
 		debug.write_line('Open file description: Iterating directory entries...')
 
-		loop entry in FileSystem.root.iterate_directory(allocator, inode) {
+		iterator = FileSystem.root.iterate_directory(allocator, inode)
+
+		# Move to the current offset
+		loop (i = 0, i < offset and iterator.next(), i++) {}
+
+		loop entry in iterator {
 			debug.write('Open file description: Found directory entry: name=')
 			debug.write(entry.name)
 			debug.write(', inode=')
@@ -171,6 +176,9 @@ plain OpenFileDescription {
 				error = EINVAL # Tell the user the output buffer is too small
 				stop
 			}
+
+			# Increment the offset, because we wrote a new entry
+			offset++
 		}
 
 		allocator.deallocate()

@@ -48,3 +48,31 @@ plain FileMetadata {
 	padding_3: u64
 	last_change_time: u64
 }
+
+pack Timestamp {
+	seconds: u64
+	nanoseconds: u64
+}
+
+plain FileMetadataExtended {
+	mask: u32
+	block_size: u32
+	attributes: u64
+	hard_link_count: u32
+	uid: u32
+	gid: u32
+	mode: u32
+	inode: u64
+	size: u64
+	blocks: u64
+	attributes_mask: u64
+	last_access_time: Timestamp
+	creation_time: Timestamp
+	last_change_time: Timestamp
+	last_modification_time: Timestamp
+	device_major: u32
+	device_minor: u32
+	file_system_device_major: u32
+	file_system_device_minor: u32
+	mount_id: u64
+}

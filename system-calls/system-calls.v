@@ -270,14 +270,16 @@ export process(frame: TrapFrame*): u64 {
 		result = system_getppid()
 	} else system_call_number == 0x6f {
 		result = system_getpgrp()
+	} else system_call_number == 0x89 {
+		result = system_statfs(registers[].rdi as link, registers[].rsi as link)
+	} else system_call_number == 0x9e {
+		result = system_arch_prctl(registers[].rdi as u32, registers[].rsi as u64)
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0xda {
 		result = system_set_tid_address(registers[].rdi as u64)
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
-	} else system_call_number == 0x9e {
-		result = system_arch_prctl(registers[].rdi as u32, registers[].rsi as u64)
 	} else system_call_number == 0x101 {
 		result = system_openat(registers[].rdi as i32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u64)
 	} else system_call_number == 0x111 {
@@ -290,6 +292,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_getrandom(registers[].rdi as link, registers[].rsi as u64, registers[].rdx as u32)
 	} else system_call_number == 0x14e {
 		result = system_faccessat(registers[].rdi as u64, registers[].rdi as link, registers[].rdx as u64)
+	} else system_call_number == 0x14c {
+		result = system_statx(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u32, registers[].r10 as u32, registers[].r8 as link)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')

@@ -80,10 +80,10 @@ Inode MemoryDirectoryInode {
 		# Todo: Fill in correct data
 		metadata.device_id = 1
 		metadata.inode = index
-		metadata.mode = this.metadata.mode 
+		metadata.mode = this.metadata.mode | S_IFDIR
 		metadata.hard_link_count = 1
-		metadata.uid = 1
-		metadata.gid = 1
+		metadata.uid = 0
+		metadata.gid = 0
 		metadata.rdev = 0
 		metadata.size = 0
 		metadata.block_size = PAGE_SIZE
@@ -301,6 +301,33 @@ FileSystem MemoryFileSystem {
 		local_allocator.deallocate()
 		return result
 	}
+
+	override lookup_extended_status(base: Custody, path: String, metadata: FileMetadataExtended) {
+		standard_metadata = FileMetadata()
+		lookup_status(base, path, standard_metadata)
+
+		metadata.mask = 0
+		metadata.block_size = standard_metadata.block_size
+		metadata.attributes = 0
+		metadata.hard_link_count = standard_metadata.hard_link_count
+		metadata.uid = standard_metadata.uid
+		metadata.gid = standard_metadata.gid
+		metadata.mode = standard_metadata.mode
+		metadata.inode = standard_metadata.inode
+		metadata.size = standard_metadata.size
+		metadata.blocks = standard_metadata.blocks
+		metadata.attributes_mask = 0
+		metadata.last_access_time = 0 as Timestamp
+		metadata.creation_time = 0 as Timestamp
+		metadata.last_change_time = 0 as Timestamp
+		metadata.last_modification_time = 0 as Timestamp
+		metadata.device_major = standard_metadata.rdev |> 32
+		metadata.device_minor = standard_metadata.rdev & 0xffffffff
+		metadata.file_system_device_major = standard_metadata.device_id |> 32
+		metadata.file_system_device_minor = standard_metadata.device_id & 0xffffffff
+		metadata.mount_id = 0
+		return 0
+	} 
 
 	override iterate_directory(allocator: Allocator, inode: Inode) {
 		require(inode.is_directory(), 'Specified inode was not a directory')

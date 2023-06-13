@@ -29,6 +29,7 @@ FileSystem {
 	open make_directory(base: Custody, path: String, flags: i32, mode: u32): Result<OpenFileDescription, u32>
 	open access(base: Custody, path: String, mode: u32): u64
 	open lookup_status(base: Custody, path: String, metadata: FileMetadata): u64
+	open lookup_extended_status(base: Custody, path: String, metadata: FileMetadataExtended): u64
 	open link()
 	open unlink()
 	open symbolic_link()

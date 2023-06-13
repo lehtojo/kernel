@@ -41,6 +41,35 @@ export system_fstat(file_descriptor: u32, buffer: link): u32 {
 	return file_description.load_status(buffer as FileMetadata)
 }
 
+# Todo: Duplicate
+load_custody(allocator: Allocator, process: Process, directory_descriptor: u32, path: String): Result<Custody, u32> {
+	# Figure out the custody of the specified directory, so that we can look for the file
+	if path.starts_with(`/`) {
+		return Results.new<Custody, u32>(Custody.root)
+	} 
+
+	if directory_descriptor == AT_FDCWD {
+		# User wants we to use the current working directory of the process
+		custody = FileSystem.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
+		if custody !== none return Results.new<Custody, u32>(custody)
+
+		return Results.error<Custody, u32>(EINVAL)
+	}
+
+	# Find the directory description associated with the specified descriptor
+	directory_description = process.file_descriptors.try_get_description(directory_descriptor)
+
+	if directory_description === none {
+		debug.write_line('System call: Fstatat: Invalid directory descriptor')
+		return Results.error<Custody, u32>(EBADF)
+	}
+
+	# Ensure the description represents a directory
+	if not directory_description.is_directory return Results.error<Custody, u32>(ENOTDIR)
+
+	return Results.new<Custody, u32>(directory_description.custody)
+}
+
 # System call: fstatat
 export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: link, flags: u32): u32 {
 	debug.write('System call: Fstatat: ')
@@ -53,7 +82,7 @@ export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: li
 	process = get_process()
 	allocator = BufferAllocator(allocator_buffer: u8[PATH_MAX], PATH_MAX)
 
-	# Load the path argument into a string object
+	# Load the path argument into a string
 	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
 		debug.write_line('System call: Fstatat: Invalid path argument')
 		return EFAULT
@@ -68,39 +97,60 @@ export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: li
 	local_allocator = LocalHeapAllocator(HeapAllocator.instance)
 
 	# Figure out the custody of the specified directory, so that we can look for the file
-	# Note: Duplicated from openat system call
-	custody = none as Custody
+	custody_or_error = load_custody(allocator, process, directory_descriptor, path)
 
-	# Todo: Duplicate?
-	if path.starts_with(`/`) {
-		custody = Custody.root
-	} else directory_descriptor == AT_FDCWD {
-		# User wants we to use the current working directory of the process
-		custody = FileSystem.root.open_path(local_allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
-	} else {
-		# Find the directory description associated with the specified descriptor
-		directory_description = process.file_descriptors.try_get_description(directory_descriptor)
-
-		if directory_description === none {
-			debug.write_line('System call: Fstatat: Invalid directory descriptor')
-			return EBADF
-		}
-
-		# Ensure the description represents a directory
-		if not directory_description.is_directory return ENOTDIR
-
-		custody = directory_description.custody
-	}
-
-	# Abort if we failed to get the custody
-	if custody === none {
+	if custody_or_error.has_error {
 		local_allocator.deallocate()
-		return EINVAL
+		return custody_or_error.error
 	}
+
+	custody = custody_or_error.get_value()
 
 	# Lookup the file status into the user buffer
 	result = FileSystem.root.lookup_status(custody, path, buffer as FileMetadata)
 	
+	local_allocator.deallocate()
+	return result
+}
+
+# System call: fstatat
+export system_statx(directory_descriptor: u32, path_argument: link, flags: u32, mask: u32, buffer: link): u32 {
+	debug.write('System call: statx: ')
+	debug.write('directory_descriptor=') debug.write(directory_descriptor)
+	debug.write(', path=') debug.write_address(path_argument)
+	debug.write(', flags=') debug.write(flags)
+	debug.write(', mask=') debug.write(mask)
+	debug.write(', buffer=') debug.write_address(buffer)
+	debug.write_line()
+
+	process = get_process()
+	allocator = BufferAllocator(allocator_buffer: u8[PATH_MAX], PATH_MAX)
+
+	# Load the path argument into a string
+	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
+		debug.write_line('System call: statx: Invalid path argument')
+		return EFAULT
+	}
+
+	# Output path as debugging information
+	debug.write('System call: statx: Path = ') debug.write_line(path)
+
+	local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+	# Figure out the custody of the specified directory, so that we can look for the file
+	custody_or_error = load_custody(allocator, process, directory_descriptor, path)
+
+	if custody_or_error.has_error {
+		local_allocator.deallocate()
+		return custody_or_error.error
+	}
+
+	custody = custody_or_error.get_value()
+
+	# Lookup the file status
+	result = FileSystem.root.lookup_extended_status(custody, path, buffer as FileMetadataExtended)
+	buffer.(FileMetadataExtended).mask = mask
+
 	local_allocator.deallocate()
 	return result
 }

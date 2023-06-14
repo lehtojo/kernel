@@ -5,16 +5,23 @@ import kernel.devices.console
 
 constant KEYCODE_COUNT = 128
 
+constant LEFT_SHIFT = 0x2a
+constant RIGHT_SHIFT = 0x36
+
 layout: u8*
+shift_layout: u8*
 states: u8*
 
 export initialize(allocator: Allocator) {
 	layout = allocator.allocate(KEYCODE_COUNT * 2)
+	shift_layout = allocator.allocate(KEYCODE_COUNT * 2)
 	states = layout + KEYCODE_COUNT
 
 	memory.zero(layout, KEYCODE_COUNT)
+	memory.zero(shift_layout, KEYCODE_COUNT)
 	memory.zero(states, KEYCODE_COUNT)
 
+	# Keycode layout:
 	layout[2] = `1`
 	layout[3] = `2`
 	layout[4] = `3`
@@ -67,6 +74,45 @@ export initialize(allocator: Allocator) {
 	layout[53] = `/`
 
 	layout[57] = ` `
+
+	# Shifted keycode layout:
+	shift_layout[2] = `!`
+	shift_layout[3] = `@`
+	shift_layout[4] = `#`
+	shift_layout[5] = `$`
+	shift_layout[6] = `%`
+	shift_layout[7] = `^`
+	shift_layout[8] = `&`
+	shift_layout[9] = `*`
+	shift_layout[10] = `(`
+	shift_layout[11] = `)`
+	shift_layout[12] = `_`
+	shift_layout[13] = `+`
+
+	# Do not map alphabet as they are handled in code
+
+	shift_layout[51] = `<`
+	shift_layout[52] = `>`
+	shift_layout[53] = `?`
+}
+
+is_alphabet(character: u8): bool {
+	return character >= `a` and character <= `z`
+}
+
+resolve_keycode(scancode: u8, keycode: u8, is_shift_down: bool): u8 {
+	if is_alphabet(keycode) {
+		if is_shift_down return keycode - `a` + `A`
+
+		return keycode
+	}
+
+	if is_shift_down {
+		shifted_keycode = shift_layout[scancode]
+		if shifted_keycode != 0 return shifted_keycode
+	}
+
+	return keycode
 }
 
 export process() {
@@ -74,10 +120,15 @@ export process() {
 	down = (scancode & 0x80) == 0
 	scancode &= 0x7f # Remove the last bit
 
+	debug.write('Keyboard: Received ') debug.write_address(scancode) debug.write_line()
+
 	keycode = layout[scancode]
 
 	state = states[scancode]
 	states[scancode] = down
+
+	is_shift_down = states[LEFT_SHIFT] or states[RIGHT_SHIFT]
+	keycode = resolve_keycode(scancode, keycode, is_shift_down)
 
 	if keycode !== 0 and not state {
 		require(Devices.instance.find(BootConsoleDevice.MAJOR, BootConsoleDevice.MINOR) has boot_console, 'Missing boot console device')

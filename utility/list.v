@@ -28,6 +28,15 @@ List<T> {
 		this.capacity = size
 	}
 
+	init(allocator: Allocator, other: List<T>) {
+		this.allocator = allocator
+		this.data = allocator.allocate(strideof(T) * other.capacity)
+		this.capacity = other.capacity
+		this.size = other.size
+
+		memory.copy(data, other.data, strideof(T) * size)
+	}
+
 	private extend() {
 		reserve(math.max(size, 1) * 2)
 	}

@@ -23,6 +23,12 @@ plain ProcessFileDescriptors {
 		this.max_descriptors = max_descriptors
 	}
 
+	init(descriptors: ProcessFileDescriptors) {
+		this.allocator = descriptors.allocator
+		this.descriptors = List<FileDescriptorState>(allocator, descriptors.descriptors) using allocator
+		this.max_descriptors = descriptors.max_descriptors
+	}
+
 	# Summary: Attempts to allocate a file descriptor (>= min) for usage
 	allocate(min: u32): Optional<u32> {
 		# Look for a file descriptor that is no longer allocated
@@ -62,6 +68,8 @@ plain ProcessFileDescriptors {
 		state.allocated = true
 		state.description = description
 		descriptors[descriptor] = state
+
+		description.links++
 		return true
 	}
 
@@ -124,8 +132,16 @@ plain ProcessFileDescriptors {
 		# Set the descriptor deallocated and empty
 		descriptors[file_descriptor] = FileDescriptorState.new()
 
+		# Decrease the number of links to the description and close it if there are no more links
+		# Note: File descriptions can be accessed through multiple file descriptors
+		if --state.description.links > 0 return 0
+
 		# Close the file description and return potential errors from there
 		return state.description.close()
+	}
+
+	clone(): ProcessFileDescriptors {
+		return ProcessFileDescriptors(this) using allocator
 	}
 
 	destruct() {

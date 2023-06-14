@@ -270,7 +270,7 @@ Process {
 		# Create paging tables for the process so that it can access memory correctly
 		memory = ProcessMemory(allocator) using allocator
 
-		# Todo: Copy the file_descriptors object, because we do not want future stuff affected
+		file_descriptors = file_descriptors.clone()
 
 		# Now we no longer use the parent resources
 		is_sharing_parent_resources = false

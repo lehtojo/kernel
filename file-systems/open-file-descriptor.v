@@ -24,6 +24,7 @@ plain OpenFileDescription {
 	offset: u64 = 0
 	custody: Custody
 	flags: u64 = 0
+	links: i32 = 0
 
 	shared try_create(allocator, custody: Custody) {
 		file: InodeFile = InodeFile(custody.inode) using allocator
@@ -192,12 +193,6 @@ plain OpenFileDescription {
 
 		# Return the number of bytes written to the output
 		return output.position
-	}
-
-	# Summary: Attempts to clone this file description
-	try_duplicate(allocator: Allocator): Optional<OpenFileDescription> {
-		duplicate = OpenFileDescription(this) using allocator
-		return Optionals.new<OpenFileDescription>(duplicate)
 	}
 
 	close(): u32 {

@@ -240,6 +240,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_brk(registers[].rdi as u64)
 	} else system_call_number == 0x14 {
 		result = system_writev(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
+	} else system_call_number == 0x21 {
+		result = system_dup2(registers[].rdi as u32, registers[].rsi as u32)
 	} else system_call_number == 0x27 {
 		result = system_getpid()
 	} else system_call_number == 0x3a {
@@ -278,6 +280,8 @@ export process(frame: TrapFrame*): u64 {
 		result = system_getdents64(registers[].rdi as u32, registers[].rsi as link, registers[].rdx as u64)
 	} else system_call_number == 0xda {
 		result = system_set_tid_address(registers[].rdi as u64)
+	} else system_call_number == 0xdd {
+		result = system_fadvice(registers[].rdi as u32, registers[].rsi as u64, registers[].rdx as u64, registers[].r10 as u32)
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
 	} else system_call_number == 0x101 {

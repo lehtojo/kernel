@@ -12,6 +12,6 @@ pack Range {
 	inside(range: Range): bool { return range.start <= range.end and range.start >= start and range.end <= end }
 
 	outside(index: u64): bool { return not inside(index) }
-	outside(start: u64, end: u64): bool { return not inside(start, end) }
+	outside(start: u64, size: u64): bool { return not inside(start, size) }
 	outside(range: Range): bool { return not inside(range) }
 }

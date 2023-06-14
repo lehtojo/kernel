@@ -47,10 +47,14 @@ Inode MemoryInode {
 
 	# Summary: Reads data from this file using the specified offset
 	override read_bytes(destination: link, offset: u64, size: u64) {
-		if data.bounds.outside(offset, size) {
+		if data.bounds.outside(offset, 0) {
 			debug.write_line('Memory inode: Specified offset out of bounds (read)')
 			return 0
 		}
+
+		# Do not read past the end
+		remaining = data.size - offset
+		size = math.min(remaining, size)
 
 		debug.write('Memory inode: Reading ') debug.write(size) debug.write(' byte(s) from offset ') debug.write_line(offset)
 

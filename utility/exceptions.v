@@ -22,10 +22,10 @@ pack Result<V, E> {
 
 namespace Results {
 	new<V, E>(value: V): Result<V, E> {
-		return pack { value: value, error: 0 } as Result<V, E>
+		return pack { value: value, error: 0 as E } as Result<V, E>
 	}
 
 	error<V, E>(error: E): Result<V, E> {
-		return pack { value: 0, error: error } as Result<V, E>
+		return pack { value: 0 as V, error: error } as Result<V, E>
 	}
 }

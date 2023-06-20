@@ -297,3 +297,20 @@ ret
 get_system_call_handler:
 lea rax, [rip+system_call_entry]
 ret
+
+.global full_memory_barrier
+full_memory_barrier:
+lock or dword ptr [rsp], 0 # Note: Or zero with return address, does locking but nothing else
+mfence
+ret
+
+.global wait_for_microseconds
+wait_for_microseconds:
+test rdi, rdi
+jnz wait_for_microseconds_L0
+ret
+wait_for_microseconds_L0:
+in al, 0x80
+dec rdi
+jnz wait_for_microseconds_L0
+ret

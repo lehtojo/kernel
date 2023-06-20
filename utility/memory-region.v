@@ -18,6 +18,12 @@ plain MemoryRegion {
 		return true
 	}
 
+	add<T>(): T {
+		start = address + position
+		position += sizeof(T)
+		return start as T
+	}
+
 	write_string(string: String, terminate: bool) {
 		# Verify we do not write outside of bounds
 		if position + string.length + terminate >= size return false

@@ -488,7 +488,7 @@ export add_devices_to_folder(device_directory: MemoryDirectoryInode, devices: Li
 		device = devices[i]
 
 		# Todo: Support other device types
-		device_directory.create_character_device(device.get_name(), device.identifier)	
+		device_directory.create_character_device(device.get_name(), device.identifier)
 	}	
 }
 

@@ -24,12 +24,16 @@ pack ProcessMemoryRegionOptions {
 	# Summary: Stores an inode if this region is mapped to an inode
 	inode: Optional<Inode>
 
+	# Summary: Stores a device if this region is mapped to a device
+	device: Optional<Device>
+
 	# Summary: Stores an offset
 	offset: u64
 
 	shared new(): ProcessMemoryRegionOptions {
 		return pack {
 			inode: Optionals.empty<Inode>(),
+			device: Optionals.empty<Device>(),
 			offset: 0 as u64
 		} as ProcessMemoryRegionOptions
 	}
@@ -42,6 +46,9 @@ pack ProcessMemoryRegion {
 	# Summary: Stores an inode if this region is mapped to an inode
 	inode: Optional<Inode>
 
+	# Summary: Stores an device if this region is mapped to an inode
+	device: Optional<Device>
+
 	# Summary: Stores an offset
 	offset: u64
 
@@ -49,20 +56,11 @@ pack ProcessMemoryRegion {
 	owners: MemoryRegionOwners
 
 	# Summary: Returns a process memory region mapped to the specified inode
-	shared new(region: Segment, inode: Inode, offset: u64): ProcessMemoryRegion {
-		return pack {
-			region: region,
-			inode: Optionals.new<Inode>(inode),
-			offset: offset,
-			owners: none as MemoryRegionOwners
-		} as ProcessMemoryRegion
-	}
-
-	# Summary: Returns a process memory region mapped to the specified inode
-	shared new(region: Segment, inode: Optional<Inode>, offset: u64): ProcessMemoryRegion {
+	shared new(region: Segment, inode: Optional<Inode>, device: Optional<Device>, offset: u64): ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: inode,
+			device: device,
 			offset: offset,
 			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
@@ -73,6 +71,7 @@ pack ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: Optionals.empty<Inode>(),
+			device: Optionals.empty<Device>(),
 			offset: 0 as u64,
 			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
@@ -83,6 +82,7 @@ pack ProcessMemoryRegion {
 		return pack {
 			region: region,
 			inode: options.inode,
+			device: options.device,
 			offset: options.offset,
 			owners: none as MemoryRegionOwners
 		} as ProcessMemoryRegion
@@ -94,7 +94,7 @@ pack ProcessMemoryRegion {
 		require(slice.end <= region.end, 'Slice end must be less than or equal to region end')
 		require(slice.start <= slice.end, 'Slice start must be less than slice end')
 
-		return ProcessMemoryRegion.new(slice, inode, offset)
+		return ProcessMemoryRegion.new(slice, inode, device, offset)
 	}
 
 	# Summary: Returns a slice of this region
@@ -106,6 +106,9 @@ pack ProcessMemoryRegion {
 	can_merge(other: ProcessMemoryRegion): bool {
 		# Regions can not be merged if they have different inodes
 		if not (inode == other.inode) return false
+
+		# Regions can not be merged if they have different devices
+		if not (device == other.device) return false
 
 		# Regions can not be merged if they have different owners
 		if not (owners == other.owners) return false
@@ -533,7 +536,8 @@ plain ProcessMemory {
 	# the process, the page is mapped and this function returns true.
 	# Otherwise if the specified address is not accessible, 
 	# this function returns false.
-	process_page_fault(virtual_address: u64, write: bool): bool {
+	# Todo: It is kinda weird that we pass the process as this object should know about its owner, but we only have the pid and it is inefficent to lookup the process...
+	process_page_fault(process: Process, virtual_address: u64, write: bool): bool {
 		# Attempt to find the allocation that contains the specified address
 		allocation = none as ProcessMemoryRegion
 		i = -1
@@ -567,6 +571,17 @@ plain ProcessMemory {
 		}
 
 		# Todo: Verify access rights here?
+
+		# If the allocation maps a device, let the device do the mapping if it wants
+		if allocation.device has device {
+			debug.write_line('Process memory: Attempting to use device for resolving page fault')
+
+			# Attempt to map using the device
+			if device.map(process, allocation, virtual_address) has result {
+				debug.write_line('Process memory: Page fault resolved using device')
+				return result == 0
+			}
+		}
 
 		# Attempt to allocate a physical page for the virtual page
 		physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)

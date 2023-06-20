@@ -13,6 +13,7 @@ plain Devices {
 
 	# Summary: Adds the specified device
 	add(device: Device): _ {
+		debug.write('Devices: Adding device with id ') debug.write_address(device.identifier) debug.write_line()
 		devices.add(device.identifier, device)
 	}
 

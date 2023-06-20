@@ -24,7 +24,7 @@ Inode {
 
 	open create_child(name: String, mode: u16, device: u64): Inode { return none as Inode }
 
-	create_character_device(name: String, device: u64): Inode { return create_child(name, S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO, 0) }
+	create_character_device(name: String, device: u64): Inode { return create_child(name, S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO, device) }
 	create_directory(name: String): Inode { return create_child(name, S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO, 0) }
 	create_file(name: String): Inode { return create_child(name, S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO, 0) }
 

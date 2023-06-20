@@ -41,6 +41,11 @@ namespace kernel {
 	import 'C' registers_rsp(): u64
 	import 'C' registers_rip(): u64
 
+	import 'C' full_memory_barrier(): _
+	import 'C' wait_for_microseconds(microseconds: u64): _
+
+	wait_for_microsecond(): _ { wait_for_microseconds(1) }
+
 	pack SymbolInformation {
 		name: String
 		address: link

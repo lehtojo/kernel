@@ -186,6 +186,8 @@ export process_madt_entries(madt: MADT*, information: ApicInformation) {
 		} else type == 1 {
 			# Address of ioapic
 			ioapic_registers_physical_address = (entry + 4).(u32*)[] as link
+			ioapic_gsi_base = (entry + 8).(u32*)[]
+			debug.write('IOAPIC: GSI base: ') debug.write_line(ioapic_gsi_base)
 			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address)
 		} else type == 5 {
 			# Address of the local apic (64-bit system version)

@@ -17,12 +17,14 @@ constant EBADF = -9
 constant ECHILD = -10
 constant ENOMEM = -12
 constant EFAULT = -14
+constant EBUSY = -16
 constant EINVAL = -22
 constant ENOTTY = -25
 constant ESPIPE = -29
 constant ENOTDIR = -20
 constant ERANGE = -34
 constant EOVERFLOW = -75
+constant ENOTSUP = -95 # Todo: Does this constant exist?
 
 constant DT_UNKNOWN = 0
 constant DT_FIFO = 1
@@ -66,7 +68,7 @@ export count<T>(process: Process, start: T*, limit: u32): i64 {
 
 		# If the first byte of the element is not accessible, return -1
 		if not process_memory.is_accessible(start) and 
-			not process_memory.process_page_fault(start as u64, false) {
+			not process_memory.process_page_fault(process, start as u64, false) {
 			return -1
 		}
 
@@ -74,7 +76,7 @@ export count<T>(process: Process, start: T*, limit: u32): i64 {
 		end = start + strideof(T) - 1
 
 		if not process_memory.is_accessible(end) and 
-			not process_memory.process_page_fault(end as u64, false) {
+			not process_memory.process_page_fault(process, end as u64, false) {
 			return -1
 		}
 
@@ -100,7 +102,7 @@ export load_string(allocator, process: Process, string: link, limit: u32): Optio
 
 		# If the character is not accessible, return none string
 		if not process_memory.is_accessible(address) and 
-			not process_memory.process_page_fault(address as u64, false) {
+			not process_memory.process_page_fault(process, address as u64, false) {
 			return Optionals.empty<String>()
 		}
 
@@ -137,7 +139,7 @@ export is_valid_region(process: Process, start: link, size: u64, write: bool): b
 	loop (virtual_page = start_page, virtual_page < end_page, virtual_page += PAGE_SIZE) {
 		# If the page is accessible or becomes accessible after page fault, there is no problem
 		if process.memory.is_accessible(Segment.new(virtual_page, virtual_page + PAGE_SIZE)) or 
-			process.memory.process_page_fault(virtual_page as u64, write) {
+			process.memory.process_page_fault(process, virtual_page as u64, write) {
 			continue
 		}
 

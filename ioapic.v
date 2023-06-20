@@ -1,6 +1,10 @@
 namespace kernel
 
 namespace ioapic {
+	constant REDIRECTION_ENTRY_OFFSET = 0x10
+
+	constant DELIVERY_MODE_NORMAL = 0
+
 	registers: u32*
 
 	export initialize(base: u32*) {
@@ -18,6 +22,14 @@ namespace ioapic {
 		register = 0x10 + interrupt * 2 # Compute the index of the first register associated with the specified interrupt
 		write_register(register, value)
 		write_register(register + 1, 0)
+	}
+
+	export redirect(index: u64, interrupt_vector: u8, delivery_mode: u8, logical_destination: bool, active_low: bool, trigger_level_mode: bool, masked: bool, destination: u8) {
+		redirection_entry1: u32 = interrupt_vector | ((delivery_mode & 0b111) <| 8) | (logical_destination <| 11) | (active_low <| 13) | (trigger_level_mode <| 15) | (masked <| 16)
+		redirection_entry2: u32 = destination <| 24
+
+		write_register((index <| 1) + REDIRECTION_ENTRY_OFFSET, redirection_entry1)
+		write_register((index <| 1) + REDIRECTION_ENTRY_OFFSET + 1, redirection_entry2)
 	}
 
 	export redirect(interrupt: u8, cpu: u8) {
@@ -41,7 +53,7 @@ namespace ioapic {
 		flags = (0x20 + interrupt) | (delivery <| 8) | (mode <| 11) | (status <| 12) | (polarity <| 13) | (trigger <| 15)
 		destination = cpu # APIC ID of CPU
 
-		register = 0x10 + interrupt * 2 # Compute the index of the first register associated with the specified interrupt
+		register = REDIRECTION_ENTRY_OFFSET + interrupt * 2 # Compute the index of the first register associated with the specified interrupt
 		write_register(register + 1, destination) # Write the destination before enabling the redirection entry
 		write_register(register, flags)
 	}

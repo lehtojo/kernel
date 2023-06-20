@@ -125,18 +125,84 @@ pack HardwareId {
 	}
 }
 
+pack Address {
+	value: u64
+
+	domain => value |> 24
+	bus => (value |> 16) & 0xff
+	device => (value |> 8) & 0xff
+	function => value & 0xff
+
+	shared new(domain: u32, bus: u8, device: u8, function: u8): Address {
+		return pack { value: (domain <| 24) | (bus <| 16) | (device <| 8) | function } as Address
+	}
+}
+
 pack Capability {
-	address: link
+	address: Address
 	id: u8
 	pointer: u8
 
-	shared new(address: link, id: u8, pointer: u8): Capability {
+	shared new(address: Address, id: u8, pointer: u8): Capability {
 		return pack { address: address, id: id, pointer: pointer } as Capability
+	}
+
+	identifier => Parser.instance.get_device_identifier(address)
+
+	host_contoller(identifier: DeviceIdentifier): HostController {
+		contoller = Parser.instance.find_host_contoller(identifier)
+		require(contoller !== none, 'Failed to find the host controller associated with capability')
+		return contoller
+	}
+
+	read_u8(offset: u64): u8 {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		return host_contoller(identifier).read_u8(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	read_u16(offset: u64): u16 {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		return host_contoller(identifier).read_u16(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	read_u32(offset: u64): u32 {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		return host_contoller(identifier).read_u32(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	write_u8(offset: u64, value: u8): _ {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		host_contoller(identifier).write_u8(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	write_u16(offset: u64, value: u16): _ {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		host_contoller(identifier).write_u16(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	write_u32(offset: u64, value: u32): _ {
+		identifier: DeviceIdentifier = this.identifier
+		address: Address = identifier.address
+		host_contoller(identifier).write_u32(address.bus, address.device, address.function, pointer + offset)
+	}
+
+	print(): _ {
+		debug.write('Capability: ')
+		debug.write('id=')
+		debug.write(id)
+		debug.write(', pointer=')
+		debug.write_address(pointer)
+		debug.write_line()
 	}
 }
 
 plain DeviceIdentifier {
-	address: link
+	address: Address
 	id: HardwareId
 	revision_id: u8
 	class_code: u8
@@ -152,8 +218,16 @@ plain DeviceIdentifier {
 	subsystem_vendor_id: u16
 	interrupt_pin: u8
 	interrupt_line: u8
+	capabilities: List<Capability>
 
-	init(address: link, id: HardwareId, revision_id: u8, class_code: u8, subclass_code: u8, programming_interface: u8, bar0: u32, bar1: u32, bar2: u32, bar3: u32, bar4: u32, bar5: u32, subsystem_id: u16, subsystem_vendor_id: u16, interrupt_pin: u8, interrupt_line: u8) {
+	init(
+		address: Address, id: HardwareId, revision_id: u8,
+		class_code: u8, subclass_code: u8, programming_interface: u8,
+		bar0: u32, bar1: u32, bar2: u32,
+		bar3: u32, bar4: u32, bar5: u32,
+		subsystem_id: u16, subsystem_vendor_id: u16, interrupt_pin: u8,
+		interrupt_line: u8, capabilities: List<Capability>
+	) {
 		this.address = address
 		this.id = id
 		this.revision_id = revision_id
@@ -170,6 +244,15 @@ plain DeviceIdentifier {
 		this.subsystem_vendor_id = subsystem_vendor_id
 		this.interrupt_pin = interrupt_pin
 		this.interrupt_line = interrupt_line
+		this.capabilities = capabilities
+	}
+}
+
+Device {
+	identifier: DeviceIdentifier
+
+	init(identifier: DeviceIdentifier) {
+		this.identifier = identifier
 	}
 }
 
@@ -211,6 +294,18 @@ plain HostController {
 
 	read_u32(bus: u8, device: u8, function: u8, register: u8): u32 {
 		return compute_function_address(bus, device, function, register).(u32*)[]
+	}
+
+	write_u8(bus: u8, device: u8, function: u8, register: u8, value: u8): _ {
+		compute_function_address(bus, device, function, register).(u8*)[] = value
+	}
+
+	write_u16(bus: u8, device: u8, function: u8, register: u8, value: u16): _ {
+		compute_function_address(bus, device, function, register).(u16*)[] = value
+	}
+
+	write_u32(bus: u8, device: u8, function: u8, register: u8, value: u32): _ {
+		compute_function_address(bus, device, function, register).(u32*)[] = value
 	}
 
 	print_device(id: HardwareId, class: u8, subclass: u8) {
@@ -283,11 +378,45 @@ plain HostController {
 		debug.write(class) debug.put(`.`) debug.write_line(subclass)
 	}
 
+	get_capabilities_pointer_for_function(bus: u8, device: u8, function: u8): i16 {
+		if (read_u16(bus, device, function, REGISTER_STATUS) & 0b10000) != 0 {
+			return read_u8(bus, device, function, REGISTER_CAPABILITIES_POINTER) as i16
+		}
+
+		return -1
+	}
+
+	get_capabilities_for_function(allocator: Allocator, bus: u8, device: u8, function: u8): List<Capability> {
+		capabilities_pointer = get_capabilities_pointer_for_function(bus, device, function)
+		if capabilities_pointer < 0 return none as List<Capability>
+
+		capabilities = List<Capability>(allocator) using allocator
+
+		loop (capabilities_pointer != 0) {
+			# Load the capability header and the capability id
+			header = read_u16(bus, device, function, capabilities_pointer)
+			id = header & 0xff
+
+			address = Address.new(domain.id, bus, device, function)
+			capability = Capability.new(address, id, capabilities_pointer)
+			capability.print()
+
+			capabilities.add(capability)
+
+			# Move to the next capability
+			capabilities_pointer = header |> 8
+		}
+
+		return capabilities
+	}
+
 	scan_function(bus: u8, device: u8, function: u8, devices: List<DeviceIdentifier>) {
 		id = HardwareId.new(read_u16(bus, device, function, REGISTER_VENDOR_ID), read_u16(bus, device, function, REGISTER_DEVICE_ID))
 		revision_id = read_u8(bus, device, function, REGISTER_REVISION_ID)
 		class_code = read_u8(bus, device, function, REGISTER_CLASS)
 		subclass_code = read_u8(bus, device, function, REGISTER_SUBCLASS)
+		print_device(id, class_code, subclass_code)
+
 		programming_interface = read_u8(bus, device, function, REGISTER_PROGRAMMING_INTERFACE)
 		bar0 = read_u32(bus, device, function, REGISTER_BAR0)
 		bar1 = read_u32(bus, device, function, REGISTER_BAR1)
@@ -299,17 +428,17 @@ plain HostController {
 		subsystem_vendor_id = read_u16(bus, device, function, REGISTER_SUBSYSTEM_VENDOR_ID)
 		interrupt_pin = read_u8(bus, device, function, REGISTER_INTERRUPT_PIN)
 		interrupt_line = read_u8(bus, device, function, REGISTER_INTERRUPT_LINE)
+		capabilities = get_capabilities_for_function(devices.allocator, bus, device, function) 
+		address = Address.new(domain.id, bus, device, function)
 
 		devices.add(DeviceIdentifier(
-			none as link, id, revision_id,
+			address, id, revision_id,
 			class_code, subclass_code,
 			programming_interface,
 			bar0, bar1, bar2, bar3, bar4, bar5,
 			subsystem_id, subsystem_vendor_id,
-			interrupt_pin, interrupt_line
+			interrupt_pin, interrupt_line, capabilities
 		) using devices.allocator)
-
-		print_device(id, class_code, subclass_code)
 	}
 
 	scan_device(bus: u8, device: u8, devices: List<DeviceIdentifier>) {
@@ -455,7 +584,8 @@ plain Parser {
 	shared instance: Parser
 
 	shared initialize(allocator: Allocator, fadt: FADT, mcfg: MCFG) {
-		instance = Parser(allocator, fadt, mcfg) using allocator
+		instance = Parser(allocator) using allocator
+		instance.initialize(fadt, mcfg)
 	}
 
 	allocator: Allocator
@@ -466,11 +596,13 @@ plain Parser {
 	host_controllers: List<HostController>
 	device_identifiers: List<DeviceIdentifier>
 
-	init(allocator: Allocator, fadt: FADT, mcfg: MCFG) {
+	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.host_controllers = List<HostController>(allocator) using allocator
 		this.device_identifiers = List<DeviceIdentifier>(allocator) using allocator
+	}
 
+	initialize(fadt: FADT, mcfg: MCFG) {
 		process_fadt(fadt)
 		process_mcfg(mcfg)
 		scan()
@@ -540,6 +672,40 @@ plain Parser {
 		loop (i = 0, i < host_controllers.size, i++) {
 			host_controllers[i].scan(device_identifiers)
 		}
+
+		loop (i = 0, i < device_identifiers.size, i++) {
+			device_identifier = device_identifiers[i]
+			if device_identifier.id.vendor != 0x1234 continue
+
+			debug.write_line('PCI: Found QEMU graphics device')
+			adapter = devices.gpu.qemu.GraphicsAdapter.create(device_identifier)
+		}
+	}
+
+	find_host_contoller(identifier: DeviceIdentifier): HostController {
+		# Todo: Use map
+		loop (i = 0, i < host_controllers.size, i++) {
+			controller = host_controllers[i]
+			if controller.domain.id == identifier.address.domain return controller
+		}
+
+		return none as HostController
+	}
+
+	get_device_identifier(address: Address): DeviceIdentifier {
+		loop (i = 0, i < device_identifiers.size, i++) {
+			device_identifier = device_identifiers[i]
+			device_address = device_identifier.address
+
+			if device_address.domain == address.domain and
+			   device_address.bus == address.bus and
+			   device_address.device == address.device and
+			   device_address.function == address.function {
+				return device_identifier
+			}
+		}
+
+		return none as DeviceIdentifier
 	}
 }
 

@@ -435,6 +435,18 @@ memory_file_system_start_cat_start:
 incbin "cat"
 memory_file_system_start_cat_end:
 
+dq memory_file_system_start_display_path
+dq memory_file_system_start_display_end - memory_file_system_start_display_start
+memory_file_system_start_display_start:
+incbin "display"
+memory_file_system_start_display_end:
+
+dq memory_file_system_start_image_path
+dq memory_file_system_start_image_end - memory_file_system_start_image_start
+memory_file_system_start_image_start:
+incbin "a.bmp"
+memory_file_system_start_image_end:
+
 dq memory_file_system_start_libpcre_path
 dq memory_file_system_start_libpcre_end - memory_file_system_start_libpcre_start
 memory_file_system_start_libpcre_start:
@@ -456,6 +468,8 @@ memory_file_system_start_hello_path: db "/bin/hello", 0
 memory_file_system_start_sh_path: db "/bin/sh", 0
 memory_file_system_start_ls_path: db "/bin/ls", 0
 memory_file_system_start_cat_path: db "/bin/cat", 0
+memory_file_system_start_display_path: db "/bin/display", 0
+memory_file_system_start_image_path: db "/bin/a.bmp", 0
 memory_file_system_start_libpcre_path: db "/lib/libpcre2-8.so.0", 0
 memory_file_system_start_libselinux_path: db "/lib/libselinux.so.1", 0
 

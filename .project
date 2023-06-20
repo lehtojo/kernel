@@ -12,7 +12,9 @@
 				"./file-systems/",
 				"./file-systems/memory-file-system/",
 				"./devices/",
-				"./devices/console/"
+				"./devices/console/",
+				"./devices/gpu/",
+				"./devices/gpu/qemu/"
 			]
 		}
 	]

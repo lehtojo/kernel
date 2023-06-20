@@ -31,6 +31,8 @@ File Device {
 	# Summary: Returns the name of this device
 	open get_name(): String
 
+	open map(process: Process, region: ProcessMemoryRegion, virtual_address: u64): Optional<i32> { return Optionals.empty<i32>() }
+
 	# Summary: Controls this devices
 	open control(request: u32, argument: u64): i32
 

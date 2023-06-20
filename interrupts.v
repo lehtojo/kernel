@@ -187,7 +187,7 @@ export process_page_fault(frame: TrapFrame*) {
 
 	# If the current process determines the page fault was legal, then continue
 	# Todo: Continue
-	if is_user_space and process !== none and process.memory !== none and process.memory.process_page_fault(address, false) return
+	if is_user_space and process !== none and process.memory !== none and process.memory.process_page_fault(process, address, false) return
 
 	debug.write('Attempted to access address ')
 	debug.write_address(address)
@@ -221,6 +221,7 @@ export process(frame: TrapFrame*): u64 {
 	} else code == 0x80 {
 		result = system_calls.process(frame)
 	} else {
+		debug.write('Interrupts: Using default handler for unsupported interrupt ') debug.write_line(code)
 		default_handler()
 	}
 

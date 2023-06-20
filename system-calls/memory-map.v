@@ -17,19 +17,29 @@ create_process_memory_region_options(process: Process, flags: u32, file_descript
 		}
 
 		# Todo: Do some checks on the file description
-		if not description.file.is_inode() {
-			debug.write_line('System call: Memory map: File descriptor does not refer to an inode')
+
+		if description.file.is_inode() {
+			# Store the inode in the options
+			inode = description.file.(InodeFile).inode
+			options.inode = Optionals.new<Inode>(inode)
+
+			# Output debug information
+			debug.write('System call: Memory map: Attaching inode to memory region: ')
+			inode.identifier.print()
+		} else description.file.is_device() {
+			# Store the device in the options
+			device = description.file as Device
+			options.device = Optionals.new<Device>(device)
+
+			# Output debug information
+			debug.write('System call: Memory map: Attaching device to memory region: ')
+			debug.write_address(device.identifier)
+			debug.write_line()
+
+		} else {
+			debug.write_line('System call: Memory map: File descriptor can not be mapped')
 			return Results.error<ProcessMemoryRegionOptions, u32>(EBADF)
-		} 
-
-		# Store the inode in the options
-		inode = description.file.(InodeFile).inode
-		options.inode = Optionals.new<Inode>(inode)
-
-		# Output debug information
-		debug.write('System call: Memory map: Attaching inode to memory region: ')
-		inode.identifier.print()
-		debug.write_line()
+		}
 	}
 
 	debug.write_line('System call: Memory map: Creating memory region options')

@@ -52,8 +52,14 @@ constant PRESENT_BIT = 1 <| 7
 constant GATE_TYPE_INTERRUPT = 0xE
 constant GATE_TYPE_TRAP = 0xF
 
+constant FIRST_ALLOCATED_INTERRUPT = 0x81
+constant LAST_ALLOCATED_INTERRUPT = 0xff
+constant MAX_ALLOCATED_INTERRUPTS = LAST_ALLOCATED_INTERRUPT - FIRST_ALLOCATED_INTERRUPT + 1
+
 tables: link
 scheduler: Scheduler
+allocated_interrupts: u64[MAX_ALLOCATED_INTERRUPTS]
+next_available_interrupt: u32
 
 pack InterruptDescriptor {
 	offset_1: u16
@@ -92,6 +98,28 @@ export initialize() {
 	debug.write_address(tables + IDTR_OFFSET)
 	debug.write_line()
 	internal.interrupts_set_idtr(tables + IDTR_OFFSET)
+
+	# Zero out the allocated interrupts, because we do not want garbage values as non-zero entry means an allocated interrupt
+	memory.zero(allocated_interrupts, MAX_ALLOCATED_INTERRUPTS * sizeof(u64))
+	next_available_interrupt = 0
+}
+
+# Summary: Allocates a new interrupt and registers the specified handler for it
+allocate_interrupt(handler: (u8, TrapFrame*) -> u64): u8 {
+	if next_available_interrupt >= MAX_ALLOCATED_INTERRUPTS {
+		panic('Interrupts: No more interrupts available')
+	}
+
+	# Register the handler for the interrupt
+	allocated_interrupts[next_available_interrupt] = handler as u64
+
+	# Compute the interrupt number
+	interrupt = FIRST_ALLOCATED_INTERRUPT + next_available_interrupt
+
+	# Increment the number of allocated interrupts
+	next_available_interrupt += 1
+
+	return interrupt
 }
 
 export enable() {
@@ -220,6 +248,16 @@ export process(frame: TrapFrame*): u64 {
 		panic('General protection fault')
 	} else code == 0x80 {
 		result = system_calls.process(frame)
+	} else code >= FIRST_ALLOCATED_INTERRUPT and code <= LAST_ALLOCATED_INTERRUPT {
+		handler = allocated_interrupts[code - FIRST_ALLOCATED_INTERRUPT] as (u8, TrapFrame*) -> u64
+
+		if handler !== none {
+			result = handler(code, frame)
+		} else {
+			debug.write('Interrupts: Using default handler for unsupported interrupt ') debug.write_line(code)
+			default_handler()
+		}
+
 	} else {
 		debug.write('Interrupts: Using default handler for unsupported interrupt ') debug.write_line(code)
 		default_handler()
@@ -233,7 +271,7 @@ export process(frame: TrapFrame*): u64 {
 
 	# If the current process no longer runs, let the scheduler decide the next action
 	process = scheduler.current
-	if not process.is_running { scheduler.tick(frame) }
+	if process !== none and not process.is_running { scheduler.tick(frame) }
 
 	return result
 }

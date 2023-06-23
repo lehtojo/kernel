@@ -44,7 +44,9 @@ namespace kernel {
 	import 'C' full_memory_barrier(): _
 	import 'C' wait_for_microseconds(microseconds: u64): _
 
-	wait_for_microsecond(): _ { wait_for_microseconds(1) }
+	# Todo: Remove the multiplications (* 100) once proper waiting is supported
+	wait_for_microsecond(): _ { wait_for_microseconds(1 * 100) }
+	wait_for_millisecond(): _ { wait_for_microseconds(1000 * 100) }
 
 	pack SymbolInformation {
 		name: String
@@ -104,7 +106,8 @@ export start(
 
 	interrupts.scheduler.initialize_processes()
 
-	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address)
+	Processor.count = 1
+	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address, 0)
 	mapper.remap()
 
 	interrupts.initialize()

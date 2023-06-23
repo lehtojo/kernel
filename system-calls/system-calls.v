@@ -24,7 +24,10 @@ constant ESPIPE = -29
 constant ENOTDIR = -20
 constant ERANGE = -34
 constant EOVERFLOW = -75
-constant ENOTSUP = -95 # Todo: Does this constant exist?
+
+# These error codes are not in the standard:
+constant ENOTSUP = -200
+constant ETIMEOUT = -201
 
 constant DT_UNKNOWN = 0
 constant DT_FIFO = 1

@@ -306,11 +306,12 @@ ret
 
 .global wait_for_microseconds
 wait_for_microseconds:
+xor rax, rax
 test rdi, rdi
 jnz wait_for_microseconds_L0
 ret
 wait_for_microseconds_L0:
-in al, 0x80
+out 0x80, al
 dec rdi
 jnz wait_for_microseconds_L0
 ret

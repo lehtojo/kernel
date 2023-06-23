@@ -3,6 +3,8 @@ namespace kernel.pci
 import kernel.acpi
 import kernel.system_calls
 
+interrupts_devices: Device[interrupts.MAX_ALLOCATED_INTERRUPTS]
+
 constant PCI_CAPABILITY_ID_NULL = 0x00
 constant PCI_CAPABILITY_ID_MSI = 0x05
 constant PCI_CAPABILITY_ID_VENDOR_SPECIFIC = 0x09
@@ -14,6 +16,26 @@ constant BAR_SPACE_TYPE_64_BIT = 2
 constant BAR_SPACE_TYPE_IO_SPACE = 3
 
 constant BAR_ADDRESS_MASK = 0xfffffff0
+
+initialize(): _ {
+	# Zero out the allocated interrupts, because we do not want garbage values as non-zero entry means an allocated interrupt
+	memory.zero(interrupts_devices, interrupts.MAX_ALLOCATED_INTERRUPTS * strideof(Device))
+}
+
+# Summary: Allocates an interrupt for the specified device
+allocate_interrupt(device: Device): u8 {
+	interrupt = interrupts.allocate_interrupt((interrupt: u8, frame: TrapFrame*) -> process_interrupt(interrupt, frame))
+	interrupts_devices[interrupt - interrupts.FIRST_ALLOCATED_INTERRUPT] = device
+	return interrupt
+}
+
+# Summary: Forwards an interrupt for a device
+process_interrupt(interrupt: u8, frame: TrapFrame*): u64 {
+	device = interrupts_devices[interrupt - interrupts.FIRST_ALLOCATED_INTERRUPT]
+	require(device !== none, 'Received interrupt for unallocated interrupt')
+
+	return device.interrupt(interrupt, frame)
+}
 
 get_controller(identifier: DeviceIdentifier): HostController {
 	controller = Parser.instance.find_host_contoller(identifier)
@@ -79,6 +101,14 @@ enable_bus_mastering(identifier: DeviceIdentifier): _ {
 	write_u16(identifier, REGISTER_COMMAND, value)
 }
 
+enable_memory_space(identifier: DeviceIdentifier): _ {
+	debug.write('PCI: Enabling memory space for ') debug.write_address(identifier.address.value) debug.write_line()
+
+	value = read_u16(identifier, REGISTER_COMMAND)
+	value |= 0b10
+	write_u16(identifier, REGISTER_COMMAND, value)
+}
+
 create_io_window_for_pci_device_bar(identifier: DeviceIdentifier, bar: u8, size: u64): Result<link, u64> {
 	require(bar <= 5, 'Invalid PCI BAR')
 
@@ -128,5 +158,14 @@ enable_interrupt_line(identifier: DeviceIdentifier): _ {
 
 	value = read_u16(identifier, REGISTER_COMMAND)
 	value &= !(1 <| 10)
+	write_u16(identifier, REGISTER_COMMAND, value)
+}
+
+disable_interrupt_line(identifier: DeviceIdentifier): _ {
+	debug.write('PCI: Disabling interrupt line ')  debug.write(identifier.interrupt_line)
+	debug.write(' for ') debug.write_address(identifier.address.value) debug.write_line()
+
+	value = read_u16(identifier, REGISTER_COMMAND)
+	value |= (1 <| 10)
 	write_u16(identifier, REGISTER_COMMAND, value)
 }

@@ -3,15 +3,19 @@ namespace kernel
 constant MSR_GS_BASE = 0xc0000101
 
 plain Processor {
+	shared count: u32
+
 	padding: link
 	kernel_stack_pointer: link
 	user_stack_pointer: link
 	gdtr_physical_address: link
+	index: u32
 
-	shared initialize(kernel_stack_pointer: link, gdtr_physical_address: link) {
+	shared initialize(kernel_stack_pointer: link, gdtr_physical_address: link, index: u32) {
 		processor = Processor() using KernelHeap
 		processor.kernel_stack_pointer = kernel_stack_pointer
 		processor.gdtr_physical_address = gdtr_physical_address
+		processor.index = index
 
 		write_msr(MSR_GS_BASE, processor as u64)
 	}

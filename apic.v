@@ -37,11 +37,15 @@ pack SDTHeader {
 namespace kernel.apic
 
 local_apic_registers: u32*
+local_apic_registers_physical_address: u32*
 
 constant APIC_BASE_MSR = 0x1B
 constant APIC_BASE_MSR_ENABLE = 0x800
 
 constant ROOT_SYSTEM_DESCRIPTOR_POINTER_SIGNATURE = 'RSD PTR '
+
+# Can be used for causing interrupts manually. Useful for MSI and MSI-X as they write to this register to cause interrupts.
+constant LOCAL_APIC_REGISTERS_INTERRUPT_COMMAND_REGISTER = 0x300
 
 pack MADT {
 	header: SDTHeader
@@ -57,6 +61,7 @@ pack MADTEntryHeader {
 ApicInformation {
 	local_apic_ids: u8[256]
 	local_apic_count: u8
+	local_apic_registers_physical_address: link
 	local_apic_registers: link
 	ioapic_registers: link
 }
@@ -191,7 +196,8 @@ export process_madt_entries(madt: MADT*, information: ApicInformation) {
 			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address)
 		} else type == 5 {
 			# Address of the local apic (64-bit system version)
-			local_apic_registers_physical_address = (entry + 4).(u64*)[] as link
+			information.local_apic_registers_physical_address = (entry + 4).(u64*)[] as link
+			debug.write('IOAPIC: Local apic registers: ') debug.write_address(local_apic_registers_physical_address) debug.write_line()
 			information.local_apic_registers = mapper.map_kernel_page(local_apic_registers_physical_address)
 		}
 
@@ -271,6 +277,7 @@ export initialize(allocator: Allocator) {
 	information.local_apic_registers = mapper.map_kernel_page(apic_table[].local_apic_address as link)
 	process_madt_entries(apic_table, information)
 
+	local_apic_registers_physical_address = information.local_apic_registers_physical_address
 	local_apic_registers = information.local_apic_registers
 
 	debug.write('APIC: Local APIC Registers = ')
@@ -318,6 +325,7 @@ export initialize(allocator: Allocator) {
 	debug.write('APIC: MCFG=') debug.write_address(mcfg_table as u64) debug.write_line()
 	require(mcfg_table !== none, 'Failed to initialize MCFG')
 
+	pci.initialize()
 	acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
 
 	ahci.initialize(acpi.Parser.instance)

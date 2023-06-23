@@ -262,7 +262,7 @@ map_page(virtual_address: link, physical_address: link): link {
 	return map_page(virtual_address, physical_address, true, true)
 }
 
-map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {
+map_region(virtual_address_start: link, physical_address_start: link, size: u64, cache: bool): link {
 	physical_page = physical_address_start & (-PAGE_SIZE)
 	virtual_page = virtual_address_start & (-PAGE_SIZE)
 	last_physical_page = memory.round_to_page(physical_address_start + size)
@@ -275,7 +275,7 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64)
 	debug.write_line()
 
 	loop (physical_page < last_physical_page) {
-		map_page(virtual_page, physical_page, true, false)
+		map_page(virtual_page, physical_page, cache, false)
 
 		physical_page += PAGE_SIZE
 		virtual_page += PAGE_SIZE
@@ -286,6 +286,10 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64)
 	return virtual_address_start & (-PAGE_SIZE) # Warning: Should not we return the unaligned virtual address?
 }
 
+map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {
+	return map_region(virtual_address_start, physical_address_start, size, true)
+}
+
 map_kernel_page(physical_address: link): link {
 	map_page(physical_address, physical_address)
 	return KERNEL_MAP_BASE as link + physical_address as u64
@@ -293,6 +297,16 @@ map_kernel_page(physical_address: link): link {
 
 map_kernel_region(physical_address: link, size: u64): link {
 	map_region(physical_address, physical_address, size)
+	return KERNEL_MAP_BASE as link + physical_address as u64
+}
+
+map_kernel_page(physical_address: link, cache: bool): link {
+	map_page(physical_address, physical_address, cache, true)
+	return KERNEL_MAP_BASE as link + physical_address as u64
+}
+
+map_kernel_region(physical_address: link, size: u64, cache: bool): link {
+	map_region(physical_address, physical_address, size, cache)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 

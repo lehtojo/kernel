@@ -1,6 +1,8 @@
 # ACPI (Advanced Configuration and Power Interface)
 namespace kernel.acpi
 
+import kernel.devices.storage
+
 plain FADT {
 	header: SDTHeader
 	firmware_ctrl: u32
@@ -176,19 +178,19 @@ pack Capability {
 	write_u8(offset: u64, value: u8): _ {
 		identifier: DeviceIdentifier = this.identifier
 		address: Address = identifier.address
-		host_contoller(identifier).write_u8(address.bus, address.device, address.function, pointer + offset)
+		host_contoller(identifier).write_u8(address.bus, address.device, address.function, pointer + offset, value)
 	}
 
 	write_u16(offset: u64, value: u16): _ {
 		identifier: DeviceIdentifier = this.identifier
 		address: Address = identifier.address
-		host_contoller(identifier).write_u16(address.bus, address.device, address.function, pointer + offset)
+		host_contoller(identifier).write_u16(address.bus, address.device, address.function, pointer + offset, value)
 	}
 
 	write_u32(offset: u64, value: u32): _ {
 		identifier: DeviceIdentifier = this.identifier
 		address: Address = identifier.address
-		host_contoller(identifier).write_u32(address.bus, address.device, address.function, pointer + offset)
+		host_contoller(identifier).write_u32(address.bus, address.device, address.function, pointer + offset, value)
 	}
 
 	print(): _ {
@@ -248,11 +250,103 @@ plain DeviceIdentifier {
 	}
 }
 
+pack MsixTableEntry {
+	address_low: u32
+	address_high: u32
+	data: u32
+	vector_control: u32
+}
+
 Device {
 	identifier: DeviceIdentifier
 
+	private msix_table: MsixTableEntry*
+	private msix_table_entry_count: u32
+
 	init(identifier: DeviceIdentifier) {
 		this.identifier = identifier
+	}
+
+	private is_interrupt_table_loaded(): bool {
+		return msix_table !== none
+	}
+
+	private load_msix(capability: Capability): _ {
+		debug.write_line('MSI-X: Enabling...')
+		pci.disable_interrupt_line(identifier)
+		capability.write_u16(2, capability.read_u16(2) | 0x8000)
+
+		register_1 = capability.read_u32(0)
+		register_2 = capability.read_u32(sizeof(u32))
+		register_3 = capability.read_u32(sizeof(u32) * 2)
+
+		message_control = (register_1 |> 16) & 0xffff
+		table_size = (message_control & 0x7ff) + 1
+
+		bar = register_2 & 0b111
+		table_offset_in_bar = register_2 & 0xfff8
+
+		debug.write('MSI-X: Message control: ') debug.write_address(message_control) debug.write_line()
+		debug.write('MSI-X: Table size: ') debug.write_address(table_size) debug.write_line()
+		debug.write('MSI-X: Using BAR') debug.write(bar) debug.write_line(' to access the table')
+		debug.write('MSI-X: Table offset in BAR: ') debug.write_address(table_offset_in_bar) debug.write_line()
+
+		table_physical_address = (pci.read_bar(identifier, bar) & pci.BAR_ADDRESS_MASK) + table_offset_in_bar
+		debug.write('MSI-X: Table physical address: ') debug.write_address(table_physical_address) debug.write_line()
+
+		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size, false) as MsixTableEntry*
+		msix_table_entry_count = table_size / sizeof(MsixTableEntry)
+	}
+
+	private load_interrupt_table(): bool {
+		capabilities = identifier.capabilities
+
+		loop (i = 0, i < capabilities.size, i++) {
+			capability = capabilities[i]
+
+			if capability.id == 0x11 {
+				debug.write_line('PCI device: Found MSI-X capability')
+				load_msix(capability)
+				return true
+			}
+		}
+
+		debug.write_line('PCI device: Failed to find interrupt tables for the device')
+		return false
+	}
+
+	private write_msix_table_entry(index: u32, interrupt: u8, edgetrigger: bool, deassert: bool): _ {
+		debug.write_line('PCI device: Writing MSI-X table entry')
+		require(index < msix_table_entry_count, 'Invalid MSI-x entry index')
+
+		local_apic_registers_physical_address = 0xfee00000 # apic.local_apic_registers_physical_address
+
+		address = (local_apic_registers_physical_address + apic.LOCAL_APIC_REGISTERS_INTERRUPT_COMMAND_REGISTER) as u64
+		address = local_apic_registers_physical_address as u64
+
+		entry = msix_table + index * sizeof(MsixTableEntry)
+		entry[].address_low = address & 0xffffffff
+		entry[].address_high = address |> 32
+		entry[].data = interrupt | (edgetrigger <| 15) | (deassert <| 14)
+		entry[].vector_control &= 0xfffffffe # Disable the first bit to enable the interrupt
+	}
+
+	open interrupt(interrupt: u8, frame: TrapFrame*): u64 { return 0 }
+
+	allocate_interrupt(index: u32): u8 {
+		debug.write('PCI device: Allocating interrupt index ') debug.write_line(index)
+
+		if not is_interrupt_table_loaded() and not load_interrupt_table() {
+			panic('PCI device: Failed to allocate interrupt for a device')
+		}
+
+		interrupt = pci.allocate_interrupt(this)
+
+		if msix_table !== none {
+			write_msix_table_entry(index, interrupt, false, false)
+		}
+
+		return interrupt
 	}
 }
 
@@ -675,10 +769,15 @@ plain Parser {
 
 		loop (i = 0, i < device_identifiers.size, i++) {
 			device_identifier = device_identifiers[i]
-			if device_identifier.id.vendor != 0x1234 continue
+			vendor = device_identifier.id.vendor
 
-			debug.write_line('PCI: Found QEMU graphics device')
-			adapter = devices.gpu.qemu.GraphicsAdapter.create(device_identifier)
+			if vendor == 0x1234 {
+				debug.write_line('PCI: Found QEMU graphics device')
+				adapter = devices.gpu.qemu.GraphicsAdapter.create(device_identifier)
+			} else vendor == 0x1b36 {
+				debug.write_line('PCI: Found NVME controller')
+				nvme = Nvme.try_create(HeapAllocator.instance, device_identifier)
+			}
 		}
 	}
 

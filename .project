@@ -14,7 +14,8 @@
 				"./devices/",
 				"./devices/console/",
 				"./devices/gpu/",
-				"./devices/gpu/qemu/"
+				"./devices/gpu/qemu/",
+				"./devices/storage/"
 			]
 		}
 	]

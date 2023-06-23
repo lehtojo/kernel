@@ -1,9 +1,9 @@
 namespace kernel.devices.storage
 
-plain BlockDeviceRequest {
+BlockDeviceRequest {
 	block_index: u64
 	block_count: u32
-	address: u64
+	address: u64 # Todo: Rename to physical_address
 	callback: (u16, BlockDeviceRequest) -> _
 
 	init(block_index: u64, block_count: u64, address: u64, callback: (u16, BlockDeviceRequest) -> _) {
@@ -14,11 +14,16 @@ plain BlockDeviceRequest {
 	}
 }
 
-plain NvmeNamespace {
+BlockStorageDevice {
+	block_size: u32
+
+	open read(request: BlockDeviceRequest): _
+}
+
+BlockStorageDevice NvmeNamespace {
 	namespace_id: u32
 	queues: List<NvmeQueue>
 	block_count: u64 = 0
-	block_size: u32 = 0
 	ready: bool = false
 
 	init(namespace_id: u32, queues: List<NvmeQueue>) {
@@ -26,7 +31,7 @@ plain NvmeNamespace {
 		this.queues = queues
 	}
 
-	read(request: BlockDeviceRequest): _ {
+	override read(request: BlockDeviceRequest) {
 		require(request.block_index + request.block_count <= block_count, 'Nvme namespace: Invalid read range')
 
 		queue = queues[Processor.current.index]

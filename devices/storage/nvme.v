@@ -2,6 +2,7 @@ namespace kernel.devices.storage
 
 import kernel.acpi
 import kernel.system_calls
+import kernel.file_systems.ext2
 
 Device Nvme {
 	allocator: Allocator
@@ -490,6 +491,7 @@ Device Nvme {
 			state = HOST_STATE_COMPLETE # All done
 
 			# Todo: Remove
+			###
 			physical_data_address = PhysicalMemoryManager.instance.allocate_physical_region(512)
 
 			request = BlockDeviceRequest(0, 1, physical_data_address as u64, (status: u16, request: BlockDeviceRequest) -> {
@@ -504,6 +506,10 @@ Device Nvme {
 			}) using KernelHeap
 
 			namespaces[0].read(request)
+			###
+
+			ext2 = Ext2(namespaces[0]) using KernelHeap
+			ext2.initialize()
 			return
 		}
 	}

@@ -776,7 +776,7 @@ plain Parser {
 				adapter = devices.gpu.qemu.GraphicsAdapter.create(device_identifier)
 			} else vendor == 0x1b36 {
 				debug.write_line('PCI: Found NVME controller')
-				nvme = Nvme.try_create(HeapAllocator.instance, device_identifier)
+				controller = Nvme.try_create(HeapAllocator.instance, device_identifier)
 			}
 		}
 	}

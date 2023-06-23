@@ -10,6 +10,7 @@
 				"./utility/",
 				"./system-calls/",
 				"./file-systems/",
+				"./file-systems/ext2/",
 				"./file-systems/memory-file-system/",
 				"./devices/",
 				"./devices/console/",

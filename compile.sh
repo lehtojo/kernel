@@ -18,7 +18,7 @@ echo "Failed to compile helper assembly files"
 exit 1
 fi
 
-v1 . ./utility/ ./system-calls/ ./file-systems/ ./file-systems/memory-file-system/ ./devices/ ./devices/console/ ./devices/gpu ./devices/gpu/qemu ./devices/storage/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin -base 0xffff800000104000 -system -a
+v1 . ./utility/ ./system-calls/ ./file-systems/ ./file-systems/ext2/ ./file-systems/memory-file-system/ ./devices/ ./devices/console/ ./devices/gpu ./devices/gpu/qemu ./devices/storage/ ./build/entry.o ./build/cpu.o -binary -o ./build/kernel.bin -base 0xffff800000104000 -system -a
 
 if [[ $? != 0 ]]; then
 echo "Failed to compile kernel"

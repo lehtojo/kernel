@@ -508,7 +508,7 @@ Device Nvme {
 			namespaces[0].read(request)
 			###
 
-			ext2 = Ext2(namespaces[0]) using KernelHeap
+			ext2 = Ext2(HeapAllocator.instance, namespaces[0]) using KernelHeap
 			ext2.initialize()
 			return
 		}

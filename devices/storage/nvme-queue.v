@@ -165,7 +165,7 @@ plain NvmeQueue {
 	}
 
 	submit(submission: NvmeSubmission*, data: u64, callback: (NvmeQueue, u16, u64) -> _): _ {
-		debug.write_line('Nvme queue: Submitting command')
+		debug.write('Nvme queue: Submitting command with id ') debug.write_line(submission[].header.command_id)
 		require(not requests.contains_key(submission[].header.command_id), 'Nvme: Request with the same command id already exists')
 
 		# Register the request, so that it will be handled

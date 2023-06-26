@@ -39,6 +39,7 @@ export plain Map<K, V> {
 
 		# Allocate the new slots
 		slots = allocator.allocate(to * strideof(MapSlot<K, V>))
+		memory.zero(slots, to * strideof(MapSlot<K, V>))
 		capacity = to
 		first = -1
 		last = -1

@@ -110,7 +110,7 @@ DirectoryIterator MemoryDirectoryIterator {
 
 		inode = directory.inodes[entry_index] as MemoryInode
 		entry.name = inode.name
-		entry.inode = inode
+		entry.inode = inode.index
 		entry.type = DT_REG # Todo: Figure out the type
 
 		return true
@@ -120,48 +120,6 @@ DirectoryIterator MemoryDirectoryIterator {
 		return entry
 	}
 }
-
-PathParts {
-	private path: String
-	private position: u64
-
-	part: String
-	ended => position == path.length
-
-	init(path: String) {
-		this.path = path
-		this.position = 0
-		this.part = String.empty()
-
-		# Skip the root separator automatically
-		if path.starts_with(`/`) { position++ }
-	}
-
-	next(): bool {
-		# If we have reached the end, there are no parts left
-		if position == path.length return false
-
-		separator = path.index_of(`/`, position)
-
-		# If there is no next separator, return the remaining path 
-		if separator < 0 {
-			part = path.slice(position)
-			position = path.length # Go to the end of the path
-			return true
-		}
-
-		# Store the part before the found separator
-		part = path.slice(position, separator)
-
-		# Find the next part after the separator
-		position = separator + 1
-		return true
-	}
-}
-
-constant CREATE_OPTION_NONE = 0
-constant CREATE_OPTION_FILE = 1
-constant CREATE_OPTION_DIRECTORY = 2
 
 FileSystem MemoryFileSystem {
 	allocator: Allocator
@@ -333,7 +291,8 @@ FileSystem MemoryFileSystem {
 		require(inode.is_directory(), 'Specified inode was not a directory')
 
 		entry = DirectoryEntry() using allocator
-		return MemoryDirectoryIterator(entry, inode as MemoryDirectoryInode) using allocator
+		iterator = MemoryDirectoryIterator(entry, inode as MemoryDirectoryInode) using allocator
+		return Results.new<DirectoryIterator, u32>(iterator)
 	}
 
 	override allocate_inode_index() {

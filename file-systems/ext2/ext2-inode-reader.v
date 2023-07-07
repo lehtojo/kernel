@@ -5,28 +5,37 @@ import kernel.system_calls
 
 # Todo: Handle destructing
 IndirectBlockOperator InodeReader {
+	# Summary: Stores the process that created this reader
+	process: Process
 	# Summary: Stores the device that will be used to read the inode
 	device: BlockStorageDevice
-	# Summary: Stores the original request that caused this reader to be created
-	request: FileSystemRequest
 	# Summary: Stores the inode that we are reading
 	inode: InodeInformation
+	# Summary: Stores the destination address where the data is read
+	destination: link
 	# Summary: Stores a callback that will be called once we complete with a status
 	completed: (InodeReader, u16) -> _ = none as (InodeReader, u16) -> _
 
+	# Todo: This is dumb, nested readers do not need to allocate these as they only use the pointers
+	_commited: u64[1]
+	_progress: u64[1]
+	_end: u64[1]
+
 	init(parent: InodeReader) {
 		IndirectBlockOperator.init(parent)
+		this.process = parent.process
 		this.device = parent.device
-		this.request = parent.request
-		this.inode = inode
-		this.completed = completed
+		this.inode = parent.inode
+		this.destination = parent.destination
+		this.completed = parent.completed
 	}
 
-	init(allocator: Allocator, device: BlockStorageDevice, request: FileSystemRequest, inode: InodeInformation, block_size: u32, layer: u8) {
-		IndirectBlockOperator.init(allocator, request.commited, request.progress, request.end, block_size, request.size, layer)
+	init(allocator: Allocator, process: Process, device: BlockStorageDevice, inode: InodeInformation, destination: link, size: u64, block_size: u32, layer: u8) {
+		IndirectBlockOperator.init(allocator, _commited, _progress, _end, block_size, size, layer)
+		this.process = process
 		this.device = device
-		this.request = request
 		this.inode = inode
+		this.destination = destination
 	}
 
 	override complete(status: u16) {
@@ -99,7 +108,7 @@ IndirectBlockOperator InodeReader {
 		}
 
 		# Compute where the block should be read
-		destination = request.address + commited[]
+		destination: u64 = (this.destination + commited[]) as u64
 
 		request: BaseRequest<InodeReader> = BaseRequest<InodeReader>(allocator, destination, callback as (u16, BlockDeviceRequest) -> bool) using allocator
 		request.data = this

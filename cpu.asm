@@ -163,7 +163,16 @@ ret
 .align 32
 .global interrupt_entry
 interrupt_entry:
+# Todo: Move cli instruction to interrupt entry before this, so that interrupts are immediately disabled, so that nothing gets pushed to stack before disabling
 cli # Disable interrupts
+
+# Save the interrupt stack pointer and load the kernel stack pointer
+# Note: Each thread has its own kernel stack for saving the state in kernel easily
+mov [gs:16], rsp
+mov rsp, [gs:8]
+
+# Interrupt stack has data we do not have in this new stack, reserve space for it and copy it later
+sub rsp, 56
 
 # Save all the registers
 push r15
@@ -183,17 +192,25 @@ push rbp
 push rsi
 push rdi
 
-mov rax, rsp # Save the address of the register state
-sub rsp, 24 # Reserve memory for a trap frame object
+# Copy the data pushed in the interrupt stack to the allocated region
+lea rdi, [rsp+128]
+mov rsi, [gs:16]
+mov rcx, 7
+rep movsq
 
-mov qword ptr [rsp], 0
-mov qword ptr [rsp+8], 0
-mov qword ptr [rsp+16], rax # Pass the register state
+mov rdi, rsp # Pass the register state
+call _VN6kernel10interrupts7processEPP13RegisterState_ry
 
-mov rdi, rsp
-call _VN6kernel10interrupts7processEPP9TrapFrame_ry
+# If the return address (rip) is in kernel mode, do a kernel switch
+mov rdi, [rsp+144]
+test rdi, rdi
+jl kernel_switch_return
 
-add rsp, 24 # Remove the trap frame object and the padding
+# Copy changes to the interrupt stack
+lea rsi, [rsp+128]
+mov rdi, [gs:16]
+mov rcx, 7
+rep movsq
 
 pop rdi
 pop rsi
@@ -212,21 +229,23 @@ pop r13
 pop r14
 pop r15
 
+# Switch back to the interrupt stack
+mov rsp, [gs:16]
+
 add rsp, 16 # Remove the interrupt number and padding (Added by the interrupt entry)
 
-sti # Enable interrupts
-iretq
+iretq # Note: Interrupts are enabled by restoring rflags
 
 .global system_call_entry
 system_call_entry:
 # Interrupts are disabled
 
 # Save the user stack pointer and load the kernel stack pointer
-mov qword [gs:16], rsp
+mov [gs:16], rsp
 mov rsp, [gs:8]
 
 pushq 0x1b # User ss (0x18 | 3)
-push qword [gs:16] # User rsp
+pushq [gs:16] # User rsp
 
 push r11 # RFLAGS
 pushq 0x23 # User cs (0x20 | 3)
@@ -251,17 +270,13 @@ push rbp
 push rsi
 push rdi
 
-mov rax, rsp # Save the address of the register state
-sub rsp, 24 # Reserve memory for a trap frame object
-
-mov qword ptr [rsp], 0
-mov qword ptr [rsp+8], 0
-mov qword ptr [rsp+16], rax # Pass the register state
-
 mov rdi, rsp
-call _VN6kernel10interrupts7processEPP9TrapFrame_ry
+call _VN6kernel10interrupts7processEPP13RegisterState_ry
 
-add rsp, 24 # Remove the trap frame object and the padding
+# If the return address (rip) is in kernel mode, do a kernel switch
+mov rdi, [rsp+144]
+test rdi, rdi
+jl kernel_switch_return
 
 pop rdi
 pop rsi
@@ -287,6 +302,33 @@ pop r11 # Load rflags
 
 pop rsp
 sysretq # Enables interrupts
+
+kernel_switch_return:
+pop rdi
+pop rsi
+pop rbp
+add rsp, 8 # Skip restoring rsp
+pop rbx
+pop rdx
+pop rcx
+add rsp, 8 # Skip restoring rax
+pop r8
+pop r9
+pop r10
+pop r11
+pop r12
+pop r13
+pop r14
+pop r15
+
+# Note: Kernel switches are done using syscall instruction, so we have rcx and r11 to work with
+
+add rsp, 16 # Remove the interrupt number and padding
+pop rcx     # Load rip
+add rsp, 8  # Do not restore cs as it is correct already
+popfq       # Load rflags
+pop rsp     # Load the stack pointer
+jmp rcx
 
 .global get_interrupt_handler
 get_interrupt_handler:
@@ -314,4 +356,16 @@ wait_for_microseconds_L0:
 out 0x80, al
 dec rdi
 jnz wait_for_microseconds_L0
+ret
+
+.global system_call
+system_call:
+mov rax, rdi
+mov rdi, rsi
+mov rsi, rdx
+mov rdx, rcx
+mov r10, r8
+mov r8, r9
+mov r9, qword [rsp+8]
+syscall
 ret

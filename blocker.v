@@ -20,10 +20,14 @@ Blocker {
 		require(process !== none, 'Attempted to update unregistered blocker')
 
 		# Execute the callback and save the result
-		succeded = callback(this)
+		succeeded = true
+
+		if callback !== none {
+			succeded = callback(this)
+		}
 
 		# Do not continue if the callback failed
-		if not succeded return false
+		if not succeeded return false
 
 		unblock()
 		process.unblock()

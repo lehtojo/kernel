@@ -1,5 +1,8 @@
 namespace kernel.system_calls
 
+# Todo: Remove
+import kernel.file_systems.ext2
+
 # System call: openat
 export system_openat(directory_descriptor: i32, filename_argument: link, flags: u32, mode: u64): i32 {
 	debug.write('System call: Open at: ')
@@ -58,7 +61,7 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 }
 
 # System call: openat
-export system_openat(allocator, process: Process, custody: Custody, filename: String, flags: u32, mode: u64): i32 {
+export system_openat(allocator, process: Process, custody: Custody, filename: String, flags: u32, mode: u64): i32 {	
 	# First, try allocating a file descriptor before doing anything
 	if process.file_descriptors.allocate() has not descriptor {
 		debug.write_line('System call: Open at: Failed to allocate a file descriptor')

@@ -331,7 +331,7 @@ Device {
 		entry[].vector_control &= 0xfffffffe # Disable the first bit to enable the interrupt
 	}
 
-	open interrupt(interrupt: u8, frame: TrapFrame*): u64 { return 0 }
+	open interrupt(interrupt: u8, frame: RegisterState*): u64 { return 0 }
 
 	allocate_interrupt(index: u32): u8 {
 		debug.write('PCI device: Allocating interrupt index ') debug.write_line(index)

@@ -44,6 +44,8 @@ namespace kernel {
 	import 'C' full_memory_barrier(): _
 	import 'C' wait_for_microseconds(microseconds: u64): _
 
+	import 'C' system_call(number: u64, argument_0: u64, argument_1: u64, argument_2: u64, argument_3: u64, argument_4: u64, argument_5: u64): u64
+
 	# Todo: Remove the multiplications (* 100) once proper waiting is supported
 	wait_for_microsecond(): _ { wait_for_microseconds(1 * 100) }
 	wait_for_millisecond(): _ { wait_for_microseconds(1000 * 100) }

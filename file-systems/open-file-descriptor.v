@@ -128,7 +128,15 @@ plain OpenFileDescription {
 
 		debug.write_line('Open file description: Iterating directory entries...')
 
-		iterator = FileSystem.root.iterate_directory(allocator, inode)
+		iterator_or_error = FileSystem.root.iterate_directory(allocator, inode)
+
+		if iterator_or_error.has_error {
+			debug.write_line('Open file description: Failed to iterate directory entries')
+			allocator.deallocate()
+			return iterator_or_error.error
+		}
+
+		iterator = iterator_or_error.value
 
 		# Move to the current offset
 		loop (i = 0, i < offset and iterator.next(), i++) {}
@@ -137,7 +145,7 @@ plain OpenFileDescription {
 			debug.write('Open file description: Found directory entry: name=')
 			debug.write(entry.name)
 			debug.write(', inode=')
-			debug.write_line(entry.inode.index)
+			debug.write_line(entry.inode)
 
 			# Compute the size of the output data structure with the name, align it to 8 bytes
 			unaligned_output_entry_size = sizeof(DirectoryEntry64) + entry.name.length + 1
@@ -148,7 +156,7 @@ plain OpenFileDescription {
 			next_entry_offset = output.position + output_entry_size
 
 			output_entry = DirectoryEntry64.new(
-				entry.inode.index,
+				entry.inode,
 				next_entry_offset,
 				output_entry_size,
 				entry.type

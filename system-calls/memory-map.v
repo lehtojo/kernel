@@ -26,6 +26,8 @@ create_process_memory_region_options(process: Process, flags: u32, file_descript
 			# Output debug information
 			debug.write('System call: Memory map: Attaching inode to memory region: ')
 			inode.identifier.print()
+			debug.write_line()
+
 		} else description.file.is_device() {
 			# Store the device in the options
 			device = description.file as Device

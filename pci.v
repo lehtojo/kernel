@@ -24,13 +24,13 @@ initialize(): _ {
 
 # Summary: Allocates an interrupt for the specified device
 allocate_interrupt(device: Device): u8 {
-	interrupt = interrupts.allocate_interrupt((interrupt: u8, frame: TrapFrame*) -> process_interrupt(interrupt, frame))
+	interrupt = interrupts.allocate_interrupt((interrupt: u8, frame: RegisterState*) -> process_interrupt(interrupt, frame))
 	interrupts_devices[interrupt - interrupts.FIRST_ALLOCATED_INTERRUPT] = device
 	return interrupt
 }
 
 # Summary: Forwards an interrupt for a device
-process_interrupt(interrupt: u8, frame: TrapFrame*): u64 {
+process_interrupt(interrupt: u8, frame: RegisterState*): u64 {
 	device = interrupts_devices[interrupt - interrupts.FIRST_ALLOCATED_INTERRUPT]
 	require(device !== none, 'Received interrupt for unallocated interrupt')
 

@@ -8,12 +8,14 @@ plain Processor {
 	padding: link
 	kernel_stack_pointer: link
 	user_stack_pointer: link
+	general_kernel_stack_pointer: link
 	gdtr_physical_address: link
 	index: u32
 
 	shared initialize(kernel_stack_pointer: link, gdtr_physical_address: link, index: u32) {
 		processor = Processor() using KernelHeap
 		processor.kernel_stack_pointer = kernel_stack_pointer
+		processor.general_kernel_stack_pointer = kernel_stack_pointer
 		processor.gdtr_physical_address = gdtr_physical_address
 		processor.index = index
 

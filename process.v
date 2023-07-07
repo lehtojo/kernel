@@ -42,6 +42,18 @@ Process {
 		}
 	}
 
+	# Summary: Allocates kernel stack for the specified process memory
+	private shared allocate_kernel_stack(memory: ProcessMemory): _ {
+		debug.write_line('Process: Allocating kernel stack memory for the process')
+		kernel_stack_pointer = KernelHeap.allocate(512 * KiB)
+
+		# Zero out the kernel stack memory
+		global.memory.zero(kernel_stack_pointer, 512 * KiB)
+
+		# Store the kernel stack pointer for use
+		memory.kernel_stack_pointer = (kernel_stack_pointer + 512 * KiB) as u64
+	}
+
 	# Summary: Configures the specified register state based on the specified load information
 	private shared configure_process_before_startup(
 		allocator: Allocator,
@@ -61,6 +73,7 @@ Process {
 		register_state[].rip = load_information.entry_point
 
 		# Allocate and map stack for the process
+		debug.write_line('Process: Allocating process stack memory')
 		# Todo: Implement proper stack support, which means lazy allocation using page faults
 		program_initial_stack_size = 512 * KiB
 		program_stack_physical_address_bottom = PhysicalMemoryManager.instance.allocate_physical_region(program_initial_stack_size) as u64
@@ -69,9 +82,19 @@ Process {
 		program_stack_virtual_address_bottom = program_stack_virtual_address_top - program_initial_stack_size
 		program_stack_mapping = MemoryMapping.new(program_stack_virtual_address_bottom, program_stack_physical_address_bottom, program_initial_stack_size)
 
-		# Zero out the stack
+		# Zero out the process stack
 		mapped_stack_bottom = mapper.map_kernel_region(program_stack_physical_address_bottom as link, program_initial_stack_size)
 		global.memory.zero(mapped_stack_bottom, program_initial_stack_size as u64)
+
+		# Allocate kernel stack for the process.
+		# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
+		# Todo: Create stack quards here as well (proper stack support)
+
+		if memory.kernel_stack_pointer === none {
+			allocate_kernel_stack(memory)
+		} else {
+			debug.write_line('Process: Reusing kernel stack')
+		}
 
 		debug.write('Process: Arguments: ')
 		debug.write_line(arguments)
@@ -81,7 +104,7 @@ Process {
 		startup_data_size = load_stack_startup_data(program_stack_physical_address_top, program_stack_virtual_address_top, arguments, environment_variables)
 		program_stack_pointer = program_stack_virtual_address_top - startup_data_size
 
-		# Map the stack memory for the application
+		# Map the process stack memory for the application
 		memory.paging_table.map_region(allocator, program_stack_mapping)
 
 		# Register the stack to the process
@@ -118,14 +141,15 @@ Process {
 		allocations.clear()
 
 		# Allocate register state for the process so that we can configure the registers before starting
-		register_state = allocator.allocate<RegisterState>()
-		configure_process_before_startup(allocator, register_state, memory, load_information, arguments, environment_variables)
+		user_frame: RegisterState* = allocator.allocate<RegisterState>()
+		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
+		configure_process_before_startup(allocator, user_frame, memory, load_information, arguments, environment_variables)
 
 		# Attach the standard files for the new process
 		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
 		attach_standard_files(allocator, file_descriptors)
 
-		process = Process(register_state, memory, file_descriptors) using allocator
+		process = Process(user_frame, kernel_frame, memory, file_descriptors) using allocator
 		process.working_directory = String.new('/bin/')
 
 		return process
@@ -133,7 +157,16 @@ Process {
 
 	id: u64
 	priority: u16 = NORMAL_PRIORITY
-	registers: RegisterState*
+
+	# Summary: Stores the register state of userspace
+	private user_frame: RegisterState*
+
+	# Summary: Stores the register state of the thread when it stops in the kernel
+	private kernel_frame: RegisterState*
+
+	# Summary: Tells how many register states has been saved
+	private frame_count: u8 = 1
+
 	fs: u64 = 0 # Todo: Group with registers?
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
@@ -151,9 +184,12 @@ Process {
 	is_sleeping => state == THREAD_STATE_SLEEPING
 	is_terminated => state == THREAD_STATE_TERMINATED
 
-	init(registers: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
+	registers => user_frame
+
+	init(user_frame: RegisterState*, kernel_frame: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0
-		this.registers = registers
+		this.user_frame = user_frame
+		this.kernel_frame = kernel_frame
 		this.memory = memory
 		this.file_descriptors = file_descriptors
 		this.working_directory = String.empty
@@ -165,9 +201,10 @@ Process {
 		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 	}
 
-	init(id: u64, registers: RegisterState*) {
+	init(id: u64, user_frame: RegisterState*, kernel_frame: RegisterState*) {
 		this.id = id
-		this.registers = registers
+		this.user_frame = user_frame
+		this.kernel_frame = kernel_frame
 		this.working_directory = String.empty
 		this.childs = List<Process>(HeapAllocator.instance) using HeapAllocator.instance
 		this.subscribers = Subscribers.new(HeapAllocator.instance)
@@ -177,8 +214,41 @@ Process {
 		registers[].userspace_ss = USER_DATA_SELECTOR | 3
 	}
 
-	save(frame: TrapFrame*): _ {
-		registers[] = frame[].registers[]
+	# Summary: Saves the register state of the thread
+	save(frame: RegisterState*): RegisterState* {
+		require(frame_count < 2, 'Attempted to save register state more than twice')
+
+		if frame_count++ == 1 {
+			# Process should not save userspace state twice.
+			# Note: Process can save userspace state and stop in kernel space
+			is_kernel_space = (frame[].rip as i64) < 0
+			require(is_kernel_space, 'Attempted to save userspace frame twice')
+
+			# Save the kernel frame
+			debug.write_line('Process: Saving kernel frame...')
+			kernel_frame[] = frame[]
+			return kernel_frame
+		}
+
+		debug.write_line('Process: Saving user frame...')
+		user_frame[] = frame[]
+		return user_frame
+	}
+
+	# Summary: Loads the register state of the thread into the specified frame
+	load(frame: RegisterState*): _ {
+		require(frame_count > 0, 'Attempted to load register state before saving')
+
+		if frame_count-- == 2 {
+			# Load the kernel frame into the specified frame
+			debug.write_line('Process: Loading kernel frame...')
+			frame[] = kernel_frame[]
+			return
+		}
+
+		# Load the user frame into the specified frame
+		debug.write_line('Process: Loading user frame...')
+		frame[] = user_frame[]
 	}
 
 	# Summary: Loads the specified program into this process
@@ -220,6 +290,7 @@ Process {
 		debug.write_line('Process: Blocking...')
 
 		require(this.blocker === none and state == THREAD_STATE_RUNNING, 'Invalid thread state')
+		require(blocker !== none, 'Attempted to block with no blocker')
 		this.blocker = blocker
 		this.blocker.process = this
 
@@ -249,11 +320,12 @@ Process {
 	# Summary: Creates a child process that shares the resources of this process
 	create_child_with_shared_resources(allocator: Allocator): Process {
 		# Clone the registers from this process
-		registers: RegisterState* = allocator.allocate<RegisterState>()
-		registers[] = this.registers[]
+		user_frame: RegisterState* = allocator.allocate<RegisterState>()
+		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
+		user_frame[] = this.user_frame[]
 
 		# Create a new child process with the same resources and state
-		child = Process(registers, memory, file_descriptors) using allocator
+		child = Process(user_frame, kernel_frame, memory, file_descriptors) using allocator
 		child.priority = priority
 		child.working_directory = working_directory
 		child.credentials = credentials
@@ -269,6 +341,9 @@ Process {
 	detach_parent_resources(allocator: Allocator) {
 		# Create paging tables for the process so that it can access memory correctly
 		memory = ProcessMemory(allocator) using allocator
+
+		# Because we detach from the parent, we also need our own kernel stack
+		allocate_kernel_stack(memory)
 
 		file_descriptors = file_descriptors.clone()
 

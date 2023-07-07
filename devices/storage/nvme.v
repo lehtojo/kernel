@@ -508,14 +508,16 @@ Device Nvme {
 			namespaces[0].read(request)
 			###
 
-			ext2 = Ext2(HeapAllocator.instance, namespaces[0]) using KernelHeap
+			# Todo: No need to pass Devices.instance as it is shared
+			ext2 = Ext2(HeapAllocator.instance, Devices.instance, namespaces[0]) using KernelHeap
+			Ext2.instance = ext2
 			ext2.initialize()
 			return
 		}
 	}
 
 	# Summary: Processes queue updates
-	override interrupt(interrupt: u8, frame: TrapFrame*) {
+	override interrupt(interrupt: u8, frame: RegisterState*) {
 		if admin_queue.interrupt == interrupt {
 			admin_queue.process_completion_queue()
 			handle_state()

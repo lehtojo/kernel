@@ -57,6 +57,7 @@ IndirectBlockOperator {
 
 	# Summary: Starts operating by choosing the next block to operate on
 	start(): _ {
+		require(size > 0, 'Ext2: Can not read nothing')
 		commit(0)
 	}
 

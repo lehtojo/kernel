@@ -24,12 +24,6 @@ pack RegisterState {
 	userspace_ss: u64
 }
 
-pack TrapFrame {
-	previous_interrupt_request_level: link
-	next_trap: TrapFrame*
-	registers: RegisterState*
-}
-
 namespace kernel.interrupts
 
 import kernel.scheduler
@@ -105,7 +99,7 @@ export initialize() {
 }
 
 # Summary: Allocates a new interrupt and registers the specified handler for it
-allocate_interrupt(handler: (u8, TrapFrame*) -> u64): u8 {
+allocate_interrupt(handler: (u8, RegisterState*) -> u64): u8 {
 	if next_available_interrupt >= MAX_ALLOCATED_INTERRUPTS {
 		panic('Interrupts: No more interrupts available')
 	}
@@ -205,12 +199,12 @@ export set_trap(index: u32, privilege: u8, handler: link) {
 	(tables + IDT_OFFSET).(InterruptDescriptor*)[index] = descriptor
 }
 
-export process_page_fault(frame: TrapFrame*) {
+export process_page_fault(frame: RegisterState*) {
 	address = read_cr2()
 	process = scheduler.current
 
 	# Load the code location where the page fault occurred
-	rip = frame[].registers[].rip 
+	rip = frame[].rip
 	is_user_space = (rip as i64) >= 0
 
 	# If the current process determines the page fault was legal, then continue
@@ -225,13 +219,28 @@ export process_page_fault(frame: TrapFrame*) {
 	panic('Page fault')
 }
 
-export process(frame: TrapFrame*): u64 {
-	code = frame[].registers[].interrupt
+export process(actual_frame: RegisterState*): u64 {
+	code = actual_frame[].interrupt
+	is_system_call = code == 0x80
 	result = 0 as u64
 
 	# Save all the registers so that they can be modified
 	process = scheduler.current
-	if process !== none { process.save(frame) }
+	frame = actual_frame
+
+	if process !== none {
+		# Validate the loaded kernel stack for debugging purposes
+		is_yielding = is_system_call and actual_frame[].rax == 0x18
+
+		if is_yielding {
+			require(Processor.current.kernel_stack_pointer == Processor.current.general_kernel_stack_pointer, 'Yielding requires general kernel stack pointer')
+		} else {
+			require(Processor.current.kernel_stack_pointer == process.memory.kernel_stack_pointer, 'Loaded wrong kernel stack pointer')
+		}
+
+		# Save the state and load the frame that should be modified
+		frame = process.save(actual_frame)
+	}
 
 	if code == 0x21 {
 		keyboard.process()
@@ -241,15 +250,15 @@ export process(frame: TrapFrame*): u64 {
 		process_page_fault(frame)
 	} else code == 0x0d {
 		debug.write('General protection fault at ')
-		debug.write_address(frame[].registers[].rip)
+		debug.write_address(frame[].rip)
 		debug.write(' for address ')
 		debug.write_address(read_cr2())
 		debug.write_line()
 		panic('General protection fault')
-	} else code == 0x80 {
+	} else is_system_call {
 		result = system_calls.process(frame)
 	} else code >= FIRST_ALLOCATED_INTERRUPT and code <= LAST_ALLOCATED_INTERRUPT {
-		handler = allocated_interrupts[code - FIRST_ALLOCATED_INTERRUPT] as (u8, TrapFrame*) -> u64
+		handler = allocated_interrupts[code - FIRST_ALLOCATED_INTERRUPT] as (u8, RegisterState*) -> u64
 
 		if handler !== none {
 			result = handler(code, frame)
@@ -263,15 +272,23 @@ export process(frame: TrapFrame*): u64 {
 		default_handler()
 	}
 
-	# Ensure interrupt flag is set after ending this interrupt
-	frame[].registers[].rflags |= RFLAGS_INTERRUPT_FLAG
+	process = scheduler.current
+
+	# If the current process is longer running, let the scheduler decide the next action
+	if process !== none and not process.is_running {
+		scheduler.tick(actual_frame)
+		process = scheduler.current
+	}
+
+	# Load registers into the actual frame
+	if process !== none {
+		process.load(actual_frame)
+	}
 
 	# Report that we have processed the interrupt
-	interrupts.end()
-
-	# If the current process no longer runs, let the scheduler decide the next action
-	process = scheduler.current
-	if process !== none and not process.is_running { scheduler.tick(frame) }
+	if not is_system_call {
+		interrupts.end()
+	}
 
 	return result
 }

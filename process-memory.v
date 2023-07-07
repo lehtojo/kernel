@@ -144,6 +144,9 @@ plain ProcessMemory {
 	# Summary: Stores the paging table used for configuring the virtual memory of the process.
 	paging_table: PagingTable
 
+	# Summary: Stores the kernel stack pointer
+	kernel_stack_pointer: u64
+
 	# Todo: Consider moving the members below into an object (name might be limits?)
 
 	# Summary: Minimum address that automatic memory mapping may return

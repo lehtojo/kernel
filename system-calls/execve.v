@@ -82,6 +82,9 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	# Load the program into the process
 	load_result = process.load(HeapAllocator.instance, program, arguments, environment_variables)
 
+	# Loading might change the kernel stack pointer. Because we are the current process, update the kernel stack pointer.
+	Processor.current.kernel_stack_pointer = process.memory.kernel_stack_pointer as link
+
 	# Deallocate the program buffer
 	allocator.deallocate()
 

@@ -49,6 +49,7 @@ plain Superblock {
 
 # Todo: What is going on with the supertype?
 kernel.devices.storage.BlockDeviceRequest BaseRequest<T> {
+	status: u16
 	data: T = 0 as T
 
 	init(allocator: Allocator, address: u64, callback: (u16, BlockDeviceRequest) -> bool) {
@@ -88,4 +89,6 @@ plain InodeInformation {
 	size_upper: u32
 	fragment_block_address: u32
 	os_specific_value_2: u8[12]
+
+	size => (size_upper <| 32) | size_lower
 }

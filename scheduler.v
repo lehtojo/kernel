@@ -75,19 +75,31 @@ Scheduler {
 		return result
 	}
 
-	switch(frame: TrapFrame*, next: Process) {
+	yield(): _ {
+		# Save the current state and the next time this thread is ready it will continue from here in kernel mode
+		# System call: sched_yield
+
+		# Switch to general kernel stack, so that the system call will not modify the current stack
+		Processor.current.kernel_stack_pointer = Processor.current.general_kernel_stack_pointer
+
+		system_call(0x18, 0, 0, 0, 0, 0, 0)
+	}
+
+	switch(frame: RegisterState*, next: Process) {
 		debug.write('Scheduler: Switching to process ')
 		debug.write(next.id)
 		debug.write(' (rip=')
 		debug.write_address(next.registers[].rip)
 		debug.write_line(')')
 
-		frame[].registers[] = next.registers[]
-
 		# Update fs register
 		enable_general_purpose_segment_instructions()
 		write_fs_base(next.fs)
 		disable_general_purpose_segment_instructions()
+
+		# Update the kernel stack pointer
+		Processor.current.kernel_stack_pointer = next.memory.kernel_stack_pointer as link
+		require(Processor.current.kernel_stack_pointer !== none, 'Missing thread kernel stack pointer')
 
 		current = next
 
@@ -95,14 +107,14 @@ Scheduler {
 		if next.memory !== none next.memory.paging_table.use()
 	}
 
-	enter(frame: TrapFrame*, next: Process) {
+	enter(frame: RegisterState*, next: Process) {
 		debug.write('Scheduler: Entering to process ')
 		debug.write_line(next.id)
 
 		if current !== next switch(frame, next)
 	}
 
-	pick_and_enter(frame: TrapFrame*) {
+	pick_and_enter(frame: RegisterState*) {
 		# Choose the next process to execute
 		next = pick()
 		if next === none return
@@ -111,21 +123,17 @@ Scheduler {
 		enter(frame, next)
 	}
 
-	tick(frame: TrapFrame*) {
-		registers = frame[].registers
-		#require(registers[].cs == KERNEL_CODE_SELECTOR and registers[].userspace_ss == KERNEL_DATA_SELECTOR, 'Illegal segment-register')
-		require((registers[].rflags & RFLAGS_INTERRUPT_FLAG) != 0, 'Illegal flags-register')
-		# TODO: Verify IOPL and RSP
+	tick(frame: RegisterState*): _ {
+		is_kernel_space = (frame[].rip as i64) < 0
+		is_interrupts_enabled = (frame[].rflags & RFLAGS_INTERRUPT_FLAG) != 0
+		require(is_interrupts_enabled or is_kernel_space, 'Illegal flags-register')
 
-		# Save the state of the current process
-		if current !== none {
-			current.save(frame)
-		}
+		# Todo: Verify IOPL and RSP
 
 		pick_and_enter(frame)
 	}
 
-	exit(frame: TrapFrame*, process: Process) {
+	exit(frame: RegisterState*, process: Process) {
 		debug.write('Scheduler: Exiting process ') debug.write_line(process.id)
 		process.change_state(THREAD_STATE_TERMINATED)
 
@@ -141,7 +149,8 @@ Scheduler {
 }
 
 test(allocator: Allocator) {
-	registers = KernelHeap.allocate<RegisterState>()
+	user_frame = KernelHeap.allocate<RegisterState>()
+	kernel_frame = KernelHeap.allocate<RegisterState>()
 
 	debug.write('Scheduler (test 1): Kernel stack address ') debug.write_address(registers_rsp()) debug.write_line()
 
@@ -169,6 +178,18 @@ test(allocator: Allocator) {
 
 	memory.paging_table.map_page(HeapAllocator.instance, program_text_section_virtual_address, text_section_physical_address)
 	memory.paging_table.map_page(HeapAllocator.instance, program_stack_virtual_address, stack_physical_address)
+
+	# Allocate kernel stack for the process.
+	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
+	# Todo: Create stack quards here as well (proper stack support)
+	debug.write_line('Scheduler (test 1): Allocating kernel stack memory for the process')
+	kernel_stack_pointer = KernelHeap.allocate(512 * KiB)
+
+	# Zero out the kernel stack memory
+	global.memory.zero(kernel_stack_pointer, 512 * KiB)
+
+	# Store the kernel stack pointer for use
+	memory.kernel_stack_pointer = (kernel_stack_pointer + 512 * KiB) as u64
 
 	# mov r8, 7
 	position = 0
@@ -217,7 +238,7 @@ test(allocator: Allocator) {
 
 	file_descriptors = ProcessFileDescriptors(allocator, 256) using KernelHeap
 
-	process = Process(registers, memory, file_descriptors) using KernelHeap
+	process = Process(user_frame, kernel_frame, memory, file_descriptors) using KernelHeap
 	process.registers[].rip = program_text_section_virtual_address as u64
 	process.registers[].userspace_rsp = (program_stack_virtual_address + 0x100) as u64
 

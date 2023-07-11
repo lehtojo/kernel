@@ -94,7 +94,8 @@ pack ProcessMemoryRegion {
 		require(slice.end <= region.end, 'Slice end must be less than or equal to region end')
 		require(slice.start <= slice.end, 'Slice start must be less than slice end')
 
-		return ProcessMemoryRegion.new(slice, inode, device, offset)
+		internal_offset = (slice.start - region.start) as u64
+		return ProcessMemoryRegion.new(slice, inode, device, offset + internal_offset)
 	}
 
 	# Summary: Returns a slice of this region
@@ -183,6 +184,18 @@ plain ProcessMemory {
 
 		# Reserve the kernel mapping region
 		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(KERNEL_MAP_BASE, KERNEL_MAP_END)))
+	}
+
+	init(other: ProcessMemory) {
+		this.pid = other.pid
+		this.allocator = other.allocator
+		this.allocations = other.allocations
+		this.available_regions_by_address = other.available_regions_by_address
+		this.paging_table = other.paging_table
+		this.kernel_stack_pointer = other.kernel_stack_pointer
+		this.min_memory_map_address = other.min_memory_map_address
+		this.break = other.break
+		this.max_break = other.max_break
 	}
 
 	# Summary:

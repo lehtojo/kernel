@@ -369,3 +369,19 @@ mov r8, r9
 mov r9, qword [rsp+8]
 syscall
 ret
+
+.global save_fpu_state_xsave
+save_fpu_state_xsave:
+; mov rax, rsi
+; mov rdx, rsi
+; shr rdx, 32
+fxsave [rdi]
+ret
+
+.global load_fpu_state_xrstor
+load_fpu_state_xrstor:
+; mov rax, rsi
+; mov rdx, rsi
+; shr rdx, 32
+fxrstor [rdi]
+ret

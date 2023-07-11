@@ -1,5 +1,7 @@
 namespace kernel.system_calls
 
+# Todo: Validate that pointer parameters in system calls do not point to kernel memory, because the user could guess and read them
+
 # System call: execve
 export system_execve(path_argument: link, arguments: link*, environment_variables: link*): i32 {
 	debug.write('System call: Execute: ')
@@ -77,7 +79,17 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	program = Array<u8>(allocator, size)
 
 	# Load the program into the buffer
-	description.read(program.data, program.size)
+	debug.write_line('System call: Execute: Loading the program into memory...')
+
+	if description.read(program.data, program.size) != program.size {
+		debug.write_line('System call: Execute: Failed to load the program into memory')
+
+		# Deallocate the program buffer
+		allocator.deallocate()
+		return EIO
+	}
+
+	debug.write_line('System call: Execute: Program is now loaded into memory')
 
 	# Load the program into the process
 	load_result = process.load(HeapAllocator.instance, program, arguments, environment_variables)

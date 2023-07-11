@@ -129,6 +129,7 @@ FileSystem MemoryFileSystem {
 	init(allocator: Allocator, devices: Devices) {
 		this.allocator = allocator
 		this.devices = devices
+		this.inode_index = 1
 	}
 
 	# Summary: Produces create options from the specified flags
@@ -285,7 +286,7 @@ FileSystem MemoryFileSystem {
 		metadata.file_system_device_minor = standard_metadata.device_id & 0xffffffff
 		metadata.mount_id = 0
 		return 0
-	} 
+	}
 
 	override iterate_directory(allocator: Allocator, inode: Inode) {
 		require(inode.is_directory(), 'Specified inode was not a directory')
@@ -451,6 +452,21 @@ export add_devices_to_folder(device_directory: MemoryDirectoryInode, devices: Li
 	}	
 }
 
+export add_system_inodes(allocator: Allocator) {
+	memory_file_system = MemoryFileSystem(allocator, Devices.instance) using allocator
+	devices_directory = MemoryDirectoryInode(allocator, memory_file_system, memory_file_system.allocate_inode_index(), String.new('dev')) using allocator
+
+	# Add all the devices to the device directory
+	# Todo: No need to pass the devices as parameter here as we have Devices.instance
+	device_list = List<Device>(allocator)
+	Devices.instance.get_all(device_list)
+	add_devices_to_folder(devices_directory, device_list)
+	device_list.clear()
+
+	Custody.root.inode.(Ext2DirectoryInode).inodes.add(devices_directory)
+}
+
+###
 export test(allocator: Allocator, memory_information: SystemMemoryInformation, devices: Devices) {
 	file_system = MemoryFileSystem(allocator, devices) using allocator
 
@@ -482,3 +498,4 @@ export test(allocator: Allocator, memory_information: SystemMemoryInformation, d
 
 	load_boot_files(allocator, file_system, memory_information)
 }
+###

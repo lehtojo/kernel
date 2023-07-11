@@ -24,11 +24,13 @@ FileSystemRequest {
 	}
 }
 
-pack ReadRequest {
-	caller: Ext2
-	request: FileSystemRequest
+pack ReadRequestData {
 	process: Process
-	inode_inside_block_byte_offset: u32
+	callback: Action<u64>
+	destination: u64
+	transfer_physical_address: u64
+	offset_in_block: u32
+	size: u32
 }
 
 pack Ext2DirectoryEntry {
@@ -98,7 +100,7 @@ DirectoryIterator Ext2DirectoryIterator {
 
 FileSystem Ext2 {
 	shared instance: Ext2
-	shared root_inode: Inode
+	shared root_inode: Ext2DirectoryInode
 
 	constant MIN_SUPPORTED_MAJOR_VERSION = 1
 
@@ -120,7 +122,30 @@ FileSystem Ext2 {
 	}
 
 	initialize(): u64 {
-		return load_superblock()
+		debug.write_line('Ext2: Initializing...')
+
+		result = load_superblock()
+
+		if result != 0 {
+			debug.write_line('Ext2: Failed to load the superblock')
+			return result
+		}
+
+		result = process_superblock_and_continue()
+
+		if result != 0 {
+			debug.write_line('Ext2: Failed to process the superblock')
+			return result
+		}
+
+		result = process_block_group_descriptors_and_continue()
+
+		if result != 0 {
+			debug.write_line('Ext2: Failed to process the block group descriptors')
+			return result
+		}
+
+		return 0
 	}
 
 	private load_superblock(): u64 {
@@ -133,27 +158,30 @@ FileSystem Ext2 {
 
 		superblock = mapper.map_kernel_page(superblock_physical_address) as Superblock
 
-		callback = (status: u16, request: BaseRequest<Ext2>) -> {
-			if status != 0 {
-				debug.write_line('Ext2: Failed to load the superblock')
-				return true
-			}
-	
-			request.data.process_superblock_and_continue()
+		callback = (status: u16, request: BaseRequest<ProgressTracker>) -> {
+			request.data.execute(status)
 			return true
 
 		} as (u16, BlockDeviceRequest) -> bool
+	
+		# Add a blocker for the process, so that when this process starts to wait below, it does not get rescheduled before the callback unblocks the process
+		process = get_process()
+		process.block(Blocker() using KernelHeap)
 
-		request = BaseRequest<Ext2>(allocator, superblock_physical_address as u64, callback) using allocator
-		request.data = this
+		tracker = ProgressTracker(process, 1)
+
+		request = BaseRequest<ProgressTracker>(allocator, superblock_physical_address as u64, callback) using allocator
+		request.data = tracker
 		request.block_index = SUPERBLOCK_OFFSET / device.block_size
 		request.set_device_region_size(device, sizeof(Superblock))
 
 		device.read(request)
-		return 0
+		wait()
+
+		return tracker.status
 	}
 
-	private process_superblock_and_continue(): _ {
+	private process_superblock_and_continue(): u64 {
 		debug.write_line('Ext2: Superblock: ')
 		debug.write('  Number of inodes: ') debug.write_line(superblock.inode_count)
 		debug.write('  Number of blocks: ') debug.write_line(superblock.block_count)
@@ -180,36 +208,39 @@ FileSystem Ext2 {
 		debug.write('  Major version: ') debug.write_line(superblock.major_version)
 		debug.write('  User id: ') debug.write_line(superblock.user_id)
 		debug.write('  Group id: ') debug.write_line(superblock.group_id)
+		debug.write('  First unreserved inode: ') debug.write_line(superblock.first_unreserved_inode)
 		debug.write('  Inode size: ') debug.write_line(superblock.inode_size)
 	
 		if superblock.signature != SIGNATURE {
 			debug.write_line('Ext2: Error: Invalid signature')
-			return
+			return EIO
 		}
 
 		# We do not support versions below 1.0 as some fields are not available such as 64-bit file size
 		if superblock.major_version < MIN_SUPPORTED_MAJOR_VERSION {
 			debug.write_line('Ext2: Error: Too old file system')
-			return
+			return EIO
 		}
 
 		# Verify the inode size is sensible. If the block size is not multiple of inode sizes,
 		# then it might be possible that inode information is across two blocks, which is not supported.
 		if not memory.is_aligned(block_size, superblock.inode_size) {
 			debug.write_line('Ext2: Error: Block size is not multiple of inode size')
-			return
+			return EIO
 		}
 
 		# Standard requires that inode usage bitmap must fit inside a single block
 		if memory.round_to(superblock.inodes_in_block_group, 8) / 8 > block_size {
 			debug.write_line('Ext2: Error: Inode usage bitmap does not fit inside a single block')
-			return
+			return EIO
 		}
 
-		load_block_group_descriptors()
+		return load_block_group_descriptors()
 	}
 
 	private load_block_group_descriptors(): u64 {
+		debug.write_line('Ext2: Loading block group descriptors...')
+
 		# Compute how many block groups there are
 		total_blocks = superblock.block_count + superblock.unallocated_block_count
 		total_block_groups = (total_blocks + superblock.blocks_in_block_group - 1) / superblock.blocks_in_block_group # ceil(total_blocks / blocks_in_block_group)
@@ -230,24 +261,29 @@ FileSystem Ext2 {
 		block_group_descriptors = List<BlockGroupDescriptor>(allocator, mapped_block_group_descriptors, total_block_groups) using allocator
 		block_group_descriptor_inode_usage_bitmaps = List<link>(allocator, total_block_groups, true) using allocator
 
-		callback = (status: u16, request: BaseRequest<Ext2>) -> {
-			if status != 0 {
-				debug.write_line('Ext2: Failed to load block group descriptors')
-				return
-			}
-
-			request.data.process_block_group_descriptors_and_continue()
+		callback = (status: u16, request: BaseRequest<ProgressTracker>) -> {
+			request.data.execute(status)
+			return true
 
 		} as (u16, BlockDeviceRequest) -> bool
+	
+		# Add a blocker for the process, so that when this process starts to wait below, it does not get rescheduled before the callback unblocks the process
+		process = get_process()
+		process.block(Blocker() using KernelHeap)
 
-		request = BaseRequest<Ext2>(allocator, block_group_descriptors_physical_address as u64, callback) using allocator
-		request.data = this
+		tracker = ProgressTracker(process, 1)
+
+		request = BaseRequest<ProgressTracker>(allocator, block_group_descriptors_physical_address as u64, callback) using allocator
+		request.data = tracker
 		request.set_device_region(device, block_group_descriptors_offset, block_groups_memory_size)
 
 		device.read(request)
+		wait()
+
+		return tracker.status
 	}
 
-	private process_block_group_descriptors_and_continue(): _ {
+	private process_block_group_descriptors_and_continue(): u64 {
 		descriptor = block_group_descriptors[0]
 		debug.write_line('Ext2: Block group descriptor: ')
 		debug.write('  Block usage bitmap (block address): ') debug.write_line(descriptor.block_usage_bitmap)
@@ -256,15 +292,17 @@ FileSystem Ext2 {
 		debug.write('  Number of unallocated blocks: ') debug.write_line(descriptor.unallocated_block_count)
 		debug.write('  Number of unallocated inodes: ') debug.write_line(descriptor.unallocated_inode_count)
 		debug.write('  Number of directories: ') debug.write_line(descriptor.directory_count)
+
+		return load_root_inode()
 	}
 
-	load_root_inode(): _ {
+	private load_root_inode(): u64 {
 		debug.write_line('Ext2: Loading root inode...')
 		root_inode = Ext2DirectoryInode(allocator, this, 2, String.empty) using allocator
-		load_inode_information(2, root_inode.(Ext2DirectoryInode).information)
+		return load_inode_information(2, root_inode.information)
 	}
 
-	private wait(): _ {
+	wait(): _ {
 		require(get_process().is_blocked, 'Attempted to wait for io request, but the process was not blocked')
 		interrupts.scheduler.yield()
 	}
@@ -319,7 +357,7 @@ FileSystem Ext2 {
 		request.data = process
 		request.set_device_region(device, inode_containing_block_byte_offset, block_size)
 
-		debug.write_line('Ext2: Reading inode information...')
+		debug.write('Ext2: Reading information of inode ') debug.write(inode) debug.write_line('...')
 		device.read(request)
 
 		# Wait for the request to finish
@@ -339,78 +377,82 @@ FileSystem Ext2 {
 		return 0
 	}
 
-	# Summary: Attempts to read the specified number of bytes from the specified inode into memory
-	read(allocator: Allocator, inode: Inode, size: u64): Result<Segment, u64> {
-		# Load information about the inode, so that we can locate its content
-		information = InodeInformation()
+	# Summary: Reads the specified block with the specified configuration and executes the callback on completion
+	read_block(destination: u64, block: u64, offset_in_block: u32, size: u32, callback: Action<u64>): u64 {
+		debug.write('Ext2: Reading a block: ')
+		debug.write('destination=') debug.write_address(destination)
+		debug.write(', block=') debug.write(block)
+		debug.write(', offset_in_block=') debug.write(offset_in_block)
+		debug.write(', size=') debug.write_line(size)
 
-		result = load_inode_information(inode.index, information)
-		if result != 0 return Results.error<Segment, u64>(result)
+		require(offset_in_block + size <= block_size, 'Can not read outside the block')
 
-		# Allocate memory for reading the inode
-		data_device_size = memory.round_to(information.size, device.block_size)
-		data_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(data_device_size)
-		if data_physical_address === none return Results.error<Segment, u64>(ENOMEM)
+		# Todo: Add block based caching here
+		# Todo: Are "holes" (index 0 refers to a block full of zeroes) a real thing?
 
-		# Add a blocker for the process, so that when this process starts to wait below, it does not get rescheduled before the callback unblocks the process
-		process = get_process()
-		process.block(Blocker() using KernelHeap)
+		# Allocate a physical region for one block
+		# Todo: We could have a special function for getting these transfer regions that would control the amount of resources used for transfers. It could yield when we are out of these resources.
+		transfer_size = math.max(block_size, device.block_size)
+		transfer_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(transfer_size) as u64
+		if transfer_physical_address === none return ENOMEM
 
-		reader = InodeReader(allocator, process, device, information, data_physical_address, size, block_size, 0) using allocator
-		reader.pointers = information.block_pointers
-		reader.pointer_count = BLOCK_POINTER_COUNT
-		reader.completed = (reader: InodeReader, status: u16) -> {
-			# If the completed with an error, report it
-			if status != 0 {
-				debug.write('Ext2: Reading failed with status ') debug.write_line(status)
-				reader.process.unblock()
-				return
-			}
+		# Compute where the block is in bytes
+		block_byte_offset = block * block_size
 
-			read = reader.progress[]
-			remaining = reader.size - read
+		device_callback = (status: u16, request: BaseRequest<ReadRequestData>) -> {
+			data = request.data
 
-			debug.write('Ext2: Size = ') debug.write(reader.size) debug.write_line(' byte(s)')
-			debug.write('Ext2: Progress = ') debug.write(read) debug.write_line(' byte(s)')
-			debug.write('Ext2: Remaining = ') debug.write(remaining) debug.write_line(' byte(s)')
+			# If we succeeded, copy the wanted region from the transfer region
+			if status == 0 {
+				# Switch to the process memory, so that we can copy
+				data.process.memory.paging_table.use()
 
-			# If we have read all of it, complete the request with success
-			if remaining == 0 {
-				debug.write_line('Ext2: Reading complete')
-				reader.process.unblock()
-				return
-			}
+				# Copy the wanted region from the transfer region
+				transfer = mapper.map_kernel_region((data.transfer_physical_address + data.offset_in_block) as link, data.size)
+				memory.copy(data.destination as link, transfer, data.size)
 
-			# Because the direct block pointers were not enough, start reading the indirect blocks
-			if reader.layer < 1 and reader.inode.singly_indirect_block_pointer != 0 {
-				debug.write_line('Ext2: Reading singly indirect blocks...')
-				reader.end[] = reader.size
-				reader.layer = 1
-				reader.load(reader.inode.singly_indirect_block_pointer)
-			} else reader.layer < 2 and reader.inode.doubly_indirect_block_pointer != 0 {
-				debug.write_line('Ext2: Reading doubly indirect blocks...')
-				reader.end[] = reader.size
-				reader.layer = 2
-				reader.load(reader.inode.doubly_indirect_block_pointer)
-			} else reader.layer < 3 and reader.inode.triply_indirect_block_pointer != 0 {
-				debug.write_line('Ext2: Reading triply indirect blocks...')
-				reader.end[] = reader.size
-				reader.layer = 3
-				reader.load(reader.inode.triply_indirect_block_pointer)
+				# Switch back to the original paging table
+				interrupts.scheduler.current.memory.paging_table.use()
 			} else {
-				# We read everything we could, so complete the request with success
-				reader.process.unblock()
+				status = EIO
 			}
+
+			# Deallocate the transfer region
+			PhysicalMemoryManager.instance.deallocate_all(data.transfer_physical_address as link)
+
+			# Execute the callback now that we have completed the request
+			data.callback.execute(status)
+			return true
 		}
 
-		debug.write_line('Ext2: Reading direct blocks...')
-		reader.start()
+		request = BaseRequest<ReadRequestData>(allocator, transfer_physical_address, device_callback as (u16, BlockDeviceRequest) -> bool) using allocator
+		request.data.process = get_process()
+		request.data.callback = callback
+		request.data.destination = destination
+		request.data.transfer_physical_address = transfer_physical_address
+		request.data.offset_in_block = offset_in_block
+		request.data.size = size
+		request.set_device_region(device, block_byte_offset, block_size)
 
-		# Wait for the request to finish
+		# Send the request, but do not wait for it to complete
+		device.read(request)
+		return 0
+	}
+
+	# Summary: Reads the specified block with the specified configuration and waits for the data to be read
+	read_block(destination: u64, block: u64, offset_in_block: u32, size: u32): u64 {
+		process = get_process()
+
+		# Create a progress tracker that will unblock the process after completion
+		tracker = ProgressTracker(process, 1)
+		result = read_block(destination, block, offset_in_block, size, tracker)
+		if result != 0 return result
+
+		# Wait for the read request to complete
+		process.block(Blocker() using KernelHeap)
 		wait()
 
-		debug.write_line('Ext2: Finished reading the inode')
-		return Results.new<Segment, u64>(Segment.new(data_physical_address, data_physical_address + size))
+		return tracker.status
 	}
 
 	# Summary: Produces create options from the specified flags
@@ -477,15 +519,82 @@ FileSystem Ext2 {
 		panic('Failed to allocate an inode index because there are no available inodes')
 	}
 
+	override access(base: Custody, path: String, mode: u32) {
+		debug.write('Ext2: Accessing path ') debug.write_line(path)
+
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
+
+		if result.has_error {
+			debug.write_line('Ext2: Failed to access the path')
+			local_allocator.deallocate()
+			return result.error
+		}
+
+		debug.write_line('Ext2: Accessed the path successfully')
+		local_allocator.deallocate()
+		return F_OK
+	}
+
+	override lookup_status(base: Custody, path: String, metadata: FileMetadata) {
+		debug.write_line('Ext2: Lookup metadata')
+
+		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+
+		# Attempt to open the specified path
+		open_result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
+
+		if open_result.has_error {
+			debug.write_line('Ext2: Failed to lookup metadata')
+			local_allocator.deallocate()
+			return open_result.error
+		}
+
+		# Load file status using the inode from the custody
+		custody = open_result.value
+		result = custody.inode.load_status(metadata)
+
+		# Deallocate and return the result code
+		local_allocator.deallocate()
+		return result
+	}
+
+	override lookup_extended_status(base: Custody, path: String, metadata: FileMetadataExtended) {
+		standard_metadata = FileMetadata()
+		lookup_status(base, path, standard_metadata)
+
+		metadata.mask = 0
+		metadata.block_size = standard_metadata.block_size
+		metadata.attributes = 0
+		metadata.hard_link_count = standard_metadata.hard_link_count
+		metadata.uid = standard_metadata.uid
+		metadata.gid = standard_metadata.gid
+		metadata.mode = standard_metadata.mode
+		metadata.inode = standard_metadata.inode
+		metadata.size = standard_metadata.size
+		metadata.blocks = standard_metadata.blocks
+		metadata.attributes_mask = 0
+		metadata.last_access_time = 0 as Timestamp
+		metadata.creation_time = 0 as Timestamp
+		metadata.last_change_time = 0 as Timestamp
+		metadata.last_modification_time = 0 as Timestamp
+		metadata.device_major = standard_metadata.rdev |> 32
+		metadata.device_minor = standard_metadata.rdev & 0xffffffff
+		metadata.file_system_device_major = standard_metadata.device_id |> 32
+		metadata.file_system_device_minor = standard_metadata.device_id & 0xffffffff
+		metadata.mount_id = 0
+		return 0
+	}
+
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
-		debug.write('Memory file system: Opening file from path ') debug.write_line(path)
+		debug.write('Ext2: Opening file from path ') debug.write_line(path)
 
 		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
 
 		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
 		if result.has_error {
-			debug.write_line('Memory file system: Failed to open the specified path')
+			debug.write_line('Ext2: Failed to open the specified path')
 			local_allocator.deallocate()
 			return Results.error<OpenFileDescription, u32>(result.error)
 		}
@@ -519,21 +628,8 @@ FileSystem Ext2 {
 		debug.write_line('Ext2: Iterating directory...')
 		require(inode.is_directory(), 'Specified inode was not a directory')
 
-		# Attempt to load directory "content" into memory. It will contain the directory entries, but not their data.
-		# Todo: Size should be part of metadata, so we do not need to cast below
-		data_or_error = read(allocator, inode, inode.(Ext2DirectoryInode).information.size)
-
-		if data_or_error.has_error() {
-			debug.write_line('Ext2: Failed to read directory content for iteration')
-			return Results.error<DirectoryIterator, u32>(data_or_error.error)
-		}
-
-		debug.write_line('Ext2: Finished reading directory entries to memory')
-
-		data_physical_region = data_or_error.value
-
 		# Attempt to allocate a region using the specified allocator where we copy the content
-		size = data_physical_region.size
+		size = inode.size()
 		destination = allocator.allocate(size)
 
 		if destination === none {
@@ -541,12 +637,19 @@ FileSystem Ext2 {
 			return Results.error<DirectoryIterator, u32>(ENOMEM)
 		}
 
-		# Copy the content into the allocated region
-		data = mapper.map_kernel_region(data_physical_region.start, size)
-		memory.copy(destination, data, size)
+		# Read the directory entries into the allocated data
+		result = inode.read_bytes(destination, 0, size)
 
-		# Deallocate the physical region
-		PhysicalMemoryManager.instance.deallocate_all(data_physical_region.start)
+		if result != size {
+			debug.write_line('Ext2: Failed to read directory content for iteration')
+
+			allocator.deallocate(destination)
+
+			# If no error occurred, but we did not read the correct number of bytes, convert that to error code
+			if (result as i64) >= 0 { result = EIO }
+
+			return Results.error<DirectoryIterator, u32>(result)
+		}
 
 		iterator = Ext2DirectoryIterator(allocator, destination, destination + size) using allocator 
 		return Results.new<DirectoryIterator, u32>(iterator)

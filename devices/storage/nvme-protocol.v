@@ -12,7 +12,7 @@ constant SUBMISSION_QUEUE_ENTRY_SIZE = 64
 constant COMPLETION_QUEUE_ENTRY_SIZE_EXPONENT = 4
 constant COMPLETION_QUEUE_ENTRY_SIZE = 16
 
-constant IO_QUEUE_SIZE = 64 # Todo: Could this be decided in the code based on capabilities?
+constant IO_QUEUE_SIZE = 1024 # Todo: Could this be decided in the code based on capabilities?
 
 constant CONFIGURATION_ENABLED_BIT = 1
 constant STATUS_READY_BIT = 1

@@ -46,6 +46,17 @@ namespace kernel {
 
 	import 'C' system_call(number: u64, argument_0: u64, argument_1: u64, argument_2: u64, argument_3: u64, argument_4: u64, argument_5: u64): u64
 
+	import 'C' save_fpu_state_xsave(destination: link): _
+	import 'C' load_fpu_state_xrstor(source: link): _
+
+	save_fpu_state(destination: link): _ {
+		save_fpu_state_xsave(destination)
+	}
+
+	load_fpu_state(source: link): _ {
+		load_fpu_state_xrstor(source)
+	}
+
 	# Todo: Remove the multiplications (* 100) once proper waiting is supported
 	wait_for_microsecond(): _ { wait_for_microseconds(1 * 100) }
 	wait_for_millisecond(): _ { wait_for_microseconds(1000 * 100) }
@@ -60,6 +71,8 @@ namespace kernel {
 	}
 
 	plain SystemMemoryInformation {
+		shared instance: SystemMemoryInformation
+
 		regions: List<Segment>
 		reserved: List<Segment>
 		sections: List<elf.SectionHeader>
@@ -73,6 +86,11 @@ namespace kernel {
 import kernel
 import kernel.devices
 import kernel.devices.console
+
+# Todo: Too direct imports, abstract or remove
+import kernel.file_systems.memory_file_system
+import kernel.file_systems.ext2
+import kernel.file_systems
 
 export start(
 	multiboot_information: link,
@@ -92,6 +110,7 @@ export start(
 	interrupts.scheduler = scheduler.Scheduler()
 
 	memory_information = SystemMemoryInformation()
+	SystemMemoryInformation.instance = memory_information
 	memory_information.regions = List<Segment>(allocator)
 	memory_information.reserved = List<Segment>(allocator)
 	memory_information.sections = List<elf.SectionHeader>(allocator)
@@ -122,15 +141,35 @@ export start(
 	devices.add(boot_console)
 
 	scheduler.test(allocator)
-	scheduler.test(allocator)
-	scheduler.test2(HeapAllocator.instance, memory_information, boot_console)
 
 	apic.initialize(allocator)
 
-	file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
+	# file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
 
 	system_calls.initialize()
 
+	kernel_thread_start = () -> {
+		debug.write_line('Kernel thread: Starting...')
+
+		Ext2.instance.initialize()
+
+		# Todo: Toggling the two lines below with the "experiment" loads the shell, but something goes wrong with executing ls for example...
+		FileSystem.root = Ext2.instance
+		Custody.root = Custody(String.empty, none as Custody, Ext2.root_inode) using KernelHeap
+
+		add_system_inodes(HeapAllocator.instance)
+
+		require(Devices.instance.find(BootConsoleDevice.MAJOR, BootConsoleDevice.MINOR) has boot_console, 'Missing boot console')
+		scheduler.create_boot_shell_process(HeapAllocator.instance, boot_console)
+		#scheduler.test2(HeapAllocator.instance, SystemMemoryInformation.instance, boot_console)
+
+		debug.write_line('Kernel thread: All done')
+
+		# Exit this thread
+		system_call(0x3c, 0, 0, 0, 0, 0, 0)
+	}
+
+	kernel_thread = scheduler.create_kernel_thread(kernel_thread_start as u64)
 	interrupts.enable()
 
 	loop {}

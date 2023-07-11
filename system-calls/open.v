@@ -24,16 +24,6 @@ export system_open(path_argument: link, flags: i32, mode: u32): i32 {
 
 # System call: open
 export system_open(process: Process, path: String, flags: i32, mode: u32): i32 {
-	# Todo: Remove
-	debug.write_line('EXPERIMENT START')
-	if process.id == 4 and FileSystem.root.index != ext2.SIGNATURE and path == '/' {
-		Ext2.instance.load_root_inode()
-
-		FileSystem.root = Ext2.instance
-		Custody.root = Custody(String.empty, none as Custody, Ext2.root_inode) using KernelHeap
-	}
-	debug.write_line('EXPERIMENT END')
-
 	# First, try allocating a file descriptor before doing anything
 	if process.file_descriptors.allocate() has not descriptor {
 		debug.write_line('System call: Open: Failed to allocate a file descriptor')

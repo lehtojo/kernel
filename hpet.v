@@ -147,7 +147,7 @@ export initialize(allocator: Allocator, header: HPETHeader*) {
 	manager.reset()
 	manager.enable_all()
 
-	manager.timers[0].periodic(4, 100000000) # Chill: 100000000
+	manager.timers[0].periodic(4, 1000000) # Chill: 100000000
 
 	manager.print()
 }

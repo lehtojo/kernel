@@ -3,24 +3,15 @@ namespace kernel.file_systems.ext2
 import kernel.system_calls
 import kernel.devices
 
-Inode Ext2DirectoryInode {
-	private allocator: Allocator
-	private name: String
-	private inodes: List<Inode>
-	inline information: InodeInformation
+Ext2Inode Ext2DirectoryInode {
+	inodes: List<Inode>
 
 	init(allocator: Allocator, file_system: FileSystem, index: u64, name: String) {
-		Inode.init(file_system, index)
-
-		this.allocator = allocator
-		this.name = name
+		Ext2Inode.init(allocator, file_system, index, name)
 		this.inodes = List<Inode>(allocator) using allocator
 	}
 
 	override is_directory() { return true }
-
-	override write_bytes(bytes: Array<u8>, offset: u64) { return -1 }
-	override read_bytes(destination: link, offset: u64, size: u64) { return -1 }
 
 	override create_child(name: String, mode: u16, device: u64) {
 		# Output debug information
@@ -77,18 +68,18 @@ Inode Ext2DirectoryInode {
 		loop entry in iterator {
 			if not (entry.name == name) continue
 
-			inode_allocator = LocalHeapAllocator(HeapAllocator.instance)
-			information = none as InodeInformation
+			inode_allocator = LocalHeapAllocator(allocator)
 
 			if entry.type == DT_DIR {
+				debug.write_line('Ext2 directory inode: Creating a directory inode...')
 				inode = Ext2DirectoryInode(allocator, file_system, entry.inode, entry.name.copy(inode_allocator)) using inode_allocator
-				information = inode.(Ext2DirectoryInode).information
 			} else {
+				debug.write_line('Ext2 directory inode: Creating an inode...')
 				inode = Ext2Inode(allocator, file_system, entry.inode, entry.name.copy(inode_allocator)) using inode_allocator
-				information = inode.(Ext2Inode).information
 			}
 
 			# Load information about the inode
+			information: InodeInformation = inode.(Ext2Inode).information
 			result = file_system.(Ext2).load_inode_information(inode.index, information)
 
 			# If loading the information failed, deallocate the inode

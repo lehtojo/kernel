@@ -511,7 +511,6 @@ Device Nvme {
 			# Todo: No need to pass Devices.instance as it is shared
 			ext2 = Ext2(HeapAllocator.instance, Devices.instance, namespaces[0]) using KernelHeap
 			Ext2.instance = ext2
-			ext2.initialize()
 			return
 		}
 	}

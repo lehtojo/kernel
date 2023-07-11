@@ -76,6 +76,8 @@ Scheduler {
 	}
 
 	yield(): _ {
+		debug.write('Scheduler: Yielding process ') debug.write_line(current.id)
+
 		# Save the current state and the next time this thread is ready it will continue from here in kernel mode
 		# System call: sched_yield
 
@@ -148,9 +150,48 @@ Scheduler {
 	}
 }
 
+create_kernel_thread(rip: u64): Process {
+	debug.write_line('Scheduler: Creating a kernel thread...')
+
+	user_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
+	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
+	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+
+	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
+
+	# Allocate kernel stack for the process.
+	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
+	# Todo: Create stack quards here as well (proper stack support)
+	debug.write_line('Scheduler: Allocating kernel thread stack...')
+	user_stack_pointer = KernelHeap.allocate(512 * KiB)
+	kernel_stack_pointer = KernelHeap.allocate(512 * KiB)
+
+	# Zero out the stack memoriy
+	global.memory.zero(kernel_stack_pointer, 512 * KiB)
+
+	# Store the kernel stack pointer for use
+	memory.kernel_stack_pointer = (kernel_stack_pointer + 512 * KiB) as u64
+
+	file_descriptors = ProcessFileDescriptors(HeapAllocator.instance, 256) using KernelHeap
+
+	process = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, memory, file_descriptors) using KernelHeap
+	process.registers[].cs = USER_CODE_SELECTOR
+	process.registers[].rflags = 0
+	process.registers[].userspace_ss = USER_DATA_SELECTOR
+	process.registers[].rip = rip
+	process.registers[].userspace_rsp = (user_stack_pointer + 512 * KiB) as u64
+
+	interrupts.scheduler.add(process)
+
+	return process
+}
+
 test(allocator: Allocator) {
-	user_frame = KernelHeap.allocate<RegisterState>()
-	kernel_frame = KernelHeap.allocate<RegisterState>()
+	user_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
+	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
+	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 
 	debug.write('Scheduler (test 1): Kernel stack address ') debug.write_address(registers_rsp()) debug.write_line()
 
@@ -236,9 +277,10 @@ test(allocator: Allocator) {
 	text_section_virtual_address[position++] = 0xeb
 	text_section_virtual_address[position++] = 0xf9
 
-	file_descriptors = ProcessFileDescriptors(allocator, 256) using KernelHeap
+	file_descriptors = ProcessFileDescriptors(HeapAllocator.instance, 256) using KernelHeap
 
-	process = Process(user_frame, kernel_frame, memory, file_descriptors) using KernelHeap
+	process = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, memory, file_descriptors) using KernelHeap
+	process.priority = 0
 	process.registers[].rip = program_text_section_virtual_address as u64
 	process.registers[].userspace_rsp = (program_stack_virtual_address + 0x100) as u64
 
@@ -255,6 +297,59 @@ export attach_console_to_process(process: Process, console: Device): _ {
 		# Replace the device of the file description
 		file_description.file = console
 	}	
+}
+
+export create_boot_shell_process(allocator: Allocator, boot_console: BootConsoleDevice): _ {
+	debug.write_line('Scheduler: Creating boot shell process...')
+
+	runtime_linker_program = String.new('/lib/ld')
+	shell_program = String.new('/bin/sh')
+
+	runtime_linker_file_or_error = FileSystem.root.open_file(Custody.root, runtime_linker_program, O_RDONLY, 0)
+	require(runtime_linker_file_or_error has runtime_linker_file, 'Failed to open the runtime linker file')
+
+	debug.write_line('Scheduler: Loading the runtime linker into memory...')
+
+	shell_size = runtime_linker_file.size
+	debug.write('Scheduler: Size of the runtime linker = ') debug.write(shell_size) debug.write_line(' byte(s)')
+
+	shell = allocator.allocate(shell_size)
+	memory.zero(shell, shell_size)
+
+	if shell === none {
+		debug.write_line('Scheduler: Failed to allocate memory for the runtime linker')
+		return
+	}
+
+	if runtime_linker_file.read(shell, shell_size) != shell_size {
+		debug.write_line('Scheduler: Failed to read the runtime linker into memory')
+		return
+	}
+
+	debug.write_line('Scheduler: Runtime linker is now loaded into memory')
+	runtime_linker_file.close()
+
+	arguments = List<String>(allocator)
+	arguments.add(runtime_linker_program)
+	arguments.add(shell_program)
+
+	environment_variables = List<String>(allocator)
+	environment_variables.add(String.new('PATH=/bin/:/lib/')) # Todo: Get proper PATH variable
+
+	process = Process.from_executable(allocator, Array<u8>(shell, shell_size), arguments, environment_variables)
+
+	# Remove all the arguments and environment variables, because they are no longer needed here
+	arguments.clear()
+	environment_variables.clear()
+
+	if process === none panic('Scheduler: Failed to create the boot shell process')
+
+	# Attach the boot console to the process
+	attach_console_to_process(process, boot_console)
+
+	debug.write_line('Scheduler: Boot shell process created')
+
+	interrupts.scheduler.add(process)
 }
 
 export test2(allocator: Allocator, memory_information: SystemMemoryInformation, boot_console: BootConsoleDevice) {

@@ -23,7 +23,7 @@ Blocker {
 		succeeded = true
 
 		if callback !== none {
-			succeded = callback(this)
+			succeeded = callback(this)
 		}
 
 		# Do not continue if the callback failed

@@ -142,14 +142,16 @@ Process {
 
 		# Allocate register state for the process so that we can configure the registers before starting
 		user_frame: RegisterState* = allocator.allocate<RegisterState>()
+		user_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
 		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
+		kernel_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
 		configure_process_before_startup(allocator, user_frame, memory, load_information, arguments, environment_variables)
 
 		# Attach the standard files for the new process
 		file_descriptors: ProcessFileDescriptors = ProcessFileDescriptors(allocator, 256) using allocator
 		attach_standard_files(allocator, file_descriptors)
 
-		process = Process(user_frame, kernel_frame, memory, file_descriptors) using allocator
+		process = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, memory, file_descriptors) using allocator
 		process.working_directory = String.new('/bin/')
 
 		return process
@@ -160,9 +162,11 @@ Process {
 
 	# Summary: Stores the register state of userspace
 	private user_frame: RegisterState*
+	private user_fpu_state: link
 
 	# Summary: Stores the register state of the thread when it stops in the kernel
 	private kernel_frame: RegisterState*
+	private kernel_fpu_state: link
 
 	# Summary: Tells how many register states has been saved
 	private frame_count: u8 = 1
@@ -186,25 +190,14 @@ Process {
 
 	registers => user_frame
 
-	init(user_frame: RegisterState*, kernel_frame: RegisterState*, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
+	init(user_frame: RegisterState*, user_fpu_state: link, kernel_frame: RegisterState*, kernel_fpu_state: link, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
 		this.id = 0
 		this.user_frame = user_frame
+		this.user_fpu_state = user_fpu_state
 		this.kernel_frame = kernel_frame
+		this.kernel_fpu_state = kernel_fpu_state
 		this.memory = memory
 		this.file_descriptors = file_descriptors
-		this.working_directory = String.empty
-		this.childs = List<Process>(HeapAllocator.instance) using HeapAllocator.instance
-		this.subscribers = Subscribers.new(HeapAllocator.instance)
-
-		registers[].cs = USER_CODE_SELECTOR | 3
-		registers[].rflags = RFLAGS_INTERRUPT_FLAG
-		registers[].userspace_ss = USER_DATA_SELECTOR | 3
-	}
-
-	init(id: u64, user_frame: RegisterState*, kernel_frame: RegisterState*) {
-		this.id = id
-		this.user_frame = user_frame
-		this.kernel_frame = kernel_frame
 		this.working_directory = String.empty
 		this.childs = List<Process>(HeapAllocator.instance) using HeapAllocator.instance
 		this.subscribers = Subscribers.new(HeapAllocator.instance)
@@ -225,13 +218,15 @@ Process {
 			require(is_kernel_space, 'Attempted to save userspace frame twice')
 
 			# Save the kernel frame
-			debug.write_line('Process: Saving kernel frame...')
+			debug.write('Process: Saving kernel frame of process ') debug.write_line(id)
 			kernel_frame[] = frame[]
+			save_fpu_state(kernel_fpu_state)
 			return kernel_frame
 		}
 
-		debug.write_line('Process: Saving user frame...')
+		debug.write('Process: Saving user frame of process ') debug.write_line(id)
 		user_frame[] = frame[]
+		save_fpu_state(user_fpu_state)
 		return user_frame
 	}
 
@@ -241,14 +236,17 @@ Process {
 
 		if frame_count-- == 2 {
 			# Load the kernel frame into the specified frame
-			debug.write_line('Process: Loading kernel frame...')
+			debug.write('Process: Loading kernel frame of process ') debug.write_line(id)
+
 			frame[] = kernel_frame[]
+			load_fpu_state(kernel_fpu_state)
 			return
 		}
 
 		# Load the user frame into the specified frame
-		debug.write_line('Process: Loading user frame...')
+		debug.write('Process: Loading user frame of process ') debug.write_line(id)
 		frame[] = user_frame[]
+		load_fpu_state(user_fpu_state)
 	}
 
 	# Summary: Loads the specified program into this process
@@ -321,11 +319,18 @@ Process {
 	create_child_with_shared_resources(allocator: Allocator): Process {
 		# Clone the registers from this process
 		user_frame: RegisterState* = allocator.allocate<RegisterState>()
+		user_fpu_state: link = allocator.allocate(PAGE_SIZE)
 		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
+		kernel_fpu_state: link = allocator.allocate(PAGE_SIZE)
 		user_frame[] = this.user_frame[]
+		global.memory.copy(user_fpu_state, this.user_fpu_state, PAGE_SIZE)
+
+		# Clone the parent memory for sharing, but use a separate kernel stack
+		child_memory = ProcessMemory(memory) using allocator
+		allocate_kernel_stack(child_memory)
 
 		# Create a new child process with the same resources and state
-		child = Process(user_frame, kernel_frame, memory, file_descriptors) using allocator
+		child = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, child_memory, file_descriptors) using allocator
 		child.priority = priority
 		child.working_directory = working_directory
 		child.credentials = credentials
@@ -340,10 +345,9 @@ Process {
 	# Summary: Detaches parent resources and creates new resources for this process
 	detach_parent_resources(allocator: Allocator) {
 		# Create paging tables for the process so that it can access memory correctly
+		kernel_stack_pointer = memory.kernel_stack_pointer
 		memory = ProcessMemory(allocator) using allocator
-
-		# Because we detach from the parent, we also need our own kernel stack
-		allocate_kernel_stack(memory)
+		memory.kernel_stack_pointer = kernel_stack_pointer
 
 		file_descriptors = file_descriptors.clone()
 

@@ -4,7 +4,10 @@ wait_for_any_child_process(process: Process, out_status: u32*, options: u32): u6
 	childs = process.childs
 
 	# Return immediately if there are no childs to wait for
-	if childs.size == 0 return ECHILD
+	if childs.size == 0 {
+		debug.write_line('System call: waitpid: No child processes to wait for')
+		return ECHILD
+	}
 
 	# Block until one of the childs changes state according to the options
 	process.block(
@@ -30,7 +33,10 @@ wait_for_any_child_process(process: Process, out_status: u32*, options: u32): u6
 
 wait_for_child_process(process: Process, pid: u32, out_status: u32*, options: u32): u64 {
 	# Attempt to find the process to wait for
-	if interrupts.scheduler.find(pid) has not target return ECHILD
+	if interrupts.scheduler.find(pid) has not target {
+		debug.write('System call: waitpid: Failed to find process with pid of ') debug.write(pid) debug.write_line()
+		return ECHILD
+	}
 
 	# Block until the target process changes state according to the options
 	process.block(
@@ -48,7 +54,7 @@ wait_for_child_process(process: Process, pid: u32, out_status: u32*, options: u3
 }
 
 # System call: waitpid
-export system_waitpid(pid: u32, out_status: u32*, options: u32): u64 {
+export system_waitpid(pid: i32, out_status: u32*, options: u32): u64 {
 	debug.write('System call: waitpid: ')
 	debug.write('pid=') debug.write(pid)
 	debug.write(', out_status=') debug.write_address(out_status)

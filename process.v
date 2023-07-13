@@ -339,6 +339,9 @@ Process {
 		child.parent = this
 		child.is_sharing_parent_resources = true
 
+		# Add the new process to the list of child processes
+		childs.add(child)
+
 		return child
 	}
 
@@ -357,6 +360,18 @@ Process {
 	}
 
 	destruct(allocator: Allocator): _ {
+		# Remove the process from the list of child processes
+		if parent !== none {
+			parent.childs.remove(this)
+		}
+
+		# If we have child processes, we need to detach them
+		if childs.size > 0 {
+			# - If they are sharing resources, we need to detach them
+			# - Set their parent pointers to none
+			panic('Todo')
+		}
+
 		# Dispose the register state
 		if registers !== none KernelHeap.deallocate(registers)
 

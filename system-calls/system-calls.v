@@ -257,7 +257,7 @@ export process(frame: RegisterState*): u64 {
 	} else system_call_number == 0x3c {
 		system_exit(frame, frame[].rdi as i32)
 	} else system_call_number == 0x3d {
-		result = system_waitpid(frame[].rdi as u32, frame[].rsi as u32*, frame[].rdx as u32)
+		result = system_waitpid(math.sign_extend_32(frame[].rdi), frame[].rsi as u32*, frame[].rdx as u32)
 	} else system_call_number == 0x3f {
 		system_uname(frame[].rdi as link)
 	} else system_call_number == 0x48 {

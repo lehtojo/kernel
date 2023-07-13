@@ -140,11 +140,9 @@ export start(
 	boot_console = BootConsoleDevice(HeapAllocator.instance)
 	devices.add(boot_console)
 
-	scheduler.test(allocator)
+	scheduler.create_idle_process()
 
 	apic.initialize(allocator)
-
-	# file_systems.memory_file_system.test(HeapAllocator.instance, memory_information, devices)
 
 	system_calls.initialize()
 
@@ -153,7 +151,6 @@ export start(
 
 		Ext2.instance.initialize()
 
-		# Todo: Toggling the two lines below with the "experiment" loads the shell, but something goes wrong with executing ls for example...
 		FileSystem.root = Ext2.instance
 		Custody.root = Custody(String.empty, none as Custody, Ext2.root_inode) using KernelHeap
 
@@ -161,7 +158,6 @@ export start(
 
 		require(Devices.instance.find(BootConsoleDevice.MAJOR, BootConsoleDevice.MINOR) has boot_console, 'Missing boot console')
 		scheduler.create_boot_shell_process(HeapAllocator.instance, boot_console)
-		#scheduler.test2(HeapAllocator.instance, SystemMemoryInformation.instance, boot_console)
 
 		debug.write_line('Kernel thread: All done')
 

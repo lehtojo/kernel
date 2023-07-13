@@ -1,8 +1,5 @@
 namespace kernel.system_calls
 
-# Todo: Remove
-import kernel.file_systems.ext2
-
 # System call: openat
 export system_openat(directory_descriptor: i32, filename_argument: link, flags: u32, mode: u64): i32 {
 	debug.write('System call: Open at: ')

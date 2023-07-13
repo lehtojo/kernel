@@ -490,24 +490,6 @@ Device Nvme {
 			debug.write_line('Nvme: All done')
 			state = HOST_STATE_COMPLETE # All done
 
-			# Todo: Remove
-			###
-			physical_data_address = PhysicalMemoryManager.instance.allocate_physical_region(512)
-
-			request = BlockDeviceRequest(0, 1, physical_data_address as u64, (status: u16, request: BlockDeviceRequest) -> {
-				data_address = mapper.map_kernel_page(request.address as link) as u64*
-
-				loop (i = 0, i < 512 / sizeof(u64), i++) {
-					debug.write_address(data_address[i]) debug.write(' ')
-				}
-
-				debug.write_line()
-
-			}) using KernelHeap
-
-			namespaces[0].read(request)
-			###
-
 			# Todo: No need to pass Devices.instance as it is shared
 			ext2 = Ext2(HeapAllocator.instance, Devices.instance, namespaces[0]) using KernelHeap
 			Ext2.instance = ext2

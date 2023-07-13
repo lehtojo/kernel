@@ -465,37 +465,3 @@ export add_system_inodes(allocator: Allocator) {
 
 	Custody.root.inode.(Ext2DirectoryInode).inodes.add(devices_directory)
 }
-
-###
-export test(allocator: Allocator, memory_information: SystemMemoryInformation, devices: Devices) {
-	file_system = MemoryFileSystem(allocator, devices) using allocator
-
-	root = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.empty) using allocator
-	bin = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('bin')) using allocator
-	home = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('home')) using allocator
-	user = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('user')) using allocator
-	dev = MemoryDirectoryInode(allocator, file_system, file_system.allocate_inode_index(), String.new('dev')) using allocator
-
-	lorem_raw_data = 'Lorem ipsum dolor sit amet'
-	lorem_data_size = length_of(lorem_raw_data)
-	lorem_data = Array<u8>(lorem_raw_data, lorem_data_size)
-	lorem_index = file_system.allocate_inode_index()
-	lorem_inode = MemoryInode(allocator, file_system, lorem_index, String.new('lorem.txt'), lorem_data) using allocator
-	lorem_file = InodeFile(lorem_inode) using allocator
-
-	root.inodes.add(bin) root.inodes.add(home) root.inodes.add(dev)
-	home.inodes.add(user)
-	user.inodes.add(lorem_file.inode)
-
-	# Add all the devices to the device directory
-	device_list = List<Device>(allocator)
-	devices.get_all(device_list)
-	add_devices_to_folder(dev, device_list)
-	device_list.clear()
-
-	Custody.root = Custody(String.empty, none as Custody, root) using allocator
-	FileSystem.root = file_system
-
-	load_boot_files(allocator, file_system, memory_information)
-}
-###

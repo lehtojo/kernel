@@ -160,14 +160,14 @@ create_kernel_thread(rip: u64): Process {
 
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
-	# Allocate kernel stack for the process.
+	# Allocate stacks for the process.
 	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
 	# Todo: Create stack quards here as well (proper stack support)
 	debug.write_line('Scheduler: Allocating kernel thread stack...')
 	user_stack_pointer = KernelHeap.allocate(512 * KiB)
 	kernel_stack_pointer = KernelHeap.allocate(512 * KiB)
 
-	# Zero out the stack memoriy
+	# Zero out the stack memory
 	global.memory.zero(kernel_stack_pointer, 512 * KiB)
 
 	# Store the kernel stack pointer for use
@@ -187,104 +187,74 @@ create_kernel_thread(rip: u64): Process {
 	return process
 }
 
-test(allocator: Allocator) {
+create_idle_process(): Process {
+	debug.write_line('Scheduler: Creating an idle process...')
+
 	user_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 
-	debug.write('Scheduler (test 1): Kernel stack address ') debug.write_address(registers_rsp()) debug.write_line()
-
-	# Instructions:
-	# mov r8, 7
-	# mov rcx, 42
-	# mov rax, 33
-	# L0:
-	# syscall
-	# inc r8
-	# jmp L0
-
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
-	text_section_virtual_address = KernelHeap.allocate(0x1000)
-	stack_virtual_address = KernelHeap.allocate(0x1000)
-	text_section_physical_address = mapper.to_physical_address(text_section_virtual_address)
-	stack_physical_address = mapper.to_physical_address(stack_virtual_address)
+	# Allocate a page for the text section that will just loop forever
+	debug.write_line('Scheduler: Allocating text section for an idle process...')
 
-	debug.write('Scheduler (test 1): Process code ') debug.write_address(text_section_physical_address) debug.write_line()
-	debug.write('Scheduler (test 1): Process stack ') debug.write_address(stack_physical_address) debug.write_line()
+	text_section_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
+	require(text_section_physical_address !== none, 'Failed to allocate physical memory for an idle process')
 
-	program_text_section_virtual_address = 0x400000 as link
-	program_stack_virtual_address = 0x690000 as link
+	if memory.allocate_region_anywhere(ProcessMemoryRegionOptions.new(), PAGE_SIZE, PAGE_SIZE) has not text_section_virtual_address {
+		panic('Failed to allocate virtual text section memory for an idle process')
+	}
 
-	memory.paging_table.map_page(HeapAllocator.instance, program_text_section_virtual_address, text_section_physical_address)
-	memory.paging_table.map_page(HeapAllocator.instance, program_stack_virtual_address, stack_physical_address)
+	# Initialize the text section:
+	# start:
+	# jmp start
+	mapped_text_section = mapper.map_kernel_page(text_section_physical_address)
+	global.memory.zero(mapped_text_section, PAGE_SIZE)
+	mapped_text_section[0] = 0xeb
+	mapped_text_section[1] = 0xfe
 
-	# Allocate kernel stack for the process.
+	# Map the physical memory to the allocated virtual memory
+	memory.paging_table.map_page(HeapAllocator.instance, text_section_virtual_address as link, text_section_physical_address)
+
+	# Allocate stacks for the process.
 	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
 	# Todo: Create stack quards here as well (proper stack support)
-	debug.write_line('Scheduler (test 1): Allocating kernel stack memory for the process')
-	kernel_stack_pointer = KernelHeap.allocate(512 * KiB)
+	debug.write_line('Scheduler: Allocating idle process stacks...')
 
-	# Zero out the kernel stack memory
-	global.memory.zero(kernel_stack_pointer, 512 * KiB)
+	user_stack_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
+	require(user_stack_physical_address !== none, 'Failed to allocate physical memory for an idle process')
+
+	if memory.allocate_region_anywhere(ProcessMemoryRegionOptions.new(), PAGE_SIZE, PAGE_SIZE) has not user_stack_bottom {
+		panic('Failed to allocate virtual stack memory for an idle process')
+	}
+
+	# Map the physical memory to the allocated virtual memory
+	memory.paging_table.map_page(HeapAllocator.instance, user_stack_bottom as link, user_stack_physical_address)
+
+	# Zero out the user stack
+	mapped_user_stack = mapper.map_kernel_page(user_stack_physical_address)
+	global.memory.zero(mapped_user_stack, PAGE_SIZE)
+
+	kernel_stack_bottom = KernelHeap.allocate(PAGE_SIZE)
+	require(kernel_stack_bottom !== none, 'Failed to allocate kernel stack for an idle process')
+
+	# Zero out the stack memory
+	global.memory.zero(kernel_stack_bottom, PAGE_SIZE)
 
 	# Store the kernel stack pointer for use
-	memory.kernel_stack_pointer = (kernel_stack_pointer + 512 * KiB) as u64
-
-	# mov r8, 7
-	position = 0
-	text_section_virtual_address[position++] = 0x49
-	text_section_virtual_address[position++] = 0xc7
-	text_section_virtual_address[position++] = 0xc0
-	text_section_virtual_address[position++] = 0x07
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-
-	# mov rcx, 42
-	text_section_virtual_address[position++] = 0x48
-	text_section_virtual_address[position++] = 0xc7
-	text_section_virtual_address[position++] = 0xc1
-	text_section_virtual_address[position++] = 0x2a
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-
-	# mov rax, 33
-	text_section_virtual_address[position++] = 0x48
-	text_section_virtual_address[position++] = 0xc7
-	text_section_virtual_address[position++] = 0xc0
-	text_section_virtual_address[position++] = 0x21
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-	text_section_virtual_address[position++] = 0x00
-
-	# syscall
-	# text_section_virtual_address[position++] = 0x0f
-	# text_section_virtual_address[position++] = 0x05
-
-	# nop nop
-	text_section_virtual_address[position++] = 0x90
-	text_section_virtual_address[position++] = 0x90
-
-	# inc r8
-	text_section_virtual_address[position++] = 0x49
-	text_section_virtual_address[position++] = 0xff
-	text_section_virtual_address[position++] = 0xc0
-
-	# jmp L0
-	text_section_virtual_address[position++] = 0xeb
-	text_section_virtual_address[position++] = 0xf9
+	memory.kernel_stack_pointer = (kernel_stack_bottom + PAGE_SIZE) as u64
 
 	file_descriptors = ProcessFileDescriptors(HeapAllocator.instance, 256) using KernelHeap
 
 	process = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, memory, file_descriptors) using KernelHeap
-	process.priority = 0
-	process.registers[].rip = program_text_section_virtual_address as u64
-	process.registers[].userspace_rsp = (program_stack_virtual_address + 0x100) as u64
+	process.registers[].rip = text_section_virtual_address
+	process.registers[].userspace_rsp = (user_stack_bottom + PAGE_SIZE) as u64
 
 	interrupts.scheduler.add(process)
+
+	return process
 }
 
 # Summary: Attaches the specified console to the process
@@ -348,59 +318,6 @@ export create_boot_shell_process(allocator: Allocator, boot_console: BootConsole
 	attach_console_to_process(process, boot_console)
 
 	debug.write_line('Scheduler: Boot shell process created')
-
-	interrupts.scheduler.add(process)
-}
-
-export test2(allocator: Allocator, memory_information: SystemMemoryInformation, boot_console: BootConsoleDevice) {
-	symbols = memory_information.symbols
-	application_start = none as link
-	application_end = none as link
-
-	debug.write_line('Scheduler: Searching for the test application...')
-
-	loop (i = 0, i < symbols.size, i++) {
-		symbol = symbols[i]
-
-		if symbol.name == 'application_start' {
-			application_start = symbol.address
-			debug.write('Scheduler (test 2): Found start of application data at ')
-			debug.write_address(application_start)
-			debug.write_line()
-		} else symbol.name == 'application_end' {
-			application_end = symbol.address
-			debug.write('Scheduler (test 2): Found end of application data at ')
-			debug.write_address(application_end)
-			debug.write_line()
-		}
-	}
-
-	if application_start === none or application_end === none return
-
-	application_size = (application_end - application_start) as u64
-
-	mapped_application_start = mapper.map_kernel_region(application_start, application_size)
-	application_data = Array<u8>(mapped_application_start, application_size)
-
-	arguments = List<String>(allocator)
-	arguments.add(String.new('/bin/ld'))
-	arguments.add(String.new('/bin/sh'))
-
-	environment_variables = List<String>(allocator)
-	environment_variables.add(String.new('PATH=/bin/:/lib/'))
-
-	process = Process.from_executable(allocator, application_data, arguments, environment_variables)
-
-	# Remove all the arguments and environment variables, because they are no longer needed here
-	arguments.clear()
-	environment_variables.clear()
-
-	if process === none panic('Scheduler (test 2): Failed to create the process')
-
-	# Attach the boot console to the process
-	attach_console_to_process(process, boot_console)
-
-	debug.write_line('Scheduler (test 2): Process created')
 
 	interrupts.scheduler.add(process)
 }

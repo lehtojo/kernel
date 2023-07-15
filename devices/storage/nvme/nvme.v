@@ -1,5 +1,6 @@
 namespace kernel.devices.storage
 
+import kernel.bus
 import kernel.acpi
 import kernel.system_calls
 import kernel.file_systems.ext2

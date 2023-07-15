@@ -1,3 +1,5 @@
+namespace kernel
+
 PhysicalMemoryManagerAvailableLayerElement {
 	next: PhysicalMemoryManagerAvailableLayerElement
 	previous: PhysicalMemoryManagerAvailableLayerElement

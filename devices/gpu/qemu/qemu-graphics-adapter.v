@@ -1,5 +1,6 @@
 namespace kernel.devices.gpu.qemu
 
+import kernel.bus
 import kernel.acpi
 
 pack DISPIInterface {

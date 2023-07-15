@@ -1,4 +1,4 @@
-namespace kernel.file_systems
+namespace kernel.file_systems.memory_file_system
 
 Inode MemoryInode {
 	private constant BLOCK_SIZE = 0x20000

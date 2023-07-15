@@ -1,4 +1,4 @@
-namespace kernel.pci
+namespace kernel.bus.pci
 
 import kernel.acpi
 import kernel.system_calls

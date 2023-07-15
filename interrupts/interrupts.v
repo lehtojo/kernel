@@ -26,6 +26,7 @@ pack RegisterState {
 
 namespace kernel.interrupts
 
+import kernel.devices.keyboard
 import kernel.scheduler
 
 namespace internal {
@@ -243,7 +244,7 @@ export process(actual_frame: RegisterState*): u64 {
 	}
 
 	if code == 0x21 {
-		keyboard.process()
+		ps2.keyboard.process()
 	} else code == 0x24 {
 		scheduler.tick(frame)
 	} else code == 0x0e {

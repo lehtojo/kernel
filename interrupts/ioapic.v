@@ -1,4 +1,4 @@
-namespace kernel
+namespace kernel.interrupts
 
 namespace ioapic {
 	constant REDIRECTION_ENTRY_OFFSET = 0x10

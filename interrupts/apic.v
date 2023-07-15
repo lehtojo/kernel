@@ -34,7 +34,9 @@ pack SDTHeader {
 	creator_revision: u32
 }
 
-namespace kernel.apic
+namespace kernel.interrupts.apic
+
+import kernel.bus
 
 local_apic_registers: u32*
 local_apic_registers_physical_address: u32*

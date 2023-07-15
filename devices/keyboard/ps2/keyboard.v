@@ -1,4 +1,4 @@
-namespace kernel.keyboard
+namespace kernel.devices.keyboard.ps2.keyboard
 
 import kernel.devices
 import kernel.devices.console

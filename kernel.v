@@ -94,6 +94,7 @@ namespace kernel {
 import kernel
 import kernel.devices
 import kernel.devices.console
+import kernel.devices.keyboard
 
 # Todo: Too direct imports, abstract or remove
 import kernel.file_systems.memory_file_system
@@ -138,7 +139,7 @@ export start(
 	mapper.remap()
 
 	interrupts.initialize()
-	keyboard.initialize(allocator)
+	ps2.keyboard.initialize(allocator)
 
 	devices = Devices(HeapAllocator.instance)
 	Devices.instance = devices
@@ -148,7 +149,7 @@ export start(
 
 	scheduler.create_idle_process()
 
-	apic.initialize(allocator)
+	interrupts.apic.initialize(allocator)
 
 	system_calls.initialize()
 

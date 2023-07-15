@@ -1,4 +1,4 @@
-namespace ports
+namespace kernel.ports
 
 namespace internal {
 	import 'C' ports_read_u8(port: u8): u8

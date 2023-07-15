@@ -1,7 +1,9 @@
 # ACPI (Advanced Configuration and Power Interface)
 namespace kernel.acpi
 
+import kernel.bus
 import kernel.devices.storage
+import kernel.interrupts
 
 plain FADT {
 	header: SDTHeader

@@ -1,16 +1,16 @@
 namespace debug
 
 export write_bytes(memory: link, size: u64) {
-	kernel.serial.write(memory, size)
+	serial.write(memory, size)
 }
 
 export next_line() {
-	kernel.serial.put(`\n`)
+	serial.put(`\n`)
 }
 
 # Summary: Writes the specified character to the console
 export put(value: char) {
-	kernel.serial.put(value)
+	serial.put(value)
 }
 
 # Summary: Writes the specified string to the console

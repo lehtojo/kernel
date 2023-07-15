@@ -296,7 +296,7 @@ Device {
 		table_physical_address = (pci.read_bar(identifier, bar) & pci.BAR_ADDRESS_MASK) + table_offset_in_bar
 		debug.write('MSI-X: Table physical address: ') debug.write_address(table_physical_address) debug.write_line()
 
-		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size, false) as MsixTableEntry*
+		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size, MAP_NO_CACHE) as MsixTableEntry*
 		msix_table_entry_count = table_size / sizeof(MsixTableEntry)
 	}
 
@@ -372,7 +372,7 @@ plain HostController {
 		start_bus = math.min(bus, domain.start)
 
 		mapped_bus = bus
-		mapped_bus_address = mapper.map_kernel_region(physical_address + MEMORY_RANGE_PER_BUS * (bus - start_bus), MEMORY_RANGE_PER_BUS)
+		mapped_bus_address = mapper.map_kernel_region(physical_address + MEMORY_RANGE_PER_BUS * (bus - start_bus), MEMORY_RANGE_PER_BUS, MAP_NO_CACHE)
 	}
 
 	compute_function_address(bus: u8, device: u8, function: u8, register: u8): link {

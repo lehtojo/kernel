@@ -199,7 +199,7 @@ Device GenericDisplayConnector {
 		virtual_page = virtual_address & (-PAGE_SIZE)
 		page_offset = virtual_page - (allocation.region.start as u64)
 		framebuffer_physical_page = framebuffer + page_offset
-		process.memory.paging_table.map_page(HeapAllocator.instance, virtual_page as link, framebuffer_physical_page)
+		process.memory.paging_table.map_page(HeapAllocator.instance, virtual_page as link, framebuffer_physical_page, MAP_USER)
 
 		return Optionals.new<i32>(0)
 	}

@@ -11,7 +11,7 @@ export system_execve(path_argument: link, arguments: link*, environment_variable
 	debug.write_line()
 
 	process = get_process()
-	allocator = LocalHeapAllocator(HeapAllocator.instance)
+	allocator = LocalHeapAllocator()
 
 	# Load the path argument into a string object
 	if load_string(allocator, process, path_argument, PATH_MAX) has not path {
@@ -75,7 +75,7 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	size = description.size
 
 	# Todo: Do not load the whole program to memory. Load necessary parts only by seeking.
-	allocator = LocalHeapAllocator(HeapAllocator.instance)
+	allocator = LocalHeapAllocator()
 	program = Array<u8>(allocator, size)
 
 	# Load the program into the buffer

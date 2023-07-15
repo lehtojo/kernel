@@ -105,7 +105,6 @@ FileSystem Ext2 {
 	constant MIN_SUPPORTED_MAJOR_VERSION = 1
 
 	allocator: Allocator
-	devices: Devices
 	device: BlockStorageDevice
 	superblock: Superblock = none as Superblock
 	block_group_descriptors: List<BlockGroupDescriptor> = none as List<BlockGroupDescriptor>
@@ -114,9 +113,8 @@ FileSystem Ext2 {
 	block_size => 1 <| (superblock.formatted_block_size + 10)
 	fragment_size => 1 <| (superblock.formatted_fragment_size + 10)
 
-	init(allocator: Allocator, devices: Devices, device: BlockStorageDevice) {
+	init(allocator: Allocator, device: BlockStorageDevice) {
 		this.allocator = allocator
-		this.devices = devices
 		this.device = device
 		this.index = SIGNATURE # Todo: Remove
 	}
@@ -156,7 +154,7 @@ FileSystem Ext2 {
 		superblock_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(superblock_device_size)
 		if superblock_physical_address === none return ENOMEM
 
-		superblock = mapper.map_kernel_page(superblock_physical_address) as Superblock
+		superblock = mapper.map_kernel_page(superblock_physical_address, MAP_NO_CACHE) as Superblock
 
 		callback = (status: u16, request: BaseRequest<ProgressTracker>) -> {
 			request.data.execute(status)
@@ -257,7 +255,7 @@ FileSystem Ext2 {
 		block_group_descriptors_offset = block_group_descriptors_block_index * block_size
 
 		# Map the descriptor memory so that we can access it using a list
-		mapped_block_group_descriptors = mapper.map_kernel_region(block_group_descriptors_physical_address, block_groups_memory_size)
+		mapped_block_group_descriptors = mapper.map_kernel_region(block_group_descriptors_physical_address, block_groups_memory_size, MAP_NO_CACHE)
 		block_group_descriptors = List<BlockGroupDescriptor>(allocator, mapped_block_group_descriptors, total_block_groups) using allocator
 		block_group_descriptor_inode_usage_bitmaps = List<link>(allocator, total_block_groups, true) using allocator
 
@@ -369,7 +367,7 @@ FileSystem Ext2 {
 		if request.status != 0 return request.status
 
 		# Copy the inode information into the specified data structure
-		inode_information = mapper.map_kernel_region(inode_information_physical_address + inode_inside_block_byte_offset, superblock.inode_size)
+		inode_information = mapper.map_kernel_region(inode_information_physical_address + inode_inside_block_byte_offset, superblock.inode_size, MAP_NO_CACHE)
 		memory.copy(information as link, inode_information, sizeof(InodeInformation))
 
 		# Deallocate the physical memory
@@ -408,7 +406,7 @@ FileSystem Ext2 {
 				data.process.memory.paging_table.use()
 
 				# Copy the wanted region from the transfer region
-				transfer = mapper.map_kernel_region((data.transfer_physical_address + data.offset_in_block) as link, data.size)
+				transfer = mapper.map_kernel_region((data.transfer_physical_address + data.offset_in_block) as link, data.size, MAP_NO_CACHE)
 				memory.copy(data.destination as link, transfer, data.size)
 
 				# Switch back to the original paging table
@@ -522,7 +520,7 @@ FileSystem Ext2 {
 	override access(base: Custody, path: String, mode: u32) {
 		debug.write('Ext2: Accessing path ') debug.write_line(path)
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 		result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
 
 		if result.has_error {
@@ -539,7 +537,7 @@ FileSystem Ext2 {
 	override lookup_status(base: Custody, path: String, metadata: FileMetadata) {
 		debug.write_line('Ext2: Lookup metadata')
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		# Attempt to open the specified path
 		open_result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
@@ -589,7 +587,7 @@ FileSystem Ext2 {
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
 		debug.write('Ext2: Opening file from path ') debug.write_line(path)
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
@@ -608,7 +606,7 @@ FileSystem Ext2 {
 		# If the inode represents a device, let the device handle the opening
 		if metadata.is_device {
 			# Find the device represented by the inode
-			if devices.find(metadata.device) has not inode_device {
+			if Devices.instance.find(metadata.device) has not inode_device {
 				return Results.error<OpenFileDescription, u32>(ENXIO)
 			}
 

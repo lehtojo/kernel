@@ -123,12 +123,10 @@ DirectoryIterator MemoryDirectoryIterator {
 
 FileSystem MemoryFileSystem {
 	allocator: Allocator
-	devices: Devices
 	inode_index: u64
 
-	init(allocator: Allocator, devices: Devices) {
+	init(allocator: Allocator) {
 		this.allocator = allocator
-		this.devices = devices
 		this.inode_index = 1
 	}
 
@@ -143,7 +141,7 @@ FileSystem MemoryFileSystem {
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
 		debug.write('Memory file system: Opening file from path ') debug.write_line(path)
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
@@ -162,7 +160,7 @@ FileSystem MemoryFileSystem {
 		# If the inode represents a device, let the device handle the opening
 		if metadata.is_device {
 			# Find the device represented by the inode
-			if devices.find(metadata.device) has not device {
+			if Devices.instance.find(metadata.device) has not device {
 				return Results.error<OpenFileDescription, u32>(ENXIO)
 			}
 
@@ -178,7 +176,7 @@ FileSystem MemoryFileSystem {
 	}
 
 	override create_file(base: Custody, path: String, flags: i32, mode: u32) {
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		result = open_path(local_allocator, base, path, get_create_options(flags, false))
 
@@ -200,7 +198,7 @@ FileSystem MemoryFileSystem {
 	}
 
 	override make_directory(base: Custody, path: String, flags: i32, mode: u32) {
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		result = open_path(local_allocator, base, path, CREATE_OPTION_DIRECTORY)
 
@@ -224,7 +222,7 @@ FileSystem MemoryFileSystem {
 	override access(base: Custody, path: String, mode: u32) {
 		debug.write('Memory file system: Accessing path ') debug.write_line(path)
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 		result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
 
 		if result.has_error {
@@ -241,7 +239,7 @@ FileSystem MemoryFileSystem {
 	override lookup_status(base: Custody, path: String, metadata: FileMetadata) {
 		debug.write_line('Memory file system: Lookup metadata')
 
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		# Attempt to open the specified path
 		open_result = open_path(local_allocator, base, path, CREATE_OPTION_NONE)
@@ -453,11 +451,10 @@ export add_devices_to_folder(device_directory: MemoryDirectoryInode, devices: Li
 }
 
 export add_system_inodes(allocator: Allocator) {
-	memory_file_system = MemoryFileSystem(allocator, Devices.instance) using allocator
+	memory_file_system = MemoryFileSystem(allocator) using allocator
 	devices_directory = MemoryDirectoryInode(allocator, memory_file_system, memory_file_system.allocate_inode_index(), String.new('dev')) using allocator
 
 	# Add all the devices to the device directory
-	# Todo: No need to pass the devices as parameter here as we have Devices.instance
 	device_list = List<Device>(allocator)
 	Devices.instance.get_all(device_list)
 	add_devices_to_folder(devices_directory, device_list)

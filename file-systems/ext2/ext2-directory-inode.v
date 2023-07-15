@@ -52,7 +52,7 @@ Ext2Inode Ext2DirectoryInode {
 
 	# Summary: Iterates all directory entries (unloaded as well) and loads an inode if it has the specified name
 	private lookup_unloaded(name: String): Inode {
-		local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+		local_allocator = LocalHeapAllocator()
 
 		iterator_or_error = file_system.iterate_directory(local_allocator, this)
 

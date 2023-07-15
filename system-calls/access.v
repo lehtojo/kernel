@@ -29,7 +29,7 @@ export system_faccessat(directory_descriptor: u64, path_argument: link, mode: u6
 	debug.write_line()
 
 	process = get_process()
-	allocator = LocalHeapAllocator(HeapAllocator.instance)
+	allocator = LocalHeapAllocator()
 
 	# Load the path argument into a string object
 	if load_string(allocator, process, path_argument, PATH_MAX) has not path {

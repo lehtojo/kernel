@@ -145,7 +145,7 @@ create_io_window_for_pci_device_bar(identifier: DeviceIdentifier, bar: u8, size:
 
 	# Map the space so that we can use it
 	bar_space_address = bar_value & BAR_ADDRESS_MASK
-	return Results.new<link, u64>(mapper.map_kernel_region(bar_space_address as link, size))
+	return Results.new<link, u64>(mapper.map_kernel_region(bar_space_address as link, size, MAP_NO_CACHE))
 }
 
 create_io_window_for_pci_device_bar(identifier: DeviceIdentifier, bar: u8): Result<link, u64> {

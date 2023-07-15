@@ -63,10 +63,6 @@ export system_writev(file_descriptor: u32, argument_vectors: link, vector_count:
 		debug.write_address(vector.start)
 		debug.write_line()
 
-		# Todo: Remove
-		debug.write_bytes(vector.start, vector.size)
-		debug.write_line()
-
 		result = file_description.write(Array<u8>(vector.start, vector.size))
 
 		# Stop and return the error if we encountered one

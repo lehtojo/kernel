@@ -94,7 +94,7 @@ export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: li
 	# Output path as debugging information
 	debug.write('System call: Fstatat: Path = ') debug.write_line(path)
 
-	local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+	local_allocator = LocalHeapAllocator()
 
 	# Figure out the custody of the specified directory, so that we can look for the file
 	custody_or_error = load_custody(allocator, process, directory_descriptor, path)
@@ -135,7 +135,7 @@ export system_statx(directory_descriptor: u32, path_argument: link, flags: u32, 
 	# Output path as debugging information
 	debug.write('System call: statx: Path = ') debug.write_line(path)
 
-	local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+	local_allocator = LocalHeapAllocator()
 
 	# Figure out the custody of the specified directory, so that we can look for the file
 	custody_or_error = load_custody(allocator, process, directory_descriptor, path)

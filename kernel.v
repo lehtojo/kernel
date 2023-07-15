@@ -50,7 +50,7 @@ namespace kernel {
 	import 'C' load_fpu_state_xrstor(source: link): _
 
 	clear_boot_console_with_white(): _ {
-		console = kernel.mapper.map_kernel_page(0xb8000 as link) as u64*
+		console = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE) as u64*
 
 		loop (i = 0, i < 500, i++) {
 			console[i] = 0xff20ff20ff20ff20 # Clear with white spaces

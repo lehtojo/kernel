@@ -45,7 +45,11 @@ Allocator LocalHeapAllocator {
 	private allocator: Allocator
 	private allocations: List<link>
 
-	# Todo: Create a default constructor that uses HeapAllocator.instance
+	init() {
+		this.allocator = HeapAllocator.instance
+		this.allocations = List<link>(HeapAllocator.instance) using HeapAllocator.instance
+	}
+
 	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.allocations = List<link>(allocator) using allocator

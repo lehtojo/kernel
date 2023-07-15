@@ -71,24 +71,24 @@ rep stosb
 ; L3: 0xF000000
 ; 1th L2: 0xF001000
 ; 2th L2: 0xF002000
-mov dword [abs VIRTUAL_MAP_BASE], (VIRTUAL_MAP_L2_BASE + 3)
-mov dword [abs VIRTUAL_MAP_BASE + 8], (VIRTUAL_MAP_L2_BASE + VIRTUAL_MAP_L2_SIZE + 3)
+mov dword [abs VIRTUAL_MAP_BASE], (VIRTUAL_MAP_L2_BASE + 0b11) ; Present | Writable
+mov dword [abs VIRTUAL_MAP_BASE + 8], (VIRTUAL_MAP_L2_BASE + VIRTUAL_MAP_L2_SIZE + 0b11) ; Present | Writable
 
 ; Point the L2 entries to L1 entries
-mov ecx, 1024                        ; There are 1024 entries, because each L3 has 512 entries
-mov ebx, (VIRTUAL_MAP_L1_BASE + 3)   ; Add the 3, so that the page is present, readable and writable
+mov ecx, 1024 ; There are 1024 entries, because each L3 has 512 entries
+mov ebx, (VIRTUAL_MAP_L1_BASE + 0b11) ; Present | Writable
 mov edi, (VIRTUAL_MAP_L2_BASE)
 page_map_virtual_mapping_L0:
 mov dword [edi], ebx
 add edi, 8
-add ebx, 0x1000       ; Jump over 512 entries, because each L2 has 512 entries
+add ebx, 0x1000 ; Jump over 512 entries, because each L2 has 512 entries
 dec ecx
 jnz page_map_virtual_mapping_L0
 
 ; Point the L1 entries to the page map
-mov ecx, 524288                        ; There are 524288 entries, because there are 1024 L2 entries and each has 512 entries
-mov ebx, (PAGE_MAP_BASE + 3)           ; Add the 3, so that the page is present, readable and writable
-mov edi, (VIRTUAL_MAP_L1_BASE)         ; Start after the last L2
+mov ecx, 524288 ; There are 524288 entries, because there are 1024 L2 entries and each has 512 entries
+mov ebx, (PAGE_MAP_BASE + 0b11) ; Present | Writable
+mov edi, (VIRTUAL_MAP_L1_BASE) ; Start after the last L2
 page_map_virtual_mapping_L1:
 mov dword [edi], ebx
 add edi, 8
@@ -97,18 +97,18 @@ dec ecx
 jnz page_map_virtual_mapping_L1
 
 ; Point the last entry of the page map to the virtual mapping, so that we can edit the page map later using virtual addresses
-mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 3)
+mov dword [abs (L4_BASE + 511 * 8)], (VIRTUAL_MAP_L3_BASE + 0b11)
 
 ; Identity map the first 1 GiB
-mov dword [abs L4_BASE], (L3_BASE + 3)
+mov dword [abs L4_BASE], (L3_BASE + 0b11) ; Present | Writable
 ; Point one L4 to the mapped 1 GiB, later the kernel will use the entry for operation
-mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 3 + 4) ; Todo: Remove access from the user
+mov dword [abs (L4_BASE + KERNEL_MAP_BASE_L4 * 8)], (L3_BASE + 0b11) ; Present | Writable
 
-mov dword [abs L3_BASE], (L2_BASE + 3)
+mov dword [abs L3_BASE], (L2_BASE + 0b11) ; Present | Writable
 
 ; Initialize L2
 mov edi, L2_BASE
-mov ebx, (L1_BASE + 3 + 4) ; Present | Writable  ; Todo: Remove access from the user
+mov ebx, (L1_BASE + 0b11) ; Present | Writable
 mov ecx, 512
 l2_mapper:
 mov dword [edi], ebx
@@ -119,7 +119,7 @@ jnz l2_mapper
 
 ; Initialize L1
 mov edi, L1_BASE
-mov ebx, (3 + 4) ; Present | Writable ; Todo: Remove access from the user
+mov ebx, 0b11 ; Present | Writable
 mov ecx, (512*512)
 l1_mapper:
 mov dword [edi], ebx

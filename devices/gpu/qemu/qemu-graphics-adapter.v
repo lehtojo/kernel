@@ -57,7 +57,7 @@ GenericGraphicsAdapter Device GraphicsAdapter {
 		debug.write(', registers=') debug.write_address(registers_physical_address)
 		debug.write_line()
 
-		mapped_registers = mapper.map_kernel_page(registers_physical_address as link)
+		mapped_registers = mapper.map_kernel_page(registers_physical_address as link, MAP_NO_CACHE)
 
 		connector = DisplayConnector(framebuffer_physical_address as link, framebuffer_space_size, mapped_registers as DisplayMemoryMappedIORegisters) using KernelHeap
 		Devices.instance.add(connector)

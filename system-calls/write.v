@@ -24,9 +24,5 @@ export system_write(file_descriptor: u32, buffer: link, size: u64): u64 {
 		return EBADF
 	}
 
-	# Todo: Remove
-	debug.write_bytes(buffer, size)
-	debug.write_line()
-
 	return file_description.write(Array<u8>(buffer, size))
 }

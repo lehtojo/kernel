@@ -76,7 +76,7 @@ plain PagingTable {
 	# Maps the specified physical address to the specified virtual address.
 	# If the entries required to map the address do not exist,
 	# this function allocates them using the specified allocator.
-	map_page(allocator: Allocator, virtual_address: link, physical_address: link) {
+	map_page(allocator: Allocator, virtual_address: link, physical_address: link, flags: u32) {
 		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address was not aligned correctly')
 		require((physical_address % PAGE_SIZE) == 0, 'Physical address was not aligned correctly')
 
@@ -117,6 +117,7 @@ plain PagingTable {
 
 			mapper.set_address(entry_address, l4_physical_address)
 			mapper.set_writable(entry_address)
+			mapper.set_accessibility(entry_address, true)
 			mapper.set_present(entry_address)
 		}
 
@@ -140,6 +141,7 @@ plain PagingTable {
 
 			mapper.set_address(entry_address, l3_physical_address)
 			mapper.set_writable(entry_address)
+			mapper.set_accessibility(entry_address, true)
 			mapper.set_present(entry_address)
 		}
 
@@ -163,6 +165,7 @@ plain PagingTable {
 
 			mapper.set_address(entry_address, l2_physical_address)
 			mapper.set_writable(entry_address)
+			mapper.set_accessibility(entry_address, true)
 			mapper.set_present(entry_address)
 		}
 
@@ -172,22 +175,41 @@ plain PagingTable {
 
 		mapper.set_address(entry_address, physical_address)
 		mapper.set_writable(entry_address)
+		mapper.set_cached(entry_address, not has_flag(flags, MAP_NO_CACHE))
+		mapper.set_accessibility(entry_address, has_flag(flags, MAP_USER))
 		mapper.set_present(entry_address)
+
+		if not has_flag(flags, MAP_NO_FLUSH) mapper.flush_tlb()
+	}
+
+	# Summary:
+	# Maps the specified physical address to the specified virtual address.
+	# If the entries required to map the address do not exist,
+	# this function allocates them using the specified allocator.
+	map_page(allocator: Allocator, virtual_address: link, physical_address: link) {
+		map_page(allocator, virtual_address, physical_address, 0)
 	}
 
 	# Summary: Maps all the pages in the specified memory region.
-	map_region(allocator: Allocator, mapping: MemoryMapping) {
+	map_region(allocator: Allocator, mapping: MemoryMapping, flags: u32) {
 		physical_page = mapping.physical_address_start & (-PAGE_SIZE)
 		virtual_page = mapping.virtual_address_start & (-PAGE_SIZE)
 		last_physical_page = memory.round_to_page(mapping.physical_address_start + mapping.size)
 		last_virtual_page = memory.round_to_page(mapping.virtual_address_start + mapping.size)
 
 		loop (physical_page < last_physical_page) {
-			map_page(allocator, virtual_page as link, physical_page as link)
+			map_page(allocator, virtual_page as link, physical_page as link, flags | MAP_NO_FLUSH)
 
 			physical_page += PAGE_SIZE
 			virtual_page += PAGE_SIZE
 		}
+
+		if not has_flag(flags, MAP_NO_FLUSH) mapper.flush_tlb()
+	}
+
+	# Summary: Maps all the pages in the specified memory region.
+	map_region(allocator: Allocator, mapping: MemoryMapping) {
+		map_region(allocator, mapping, 0)
 	}
 
 	# Summary:

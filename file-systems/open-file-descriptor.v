@@ -123,7 +123,7 @@ plain OpenFileDescription {
 
 		# Todo: Figure out if this is safe: Because the opened file is a directory, we assume that the file must be an inode file
 		inode = file.(InodeFile).inode
-		allocator = LocalHeapAllocator(HeapAllocator.instance)
+		allocator = LocalHeapAllocator()
 		error = 0
 
 		debug.write_line('Open file description: Iterating directory entries...')

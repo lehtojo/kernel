@@ -216,7 +216,7 @@ create_idle_process(): Process {
 	mapped_text_section[1] = 0xfe
 
 	# Map the physical memory to the allocated virtual memory
-	memory.paging_table.map_page(HeapAllocator.instance, text_section_virtual_address as link, text_section_physical_address)
+	memory.paging_table.map_page(HeapAllocator.instance, text_section_virtual_address as link, text_section_physical_address, MAP_USER)
 
 	# Allocate stacks for the process.
 	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
@@ -231,7 +231,7 @@ create_idle_process(): Process {
 	}
 
 	# Map the physical memory to the allocated virtual memory
-	memory.paging_table.map_page(HeapAllocator.instance, user_stack_bottom as link, user_stack_physical_address)
+	memory.paging_table.map_page(HeapAllocator.instance, user_stack_bottom as link, user_stack_physical_address, MAP_USER)
 
 	# Zero out the user stack
 	mapped_user_stack = mapper.map_kernel_page(user_stack_physical_address)

@@ -84,7 +84,7 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 		new_physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
 
 		# Map the new page to the paging table
-		paging_table.map_page(allocator, virtual_page, new_physical_page)
+		paging_table.map_page(allocator, virtual_page, new_physical_page, MAP_USER)
 
 		# Map the new physical memory into kernel space, so that we can copy into it
 		mapped_unaligned_physical_page = mapper.map_kernel_region(new_physical_page, size) + offset

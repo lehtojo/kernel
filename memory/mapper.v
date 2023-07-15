@@ -1,4 +1,10 @@
-namespace kernel.mapper
+namespace kernel
+
+constant MAP_NO_FLUSH = 1
+constant MAP_NO_CACHE = 2
+constant MAP_USER = 4
+
+namespace mapper
 
 import 'C' flush_tlb()
 import 'C' flush_tlb_local(virtual_address: link)
@@ -85,7 +91,7 @@ remap() {
 	gdtr_virtual_address = GDTR_VIRTUAL_ADDRESS + (gdtr_physical_address as u64) % PAGE_SIZE
 
 	# Remap the GDT to the virtual address that is used by process paging tables.
-	paging_table = mapper.map_kernel_page(read_cr3() as link) as scheduler.PagingTable
+	paging_table = mapper.map_kernel_page(read_cr3() as link, MAP_NO_CACHE) as scheduler.PagingTable
 	paging_table.map_gdt(HeapAllocator.instance, gdtr_physical_address)
 
 	# Apply the changes to paging
@@ -126,11 +132,6 @@ is_present(entry: u64): bool {
 # Summary: Marks the specified page entry present
 set_present(entry: u64*) {
 	entry[] |= PAGE_CONFIGURATION_PRESENT
-
-	# Todo: Remove
-	entry[] |= 4
-	entry[] |= 1
-	entry[] |= 16
 }
 
 # Summary: Returns the physical address stored inside the specified page entry
@@ -142,6 +143,15 @@ address_from_page_entry(entry: u64): u64* {
 virtual_address_from_page_entry(entry: u64): u64* {
 	physical_address = (entry & 0x7fffffffff000) as link
 	return map_kernel_page(physical_address) as u64*
+}
+
+# Summary: Sets the accessiblity of the specified page entry
+set_accessibility(entry: u64*, all: bool) {
+	if all {
+		entry[] |= 0b100
+	} else {
+		entry[] &= !0b100
+	}
 }
 
 # Summary: Sets the specified page entry writable
@@ -206,7 +216,7 @@ to_kernel_virtual_address(physical_address: u64): link {
 	return KERNEL_MAP_BASE as link + physical_address
 }
 
-map_page(virtual_address: link, physical_address: link, cache: bool, flush: bool): link {
+map_page(virtual_address: link, physical_address: link, flags: u32): link {
 	require((virtual_address & (PAGE_SIZE - 1)) == 0, 'Virtual address was not aligned correctly upon mapping')
 	require((physical_address & (PAGE_SIZE - 1)) == 0, 'Physical address was not aligned correctly upon mapping')
 
@@ -250,19 +260,20 @@ map_page(virtual_address: link, physical_address: link, cache: bool, flush: bool
 
 	set_address(l1_address, physical_address)
 	set_writable(l1_address)
+	set_cached(l1_address, not has_flag(flags, MAP_NO_CACHE))
+	set_accessibility(l1_address, has_flag(flags, MAP_USER))
 	set_present(l1_address)
-	set_cached(l1_address, cache)
 
-	if flush flush_tlb()
+	if not has_flag(flags, MAP_NO_FLUSH) flush_tlb()
 
 	return virtual_address
 }
 
 map_page(virtual_address: link, physical_address: link): link {
-	return map_page(virtual_address, physical_address, true, true)
+	return map_page(virtual_address, physical_address, 0)
 }
 
-map_region(virtual_address_start: link, physical_address_start: link, size: u64, cache: bool): link {
+map_region(virtual_address_start: link, physical_address_start: link, size: u64, flags: u32): link {
 	physical_page = physical_address_start & (-PAGE_SIZE)
 	virtual_page = virtual_address_start & (-PAGE_SIZE)
 	last_physical_page = memory.round_to_page(physical_address_start + size)
@@ -275,19 +286,19 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64,
 	debug.write_line()
 
 	loop (physical_page < last_physical_page) {
-		map_page(virtual_page, physical_page, cache, false)
+		map_page(virtual_page, physical_page, flags | MAP_NO_CACHE)
 
 		physical_page += PAGE_SIZE
 		virtual_page += PAGE_SIZE
 	}
 
-	flush_tlb()
+	if not has_flag(flags, MAP_NO_CACHE) flush_tlb()
 
 	return virtual_address_start & (-PAGE_SIZE) # Warning: Should not we return the unaligned virtual address?
 }
 
 map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {
-	return map_region(virtual_address_start, physical_address_start, size, true)
+	return map_region(virtual_address_start, physical_address_start, size, 0)
 }
 
 map_kernel_page(physical_address: link): link {
@@ -300,13 +311,13 @@ map_kernel_region(physical_address: link, size: u64): link {
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
-map_kernel_page(physical_address: link, cache: bool): link {
-	map_page(physical_address, physical_address, cache, true)
+map_kernel_page(physical_address: link, flags: u32): link {
+	map_page(physical_address, physical_address, flags)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
-map_kernel_region(physical_address: link, size: u64, cache: bool): link {
-	map_region(physical_address, physical_address, size, cache)
+map_kernel_region(physical_address: link, size: u64, flags: u32): link {
+	map_region(physical_address, physical_address, size, flags)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
@@ -323,7 +334,7 @@ quickmap(physical_address: link): link {
 	quickmap_page = quickmap_physical_base + cpu * PAGE_SIZE
 
 	# Map the virtual page to the specified physical address, but do not flush, because that would not be quick
-	map_page(quickmap_page, physical_address, false, false)
+	map_page(quickmap_page, physical_address, MAP_NO_CACHE | MAP_NO_FLUSH)
 
 	# Instead, update only the mapped page
 	virtual_address = KERNEL_MAP_BASE as link + quickmap_page

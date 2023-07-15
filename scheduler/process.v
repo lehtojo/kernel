@@ -105,7 +105,7 @@ Process {
 		program_stack_pointer = program_stack_virtual_address_top - startup_data_size
 
 		# Map the process stack memory for the application
-		memory.paging_table.map_region(allocator, program_stack_mapping)
+		memory.paging_table.map_region(allocator, program_stack_mapping, MAP_USER)
 
 		# Register the stack to the process
 		register_state[].userspace_rsp = program_stack_pointer
@@ -180,6 +180,7 @@ Process {
 	readable state: u32
 	parent: Process = none as Process
 	childs: List<Process>
+	is_kernel_process: bool = false
 	is_sharing_parent_resources: bool = false
 	subscribers: Subscribers
 

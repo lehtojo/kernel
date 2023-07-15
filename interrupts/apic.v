@@ -87,10 +87,10 @@ export find_chunk_with_signature(address: link, size: u32, signature: link, chun
 # Maps the specified table to a virtual address by first reading it length from its header.
 export map_table(physical_address: link): link {
 	# Map the header first and read the length of the table
-	table = mapper.map_kernel_region(physical_address, sizeof(SDTHeader)) as SDTHeader*
+	table = mapper.map_kernel_region(physical_address, sizeof(SDTHeader), MAP_NO_CACHE) as SDTHeader*
 
 	# Map the whole table
-	return mapper.map_kernel_region(physical_address, table[].length)
+	return mapper.map_kernel_region(physical_address, table[].length, MAP_NO_CACHE)
 }
 
 # Summary:
@@ -195,12 +195,12 @@ export process_madt_entries(madt: MADT*, information: ApicInformation) {
 			ioapic_registers_physical_address = (entry + 4).(u32*)[] as link
 			ioapic_gsi_base = (entry + 8).(u32*)[]
 			debug.write('IOAPIC: GSI base: ') debug.write_line(ioapic_gsi_base)
-			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address)
+			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address, MAP_NO_CACHE)
 		} else type == 5 {
 			# Address of the local apic (64-bit system version)
 			information.local_apic_registers_physical_address = (entry + 4).(u64*)[] as link
 			debug.write('IOAPIC: Local apic registers: ') debug.write_address(local_apic_registers_physical_address) debug.write_line()
-			information.local_apic_registers = mapper.map_kernel_page(local_apic_registers_physical_address)
+			information.local_apic_registers = mapper.map_kernel_page(local_apic_registers_physical_address, MAP_NO_CACHE)
 		}
 
 		# Move to the next entry
@@ -229,7 +229,7 @@ export enable() {
 	ports.write_u8(0x21, 0xff)
 
 	base = get_apic_base()
-	mapper.map_kernel_page(base as link)
+	mapper.map_kernel_page(base as link, MAP_NO_CACHE)
 	set_apic_base(base)
 }
 
@@ -276,7 +276,7 @@ export initialize(allocator: Allocator) {
 	debug.write_line((apic_table[].flags & 1) != 0)
 
 	information = ApicInformation()
-	information.local_apic_registers = mapper.map_kernel_page(apic_table[].local_apic_address as link)
+	information.local_apic_registers = mapper.map_kernel_page(apic_table[].local_apic_address as link, MAP_NO_CACHE)
 	process_madt_entries(apic_table, information)
 
 	local_apic_registers_physical_address = information.local_apic_registers_physical_address

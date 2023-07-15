@@ -607,7 +607,12 @@ plain ProcessMemory {
 		initialize_physical_page(allocation, virtual_page, physical_page)
 
 		# Map the new physical page to the accessed virtual page and continue as normal
-		paging_table.map_page(allocator, virtual_page, physical_page)
+		if process.is_kernel_process {
+			paging_table.map_page(allocator, virtual_page, physical_page)
+		} else {
+			paging_table.map_page(allocator, virtual_page, physical_page, MAP_USER)
+		}
+
 		return true
 	}
 

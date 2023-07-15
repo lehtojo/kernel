@@ -8,7 +8,7 @@ ConsoleDevice BootConsoleDevice {
 
 	init(allocator: Allocator) {
 		ConsoleDevice.init(allocator, MAJOR, MINOR)
-		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link)
+		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE)
 		clear()
 	}
 

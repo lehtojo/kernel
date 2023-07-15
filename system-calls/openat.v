@@ -21,7 +21,7 @@ export system_openat(directory_descriptor: i32, filename_argument: link, flags: 
 	# If the specified path is absolute, just use open system call
 	if filename.starts_with(`/`) return system_open(process, filename, flags, mode)
 
-	local_allocator = LocalHeapAllocator(HeapAllocator.instance)
+	local_allocator = LocalHeapAllocator()
 
 	# Figure out the custody of the specified directory, so that we can look for the file
 	custody = none as Custody

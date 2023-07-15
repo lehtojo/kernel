@@ -124,7 +124,7 @@ TimerManager {
 }
 
 export initialize(allocator: Allocator, header: HPETHeader*) {
-	registers = mapper.map_kernel_page(header[].address.address as link) as u64*
+	registers = mapper.map_kernel_page(header[].address.address as link, MAP_NO_CACHE) as u64*
 	require(registers !== none, 'Missing HPET registers')
 
 	debug.write('HPET: Registers=')

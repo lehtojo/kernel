@@ -28,7 +28,7 @@ Device Nvme {
 		registers_physical_address: u64 = pci.read_bar(identifier, 0) & pci.BAR_ADDRESS_MASK
 		debug.write('Nvme: registers_physical_address=') debug.write_address(registers_physical_address) debug.write_line()
 
-		registers: NvmeRegisters = mapper.map_kernel_region(registers_physical_address as link, sizeof(NvmeRegisters), false) as NvmeRegisters
+		registers: NvmeRegisters = mapper.map_kernel_region(registers_physical_address as link, sizeof(NvmeRegisters), MAP_NO_CACHE) as NvmeRegisters
 
 		debug.write('Nvme: capabilities=') debug.write_address(registers.capabilities)
 		debug.write(', version=') debug.write_address(registers.version) debug.write_line()
@@ -150,7 +150,7 @@ Device Nvme {
 		doorbell_registers_size = last_doorbell_offset + capabilities.doorbell_stride
 		debug.write('Nvme: Doorbell registers require ') debug.write(doorbell_registers_size) debug.write_line(' byte(s)')
 
-		doorbell_registers = mapper.map_kernel_region((registers_physical_address + DOORBELL_REGISTERS_OFFSET) as link, doorbell_registers_size, false)
+		doorbell_registers = mapper.map_kernel_region((registers_physical_address + DOORBELL_REGISTERS_OFFSET) as link, doorbell_registers_size, MAP_NO_CACHE)
 		debug.write('Nvme: doorbell_registers=') debug.write_address(doorbell_registers) debug.write_line()
 	}
 
@@ -165,8 +165,8 @@ Device Nvme {
 		admin_completion_queue_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(admin_completion_queue_size)
 		if admin_submission_queue_physical_address === none or admin_completion_queue_physical_address == none return ENOMEM
 
-		admin_submission_queue = mapper.map_kernel_region(admin_submission_queue_physical_address, admin_submission_queue_size, false)
-		admin_completion_queue = mapper.map_kernel_region(admin_completion_queue_physical_address, admin_completion_queue_size, false)
+		admin_submission_queue = mapper.map_kernel_region(admin_submission_queue_physical_address, admin_submission_queue_size, MAP_NO_CACHE)
+		admin_completion_queue = mapper.map_kernel_region(admin_completion_queue_physical_address, admin_completion_queue_size, MAP_NO_CACHE)
 
 		debug.write_line('Nvme: Zeroing admin queue regions...')
 		memory.zero(admin_submission_queue, admin_submission_queue_size)
@@ -249,7 +249,7 @@ Device Nvme {
 		}
 
 		debug.write_line('Nvme: Zeroing out completion queue...')
-		completion_queue = mapper.map_kernel_region(completion_queue_physical_address, completion_queue_size, false)
+		completion_queue = mapper.map_kernel_region(completion_queue_physical_address, completion_queue_size, MAP_NO_CACHE)
 		memory.zero(completion_queue, completion_queue_size)
 
 		# Create a queue that is not ready that will be initialized during multiple submissions
@@ -296,7 +296,7 @@ Device Nvme {
 		}
 
 		debug.write_line('Nvme: Zeroing out submission queue...')
-		submission_queue = mapper.map_kernel_region(submission_queue_physical_address, submission_queue_size, false)
+		submission_queue = mapper.map_kernel_region(submission_queue_physical_address, submission_queue_size, MAP_NO_CACHE)
 		memory.zero(submission_queue, submission_queue_size)
 
 		# Store the created submission queue
@@ -375,7 +375,7 @@ Device Nvme {
 		debug.write_line('Nvme: Identifying active namespaces...')
 		identify_data_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
 
-		identify_data = mapper.map_kernel_page(identify_data_physical_address as link) as u32*
+		identify_data = mapper.map_kernel_page(identify_data_physical_address as link, MAP_NO_CACHE) as u32*
 		memory.zero(identify_data as link, PAGE_SIZE)
 
 		submission = NvmeIdentifyCommand()
@@ -421,7 +421,7 @@ Device Nvme {
 		debug.write('Nvme: Identifying active namespace ') debug.write_line(active_namespace.namespace_id)
 		identify_data_physical_address = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
 
-		identify_data = mapper.map_kernel_page(identify_data_physical_address as link) as NvmeIdentifyNamespace
+		identify_data = mapper.map_kernel_page(identify_data_physical_address as link, MAP_NO_CACHE) as NvmeIdentifyNamespace
 		memory.zero(identify_data as link, sizeof(NvmeIdentifyNamespace))
 
 		submission = NvmeIdentifyCommand()
@@ -491,8 +491,7 @@ Device Nvme {
 			debug.write_line('Nvme: All done')
 			state = HOST_STATE_COMPLETE # All done
 
-			# Todo: No need to pass Devices.instance as it is shared
-			ext2 = Ext2(HeapAllocator.instance, Devices.instance, namespaces[0]) using KernelHeap
+			ext2 = Ext2(HeapAllocator.instance, namespaces[0]) using KernelHeap
 			Ext2.instance = ext2
 			return
 		}

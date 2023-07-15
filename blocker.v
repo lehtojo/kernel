@@ -83,7 +83,7 @@ Blocker MultiProcessBlocker {
 	subscribed: List<Process>
 
 	shared try_create(allocator: Allocator, processes: List<Process>): MultiProcessBlocker {
-		blocker = MultiProcessBlocker(processes) using allocator
+		blocker = MultiProcessBlocker(List<Process>(allocator, processes) using allocator) using allocator
 		return blocker
 	}
 

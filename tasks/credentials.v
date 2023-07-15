@@ -1,4 +1,4 @@
-namespace kernel
+namespace kernel.scheduler
 
 pack Credentials {
 	uid: u32

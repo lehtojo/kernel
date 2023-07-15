@@ -7,6 +7,13 @@
 			"debug": true,
 			"include": [
 				"./",
+				"./bus/",
+				"./elf/",
+				"./interrupts/",
+				"./low/",
+				"./low/x64/",
+				"./memory/",
+				"./tasks/",
 				"./utility/",
 				"./system-calls/",
 				"./file-systems/",
@@ -16,7 +23,9 @@
 				"./devices/console/",
 				"./devices/gpu/",
 				"./devices/gpu/qemu/",
-				"./devices/storage/"
+				"./devices/keyboard/ps2/",
+				"./devices/storage/ata/",
+				"./devices/storage/nvme/"
 			]
 		}
 	]

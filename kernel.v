@@ -49,6 +49,14 @@ namespace kernel {
 	import 'C' save_fpu_state_xsave(destination: link): _
 	import 'C' load_fpu_state_xrstor(source: link): _
 
+	clear_boot_console_with_white(): _ {
+		console = kernel.mapper.map_kernel_page(0xb8000 as link) as u64*
+
+		loop (i = 0, i < 500, i++) {
+			console[i] = 0xff20ff20ff20ff20 # Clear with white spaces
+		}
+	}
+
 	save_fpu_state(destination: link): _ {
 		save_fpu_state_xsave(destination)
 	}
@@ -102,9 +110,7 @@ export start(
 
 	allocator = BufferAllocator(buffer: u8[0x4000], 0x4000)
 
-	boot.console.initialize()
-	boot.console.clear()
-	boot.console.write_line('...')
+	clear_boot_console_with_white()
 
 	interrupts.tables = interrupt_tables
 	interrupts.scheduler = scheduler.Scheduler()

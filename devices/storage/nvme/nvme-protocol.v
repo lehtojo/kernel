@@ -2,7 +2,6 @@ namespace kernel.devices.storage
 
 # LBA = Physical address of a logical block
 
-# Todo: Move all the constants and data structures to a protocol file
 constant MAX_CONTROLLER_VERSION = 0x20000 # 2.0.0
 
 constant DOORBELL_REGISTERS_OFFSET = 0x1000

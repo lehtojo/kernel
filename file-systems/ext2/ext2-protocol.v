@@ -68,14 +68,14 @@ pack BlockGroupDescriptor {
 }
 
 plain InodeInformation {
-	type_and_permissions: u16
-	user_id: u16
+	mode: u16
+	uid: u16
 	size_lower: u32
 	last_access_time: u32
 	creation_time: u32
 	last_modification_time: u32
 	deletion_time: u32
-	group_id: u16
+	gid: u16
 	hard_link_count: u16
 	disk_sector_count: u32
 	flags: u32

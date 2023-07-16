@@ -275,7 +275,7 @@ export create_boot_shell_process(allocator: Allocator, boot_console: BootConsole
 	runtime_linker_program = String.new('/lib/ld')
 	shell_program = String.new('/bin/sh')
 
-	runtime_linker_file_or_error = FileSystem.root.open_file(Custody.root, runtime_linker_program, O_RDONLY, 0)
+	runtime_linker_file_or_error = FileSystems.root.open_file(Custody.root, runtime_linker_program, O_RDONLY, 0)
 	require(runtime_linker_file_or_error has runtime_linker_file, 'Failed to open the runtime linker file')
 
 	debug.write_line('Scheduler: Loading the runtime linker into memory...')

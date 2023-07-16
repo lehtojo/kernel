@@ -10,6 +10,8 @@ File Device {
 	readable gid: u32 = 0
 	readable subscribers: Subscribers
 
+	inode: InodeIdentifier
+
 	# Summary: Combines the specified device major and minor numbers into an identifier
 	shared get_identifier(major: u32, minor: u32): u64 {
 		return (major as u64 <| 32) | minor
@@ -27,6 +29,29 @@ File Device {
 
 	override subscribe(blocker: Blocker) { subscribers.subscribe(blocker) }
 	override unsubscribe(blocker: Blocker) { subscribers.unsubscribe(blocker) }
+
+	override load_status(metadata: FileMetadata) {
+		debug.write_line('Device: Loading status')
+
+		block_size = 0
+		if inode.file_system != 0 { block_size = FileSystems.get(inode.file_system).get_block_size() }
+
+		# Todo: Fill in correct data
+		metadata.device_id = inode.file_system
+		metadata.inode = inode.inode
+		metadata.mode = S_IRWXU | S_IRWXG | S_IRWXO | S_IFCHR
+		metadata.hard_link_count = 1
+		metadata.uid = 0
+		metadata.gid = 0
+		metadata.represented_device = identifier
+		metadata.size = 0
+		metadata.block_size = block_size
+		metadata.blocks = 0
+		metadata.last_access_time = 0
+		metadata.last_modification_time = 0
+		metadata.last_change_time = 0
+		return 0
+	}
 
 	# Summary: Returns the name of this device
 	open get_name(): String

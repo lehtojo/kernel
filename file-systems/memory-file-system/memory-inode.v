@@ -67,15 +67,15 @@ Inode MemoryInode {
 		debug.write('Memory inode: Loading status of inode ') debug.write_line(index)
 
 		# Todo: Fill in correct data
-		metadata.device_id = 1
+		metadata.device_id = file_system.id
 		metadata.inode = index
 		metadata.mode = this.metadata.mode | S_IFREG
 		metadata.hard_link_count = 1
 		metadata.uid = 0
 		metadata.gid = 0
-		metadata.rdev = 0
+		metadata.represented_device = 0
 		metadata.size = data.size
-		metadata.block_size = PAGE_SIZE
+		metadata.block_size = file_system.get_block_size()
 		metadata.blocks = (data.size + metadata.block_size - 1) / metadata.block_size
 		metadata.last_access_time = 0
 		metadata.last_modification_time = 0

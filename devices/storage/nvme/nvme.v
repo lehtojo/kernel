@@ -493,6 +493,8 @@ Device Nvme {
 
 			ext2 = Ext2(HeapAllocator.instance, namespaces[0]) using KernelHeap
 			Ext2.instance = ext2
+
+			FileSystems.add(ext2)
 			return
 		}
 	}

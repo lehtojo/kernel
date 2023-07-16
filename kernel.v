@@ -49,6 +49,11 @@ namespace kernel {
 	import 'C' save_fpu_state_xsave(destination: link): _
 	import 'C' load_fpu_state_xrstor(source: link): _
 
+	# Summary: Returns whether the specified result code is an error
+	is_error_code(code: u64) {
+		return (code as i64) < 0
+	}
+
 	clear_boot_console_with_white(): _ {
 		console = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE) as u64*
 
@@ -138,6 +143,8 @@ export start(
 	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address, 0)
 	mapper.remap()
 
+	FileSystems.initialize(HeapAllocator.instance)
+
 	interrupts.initialize()
 	ps2.keyboard.initialize(allocator)
 
@@ -158,7 +165,7 @@ export start(
 
 		Ext2.instance.initialize()
 
-		FileSystem.root = Ext2.instance
+		FileSystems.root = Ext2.instance
 		Custody.root = Custody(String.empty, none as Custody, Ext2.root_inode) using KernelHeap
 
 		add_system_inodes(HeapAllocator.instance)

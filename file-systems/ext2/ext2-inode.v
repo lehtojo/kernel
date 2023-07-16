@@ -145,19 +145,19 @@ Inode Ext2Inode {
 		load_block_list()
 
 		# If the specified offset is out of bounds, return an error
-		if offset >= information.size {
+		if offset > information.size {
 			debug.write_line('Ext2 inode: Offset is out of bounds')
 			return EINVAL
-		}
-
-		if size == 0 {
-			debug.write_line('Ext2 inode: Nothing to read')
-			return 0
 		}
 
 		# Truncate the size if it goes past the end of the file
 		if offset + size > information.size {
 			size = information.size - offset
+		}
+
+		if size == 0 {
+			debug.write_line('Ext2 inode: Nothing to read')
+			return 0
 		}
 
 		# Compute the range of blocks we need to read
@@ -219,20 +219,19 @@ Inode Ext2Inode {
 	override load_status(metadata: FileMetadata) {
 		debug.write('Ext2 inode: Loading status of inode ') debug.write_line(index)
 
-		# Todo: Fill in correct data
-		metadata.device_id = 1
+		metadata.device_id = file_system.id
 		metadata.inode = index
-		metadata.mode = this.metadata.mode | S_IFREG
-		metadata.hard_link_count = 1
-		metadata.uid = 0
-		metadata.gid = 0
-		metadata.rdev = 0
+		metadata.mode = information.mode
+		metadata.hard_link_count = information.hard_link_count
+		metadata.uid = information.uid
+		metadata.gid = information.gid
+		metadata.represented_device = 0
 		metadata.size = information.size
-		metadata.block_size = PAGE_SIZE
+		metadata.block_size = file_system.get_block_size()
 		metadata.blocks = (information.size + block_size - 1) / block_size
-		metadata.last_access_time = 0
-		metadata.last_modification_time = 0
-		metadata.last_change_time = 0
+		metadata.last_access_time = information.last_access_time
+		metadata.last_modification_time = information.last_modification_time
+		metadata.last_change_time = information.creation_time # Todo: Investigate
 		return 0
 	}
 

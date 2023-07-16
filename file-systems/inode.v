@@ -10,7 +10,7 @@ Inode {
 		this.index = index
 	}
 
-	identifier => InodeIdentifier.new(file_system.index, index)
+	identifier => InodeIdentifier.new(file_system.id, index)
 
 	open is_directory(): bool { return false }
 

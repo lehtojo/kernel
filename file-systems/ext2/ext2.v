@@ -116,7 +116,6 @@ FileSystem Ext2 {
 	init(allocator: Allocator, device: BlockStorageDevice) {
 		this.allocator = allocator
 		this.device = device
-		this.index = SIGNATURE # Todo: Remove
 	}
 
 	initialize(): u64 {
@@ -488,6 +487,10 @@ FileSystem Ext2 {
 		return (byte_index * 8) + bit_index
 	}
 
+	override get_block_size() {
+		return block_size
+	}
+
 	# Summary: Returns the next available inode index
 	override allocate_inode_index() {
 		loop (i = 0, i < block_group_descriptors.size, i++) {
@@ -576,8 +579,8 @@ FileSystem Ext2 {
 		metadata.creation_time = 0 as Timestamp
 		metadata.last_change_time = 0 as Timestamp
 		metadata.last_modification_time = 0 as Timestamp
-		metadata.device_major = standard_metadata.rdev |> 32
-		metadata.device_minor = standard_metadata.rdev & 0xffffffff
+		metadata.device_major = standard_metadata.represented_device |> 32
+		metadata.device_minor = standard_metadata.represented_device & 0xffffffff
 		metadata.file_system_device_major = standard_metadata.device_id |> 32
 		metadata.file_system_device_minor = standard_metadata.device_id & 0xffffffff
 		metadata.mount_id = 0

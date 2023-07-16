@@ -17,7 +17,7 @@ export system_stat(path_argument: link, buffer: link): u32 {
 	}
 
 	# Lookup the file status into the user buffer
-	return FileSystem.root.lookup_status(Custody.root, path, buffer as FileMetadata)
+	return FileSystems.root.lookup_status(Custody.root, path, buffer as FileMetadata)
 }
 
 # System call: fstat
@@ -50,7 +50,7 @@ load_custody(allocator: Allocator, process: Process, directory_descriptor: u32, 
 
 	if directory_descriptor == AT_FDCWD {
 		# User wants we to use the current working directory of the process
-		custody = FileSystem.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
+		custody = FileSystems.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
 		if custody !== none return Results.new<Custody, u32>(custody)
 
 		return Results.error<Custody, u32>(EINVAL)
@@ -107,7 +107,7 @@ export system_fstatat(directory_descriptor: u32, path_argument: link, buffer: li
 	custody = custody_or_error.get_value()
 
 	# Lookup the file status into the user buffer
-	result = FileSystem.root.lookup_status(custody, path, buffer as FileMetadata)
+	result = FileSystems.root.lookup_status(custody, path, buffer as FileMetadata)
 	
 	local_allocator.deallocate()
 	return result
@@ -148,7 +148,7 @@ export system_statx(directory_descriptor: u32, path_argument: link, flags: u32, 
 	custody = custody_or_error.get_value()
 
 	# Lookup the file status
-	result = FileSystem.root.lookup_extended_status(custody, path, buffer as FileMetadataExtended)
+	result = FileSystems.root.lookup_extended_status(custody, path, buffer as FileMetadataExtended)
 	buffer.(FileMetadataExtended).mask = mask
 
 	local_allocator.deallocate()

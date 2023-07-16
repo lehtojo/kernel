@@ -152,11 +152,6 @@ export is_valid_region(process: Process, start: link, size: u64, write: bool): b
 	return true		 
 }
 
-# Summary: Returns whether the specified system call code is an error
-export is_error_code(code: u64) {
-	return (code as i64) < 0
-}
-
 # Summary: Enables instructions that edit FS and GS segment registers
 export enable_general_purpose_segment_instructions(): _ {
 	write_cr4(read_cr4() | 0x10000)

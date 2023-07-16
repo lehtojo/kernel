@@ -38,7 +38,7 @@ plain FileMetadata {
 	uid: u32
 	gid: u32
 	padding_1: u32
-	rdev: u64
+	represented_device: u64
 	size: u64
 	block_size: u64
 	blocks: u64

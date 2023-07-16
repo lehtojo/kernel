@@ -78,7 +78,13 @@ plain OpenFileDescription {
 	}
 
 	read(destination: link, size: u64): u64 {
-		return read(destination, offset, size)
+		result = read(destination, offset, size)
+
+		if not is_error_code(result) {
+			offset += result
+		}
+
+		return result
 	}
 
 	seek(offset: i64, whence: i32): i32 {
@@ -128,7 +134,7 @@ plain OpenFileDescription {
 
 		debug.write_line('Open file description: Iterating directory entries...')
 
-		iterator_or_error = FileSystem.root.iterate_directory(allocator, inode)
+		iterator_or_error = FileSystems.root.iterate_directory(allocator, inode)
 
 		if iterator_or_error.has_error {
 			debug.write_line('Open file description: Failed to iterate directory entries')

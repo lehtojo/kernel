@@ -68,7 +68,7 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 
 	# Open the program for loading
 	# Todo: Fix the constants
-	open_result = FileSystem.root.open_file(Custody.root, path, O_RDONLY, 0)
+	open_result = FileSystems.root.open_file(Custody.root, path, O_RDONLY, 0)
 	if open_result has not description return open_result.error
 
 	# Load the size of the program

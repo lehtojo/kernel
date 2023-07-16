@@ -78,16 +78,16 @@ Inode MemoryDirectoryInode {
 		debug.write('Memory directory inode: Loading status of inode ') debug.write_line(index)
 
 		# Todo: Fill in correct data
-		metadata.device_id = 1
+		metadata.device_id = file_system.id
 		metadata.inode = index
 		metadata.mode = this.metadata.mode | S_IFDIR
 		metadata.hard_link_count = 1
 		metadata.uid = 0
 		metadata.gid = 0
-		metadata.rdev = 0
+		metadata.represented_device = 0
 		metadata.size = 0
-		metadata.block_size = PAGE_SIZE
-		metadata.blocks = 1 
+		metadata.block_size = file_system.get_block_size()
+		metadata.blocks = 0 
 		metadata.last_access_time = 0
 		metadata.last_modification_time = 0
 		metadata.last_change_time = 0
@@ -136,6 +136,10 @@ FileSystem MemoryFileSystem {
 
 		if is_directory return CREATE_OPTION_DIRECTORY
 		return CREATE_OPTION_FILE
+	}
+
+	override get_block_size() {
+		return PAGE_SIZE
 	}
 
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
@@ -278,8 +282,8 @@ FileSystem MemoryFileSystem {
 		metadata.creation_time = 0 as Timestamp
 		metadata.last_change_time = 0 as Timestamp
 		metadata.last_modification_time = 0 as Timestamp
-		metadata.device_major = standard_metadata.rdev |> 32
-		metadata.device_minor = standard_metadata.rdev & 0xffffffff
+		metadata.device_major = standard_metadata.represented_device |> 32
+		metadata.device_minor = standard_metadata.represented_device & 0xffffffff
 		metadata.file_system_device_major = standard_metadata.device_id |> 32
 		metadata.file_system_device_minor = standard_metadata.device_id & 0xffffffff
 		metadata.mount_id = 0
@@ -452,6 +456,8 @@ export add_devices_to_folder(device_directory: MemoryDirectoryInode, devices: Li
 
 export add_system_inodes(allocator: Allocator) {
 	memory_file_system = MemoryFileSystem(allocator) using allocator
+	FileSystems.add(memory_file_system)
+
 	devices_directory = MemoryDirectoryInode(allocator, memory_file_system, memory_file_system.allocate_inode_index(), String.new('dev')) using allocator
 
 	# Add all the devices to the device directory

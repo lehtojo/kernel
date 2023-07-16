@@ -60,8 +60,9 @@ DirectoryIterator {
 }
 
 FileSystem {
-	shared root: FileSystem
-	readable index: u32
+	id: u32
+
+	open get_block_size(): u32
 
 	open mount_root()
 	open mount()

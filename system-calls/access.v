@@ -17,7 +17,7 @@ export system_access(path_argument: link, mode: u64): i64 {
 	}
 
 	# Attempt to access the specified path in the specified mode
-	return FileSystem.root.access(Custody.root, path, mode)
+	return FileSystems.root.access(Custody.root, path, mode)
 }
 
 # System call: faccessat
@@ -46,7 +46,7 @@ export system_faccessat(directory_descriptor: u64, path_argument: link, mode: u6
 		custody = Custody.root
 	} else directory_descriptor == AT_FDCWD {
 		# User wants we to use the current working directory of the process
-		custody = FileSystem.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
+		custody = FileSystems.root.open_path(allocator, Custody.root, process.working_directory, 0).value_or(none as Custody)
 	} else {
 		# Find the directory description associated with the specified descriptor
 		directory_description = process.file_descriptors.try_get_description(directory_descriptor)
@@ -69,5 +69,5 @@ export system_faccessat(directory_descriptor: u64, path_argument: link, mode: u6
 	}
 
 	# Attempt to access the specified path in the specified mode
-	return FileSystem.root.access(custody, path, mode)
+	return FileSystems.root.access(custody, path, mode)
 }

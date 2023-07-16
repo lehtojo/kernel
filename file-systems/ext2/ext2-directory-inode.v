@@ -115,24 +115,4 @@ Ext2Inode Ext2DirectoryInode {
 
 		return lookup_unloaded(name)
 	}
-
-	override load_status(metadata: FileMetadata) {
-		debug.write('Ext2 directory inode: Loading status of directory inode ') debug.write_line(index)
-
-		# Todo: Fill in correct data
-		metadata.device_id = 1
-		metadata.inode = index
-		metadata.mode = this.metadata.mode | S_IFDIR
-		metadata.hard_link_count = 1
-		metadata.uid = 0
-		metadata.gid = 0
-		metadata.rdev = 0
-		metadata.size = 0
-		metadata.block_size = PAGE_SIZE
-		metadata.blocks = 1 
-		metadata.last_access_time = 0
-		metadata.last_modification_time = 0
-		metadata.last_change_time = 0
-		return 0
-	}
 }

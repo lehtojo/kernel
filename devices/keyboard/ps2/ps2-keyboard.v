@@ -34,6 +34,7 @@ export initialize(allocator: Allocator) {
 	layout[11] = `0`
 	layout[12] = `-`
 	layout[13] = `=`
+	layout[14] = BACKSPACE
 
 	layout[16] = `q`
 	layout[17] = `w`

@@ -1,5 +1,7 @@
 namespace kernel.devices.console
 
+import kernel.devices.keyboard
+
 ConsoleDevice BootConsoleDevice {
 	constant MAJOR = 42
 	constant MINOR = 42
@@ -52,8 +54,14 @@ ConsoleDevice BootConsoleDevice {
 	override emit(character: u8) {
 		debug.write('Boot console: Emiting ') debug.write_address(character) debug.write_line()
 
-		input.emit(character)
-		write_character(character)
+		if character == BACKSPACE {
+			remove_input_character()
+			input.remove()
+		} else {
+			input.emit(character)
+			write_character(character)
+		}
+
 		render_viewport()
 
 		if character == `\n` { update() }

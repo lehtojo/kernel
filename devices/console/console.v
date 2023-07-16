@@ -87,8 +87,15 @@ pack ConsoleInputBuffer {
 	private data: List<u8>
 	private capacity: u64
 
+	size => data.size
+
 	shared new(allocator: Allocator, capacity: u64): ConsoleInputBuffer {
 		return pack { data: List<u8>(allocator, capacity, false) using allocator, capacity: capacity } as ConsoleInputBuffer
+	}
+
+	remove(): _ {
+		if data.size == 0 return
+		data.remove_at(data.size - 1)
 	}
 
 	emit(value: u8): _ {
@@ -210,6 +217,17 @@ CharacterDevice ConsoleDevice {
 
 		# If a line ending was written, move to the next line
 		if character == `\n` next_line()
+	}
+
+	# Summary: Removes the character before the cursor
+	protected remove_input_character(): _ {
+		if input.size == 0 return
+
+		# Move to the previous character
+		cursor--
+
+		# Remove the character
+		cells[cursor] = Cell.new(0, background, foreground)
 	}
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {

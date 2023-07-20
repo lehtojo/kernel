@@ -136,6 +136,7 @@ CharacterDevice ConsoleDevice {
 		CharacterDevice.init(major, minor)
 		this.width = DEFAULT_WIDTH
 		this.height = DEFAULT_BUFFER_HEIGHT
+		this.cursor = 0
 		this.viewport.width = DEFAULT_WIDTH
 		this.viewport.height = DEFAULT_HEIGHT
 		initialize_lines(allocator)
@@ -206,7 +207,7 @@ CharacterDevice ConsoleDevice {
 	}
 
 	# Summary: Writes the specified character
-	protected write_character(character: u8): _ {
+	protected write_character_default(character: u8): _ {
 		cells[cursor] = Cell.new(character, background, foreground)
 
 		# Move over the written character
@@ -217,6 +218,11 @@ CharacterDevice ConsoleDevice {
 
 		# If a line ending was written, move to the next line
 		if character == `\n` next_line()
+	}
+
+	# Summary: Writes the specified character
+	open write_character(character: u8): _ {
+		write_character_default(character)
 	}
 
 	# Summary: Removes the character before the cursor

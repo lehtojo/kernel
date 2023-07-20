@@ -293,7 +293,7 @@ Device {
 		debug.write('MSI-X: Using BAR') debug.write(bar) debug.write_line(' to access the table')
 		debug.write('MSI-X: Table offset in BAR: ') debug.write_address(table_offset_in_bar) debug.write_line()
 
-		table_physical_address = (pci.read_bar(identifier, bar) & pci.BAR_ADDRESS_MASK) + table_offset_in_bar
+		table_physical_address = pci.read_bar_address(identifier, bar) + table_offset_in_bar
 		debug.write('MSI-X: Table physical address: ') debug.write_address(table_physical_address) debug.write_line()
 
 		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size, MAP_NO_CACHE) as MsixTableEntry*
@@ -363,6 +363,12 @@ plain HostController {
 		this.physical_address = physical_address
 		this.mapped_bus = -1
 		this.mapped_bus_address = none as link
+
+		debug.write('PCI: Host controller: Domain = ')
+		debug.write_address(domain.id)
+		debug.write(', Physical address = ')
+		debug.write_address(physical_address)
+		debug.write_line()
 	}
 
 	map_bus_region(bus: u8) {

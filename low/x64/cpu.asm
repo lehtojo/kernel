@@ -311,7 +311,7 @@ add rsp, 8 # Skip restoring rsp
 pop rbx
 pop rdx
 pop rcx
-add rsp, 8 # Skip restoring rax
+pop rax
 pop r8
 pop r9
 pop r10
@@ -324,11 +324,11 @@ pop r15
 # Note: Kernel switches are done using syscall instruction, so we have rcx and r11 to work with
 
 add rsp, 16 # Remove the interrupt number and padding
-pop rcx     # Load rip
+popq [gs:0]     # Load rip
 add rsp, 8  # Do not restore cs as it is correct already
 popfq       # Load rflags
 pop rsp     # Load the stack pointer
-jmp rcx
+jmp [gs:0]
 
 .global get_interrupt_handler
 get_interrupt_handler:
@@ -385,3 +385,197 @@ load_fpu_state_xrstor:
 ; shr rdx, 32
 fxrstor [rdi]
 ret
+
+.global uefi_call_wrapper
+uefi_call_wrapper:
+sub rsp, 40 # Allocate memory for the shadow space and the last argument
+
+# Convert between the following calling conventions:
+# Note: RDI has the function pointer
+# Arguments:               rsi, rdx, rcx, r8, r9
+# UEFI calling convention: rcx, rdx, r8,  r9, [rsp+32]
+mov qword ptr [rsp+32], r9
+mov r9, r8
+mov r8, rcx
+# mov rdx, rdx
+mov rcx, rsi
+
+# Call the uefi function pointer
+call rdi
+
+add rsp, 40 # Remove the shadow space and the last argument
+ret
+
+# Todo: Prettify
+.global forward_copy
+forward_copy:
+        test    rdx, rdx
+        je      .LBB0_13
+        cmp     rdx, 8
+        jae     .LBB0_3
+        xor     eax, eax
+        jmp     .LBB0_12
+.LBB0_3:
+        cmp     rdx, 32
+        jae     .LBB0_5
+        xor     eax, eax
+        jmp     .LBB0_9
+.LBB0_5:
+        mov     rax, rdx
+        and     rax, -32
+        xor     ecx, ecx
+.LBB0_6:
+        movups  xmm0, xmmword ptr [rsi + rcx]
+        movups  xmm1, xmmword ptr [rsi + rcx + 16]
+        movups  xmmword ptr [rdi + rcx], xmm0
+        movups  xmmword ptr [rdi + rcx + 16], xmm1
+        add     rcx, 32
+        cmp     rax, rcx
+        jne     .LBB0_6
+        cmp     rax, rdx
+        je      .LBB0_13
+        test    dl, 24
+        je      .LBB0_12
+.LBB0_9:
+        mov     rcx, rax
+        mov     rax, rdx
+        and     rax, -8
+.LBB0_10:
+        mov     r8, qword ptr [rsi + rcx]
+        mov     qword ptr [rdi + rcx], r8
+        add     rcx, 8
+        cmp     rax, rcx
+        jne     .LBB0_10
+        cmp     rax, rdx
+        je      .LBB0_13
+.LBB0_12:
+        movzx   ecx, byte ptr [rsi + rax]
+        mov     byte ptr [rdi + rax], cl
+        inc     rax
+        cmp     rdx, rax
+        jne     .LBB0_12
+.LBB0_13:
+        ret
+
+.global reverse_copy
+reverse_copy:
+        test    rdx, rdx
+        je      .LBB1_11
+        cmp     rdx, 4
+        jae     .LBB1_4
+        xor     eax, eax
+.LBB1_3:
+        mov     rcx, rdi
+        mov     r8, rsi
+        jmp     .LBB1_9
+.LBB1_4:
+        cmp     rdx, 16
+        jae     .LBB1_12
+        xor     eax, eax
+        jmp     .LBB1_6
+.LBB1_12:
+        mov     rax, rdx
+        and     rax, -16
+        mov     rcx, rax
+        neg     rcx
+        xor     r8d, r8d
+.LBB1_13:
+        movups  xmm0, xmmword ptr [rsi + r8 - 15]
+        movups  xmmword ptr [rdi + r8 - 15], xmm0
+        add     r8, -16
+        cmp     rcx, r8
+        jne     .LBB1_13
+        cmp     rax, rdx
+        je      .LBB1_11
+        test    dl, 12
+        je      .LBB1_16
+.LBB1_6:
+        mov     r9, rax
+        mov     rax, rdx
+        and     rax, -4
+        mov     r10, rax
+        neg     r10
+        mov     rcx, rdi
+        sub     rcx, rax
+        mov     r8, rsi
+        sub     r8, rax
+        neg     r9
+.LBB1_7: 
+        mov     r11d, dword ptr [rsi + r9 - 3]
+        mov     dword ptr [rdi + r9 - 3], r11d
+        add     r9, -4
+        cmp     r10, r9
+        jne     .LBB1_7
+        cmp     rax, rdx
+        je      .LBB1_11
+.LBB1_9:
+        sub     rax, rdx
+        xor     edx, edx
+.LBB1_10:
+        movzx   esi, byte ptr [r8 + rdx]
+        mov     byte ptr [rcx + rdx], sil
+        dec     rdx
+        cmp     rax, rdx
+        jne     .LBB1_10
+.LBB1_11:
+        ret
+.LBB1_16:
+        sub     rsi, rax
+        sub     rdi, rax
+        jmp     .LBB1_3
+
+.global zero
+zero:
+        test    rsi, rsi
+        je      .LBB2_8
+        cmp     rsi, 8
+        jae     .LBB2_3
+        xor     eax, eax
+.LBB2_14:
+        mov     rcx, rdi
+        jmp     .LBB2_15
+.LBB2_3:
+        cmp     rsi, 32
+        jae     .LBB2_9
+        xor     eax, eax
+        jmp     .LBB2_5
+.LBB2_9:
+        mov     rax, rsi
+        and     rax, -32
+        xor     ecx, ecx
+        xorps   xmm0, xmm0
+.LBB2_10:
+        movups  xmmword ptr [rdi + rcx], xmm0
+        movups  xmmword ptr [rdi + rcx + 16], xmm0
+        add     rcx, 32
+        cmp     rax, rcx
+        jne     .LBB2_10
+        cmp     rax, rsi
+        je      .LBB2_8
+        test    sil, 24
+        je      .LBB2_13
+.LBB2_5:
+        mov     rdx, rax
+        mov     rax, rsi
+        and     rax, -8
+        lea     rcx, [rdi + rax]
+.LBB2_6:
+        mov     qword ptr [rdi + rdx], 0
+        add     rdx, 8
+        cmp     rax, rdx
+        jne     .LBB2_6
+        cmp     rax, rsi
+        je      .LBB2_8
+.LBB2_15:
+        sub     rsi, rax
+        xor     eax, eax
+.LBB2_16:
+        mov     byte ptr [rcx + rax], 0
+        inc     rax
+        cmp     rsi, rax
+        jne     .LBB2_16
+.LBB2_8:
+        ret
+.LBB2_13:
+        add     rdi, rax
+        jmp     .LBB2_14

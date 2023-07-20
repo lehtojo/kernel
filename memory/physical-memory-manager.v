@@ -483,7 +483,7 @@ PhysicalMemoryManager {
 		# If this point is reached, there is no continuous slab available that could hold the specified amount of memory.
 		# However, we can still try using multiple slabs to hold specified amount of memory since we are using virtual addresses.
 		# In addition, the size of the allocation might be problematic to determine upon deallocation.
-		panic('Out of memory')
+		panic('Physical memory manager: Out of memory')
 	}
 
 	# Summary:

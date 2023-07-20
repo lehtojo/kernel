@@ -96,21 +96,18 @@ export map_table(physical_address: link): link {
 # Summary:
 # Goes through all the RSDT tables and attempts to return the table with the specified signature.
 # The returned address is a virtual address.
-export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): link {
-	debug.write('APIC: Finding table under RSDT ')
-	debug.write_address(header)
+export find_table_with_signature(tables, table_count: u64, signature: link): link {
+	debug.write('APIC: Finding table with signature starting from ')
+	debug.write_address(tables)
 	debug.write_line()
-
-	# Compute the number of tables in the SDT
-	table_count = (header[].length - sizeof(SDTHeader)) / strideof(u32)
 
 	# Compute the length of the signature to look for
 	signature_length = length_of(signature)
 
-	debug.write('APIC: RSDT table count: ')
+	debug.write('APIC: Number of tables = ')
 	debug.write_line(table_count)
 
-	debug.write('APIC: RSDT tables: ')
+	debug.write_line('APIC: Tables: ')
 
 	# Store the table that has the specified signature
 	result = none as SDTHeader*
@@ -137,23 +134,62 @@ export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): 
 export find_table(rsdp: RSDPDescriptor20*, signature: link): link {
 	revision = rsdp[].base.revision
 
-	debug.write('APIC: RSDP revision=')
+	debug.write('APIC: RSDP revision = ')
 	debug.write_line(revision as i64)
 
 	if revision === 0 {
-		rsdt: SDTHeader* = map_table(rsdp[].base.rsdt_address as link)
-		tables: u32* = rsdt + sizeof(SDTHeader)
+		rsdt = map_table(rsdp[].base.rsdt_address as link) as SDTHeader*
+		tables: u32* = (rsdt as link) + sizeof(SDTHeader)
+		table_count = (rsdt[].length - sizeof(SDTHeader)) / sizeof(u32)
 
-		return find_table_from_rsdt(rsdt, tables, signature)
+		return find_table_with_signature(tables, table_count, signature)
+	}
+
+	if revision === 2 {
+		xsdt = map_table(rsdp[].xsdt_address as link) as SDTHeader*
+		tables: u64* = (xsdt as link) + sizeof(SDTHeader)
+		table_count = (xsdt[].length - sizeof(SDTHeader)) / sizeof(u64)
+		return find_table_with_signature(tables, table_count, signature)
 	}
 
 	return none as link
 }
 
 # Summary:
+# Attempts to find the RSDP from the specified UEFI information.
+# Panics upon failure.
+export find_root_system_descriptor_table_from_uefi_uefi_information(uefi_information: UefiInformation) {
+	debug.write_line('APIC: Finding RSDP 2.0 using UEFI information...')
+
+	configuration_table = uefi_information.system_table.configuration_table
+	number_of_table_entries = uefi_information.system_table.number_of_table_entries
+
+	debug.write('APIC: Number of configuration table entries = ') debug.write_line(number_of_table_entries)
+
+	rsdp_guid = UefiGuid.new(0x8868e871, 0xe4f1, 0x11d3, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81)
+
+	loop (i = 0, i < number_of_table_entries, i++) {
+		if configuration_table[i].vendor_guid != rsdp_guid continue
+
+		rsdp = configuration_table[i].vendor_table
+		debug.write('APIC: Found RSDP 2.0 at physical address ')
+		debug.write_address(rsdp)
+		debug.write_line()
+
+		return mapper.to_kernel_virtual_address(rsdp)
+	}
+
+	panic('APIC: Failed to find RSDP 2.0')
+}
+
+# Summary:
 # Attempts to find the root system descriptor table from EBDA.
 # Returns none pointer upon failure.
-export find_root_system_descriptor_table() {
+export find_root_system_descriptor_table(uefi_information: UefiInformation) {
+	if uefi_information !== none {
+		return find_root_system_descriptor_table_from_uefi_uefi_information(uefi_information)
+	}
+
 	# EBDA = Extended BIOS Data Area
 	# RSDP = Root system descriptor pointer
 	ebda_segment_pointer = mapper.to_kernel_virtual_address(0x40E) as u16*
@@ -255,11 +291,11 @@ export max_redirection(registers: u32*) {
 	return result |> 16
 }
 
-export initialize(allocator: Allocator) {
+export initialize(allocator: Allocator, uefi_information: UefiInformation) {
 	debug.write_line('APIC: Finding root system descriptor table')
 
 	# Find the root system descriptor table, so that we can use the hardware
-	rsdp = apic.find_root_system_descriptor_table()
+	rsdp = find_root_system_descriptor_table(uefi_information)
 	debug.write('APIC: RSDP=')
 	debug.write_address(rsdp as u64)
 	debug.write_line()
@@ -268,6 +304,8 @@ export initialize(allocator: Allocator) {
 
 	# Find the MADT table under RSDP
 	apic_table = find_table(rsdp, 'APIC') as MADT*
+	require(apic_table !== none, 'Failed to find MADT')
+
 	debug.write('APIC: MADT=')
 	debug.write_address(apic_table as u64)
 	debug.write_line()

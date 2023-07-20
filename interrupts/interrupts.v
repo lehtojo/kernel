@@ -247,6 +247,12 @@ export process(actual_frame: RegisterState*): u64 {
 		ps2.keyboard.process()
 	} else code == 0x24 {
 		scheduler.tick(frame)
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.tick()
+		}
+
 	} else code == 0x0e {
 		process_page_fault(frame)
 	} else code == 0x0d {

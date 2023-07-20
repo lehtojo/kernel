@@ -49,6 +49,14 @@ namespace kernel {
 	import 'C' save_fpu_state_xsave(destination: link): _
 	import 'C' load_fpu_state_xrstor(source: link): _
 
+	import 'C' uefi_call_wrapper(function: link, argument_0: u64, argument_1: u64): _
+
+	call_uefi(function: link, argument_0, argument_1) {
+		debug.write('UEFI: Calling ') debug.write_address(function) debug.write(' with arguments ')
+		debug.write_address(argument_0 as u64) debug.write(', ') debug.write_address(argument_1 as u64) debug.write_line()
+		uefi_call_wrapper(function, argument_0 as u64, argument_1 as u64)
+	}
+
 	# Summary: Returns whether the specified result code is an error
 	is_error_code(code: u64) {
 		return (code as i64) < 0
@@ -94,6 +102,73 @@ namespace kernel {
 		physical_memory_manager_virtual_address: link
 		quickmap_physical_base: link
 	}
+
+	plain UefiTableHeader {
+		signature: u64
+		revision: u32
+		header_size: u32
+		crc32: u32
+		reserved: u32
+	}
+
+	pack UefiGuid {
+		data1: u32
+		data2: u16
+		data3: u16
+		data4: u64
+
+		shared new(data1: u32, data2: u16, data3: u16, data4_1: u8, data4_2: u8, data4_3: u8, data4_4: u8, data4_5: u8, data4_6: u8, data4_7: u8, data4_8: u8): UefiGuid {
+			data4: u64 = data4_1 | (data4_2 <| 8) | (data4_3 <| 16) | (data4_4 <| 24) | (data4_5 <| 32) | (data4_6 <| 40) | (data4_7 <| 48) | (data4_8 <| 56)
+			return pack { data1: data1, data2: data2, data3: data3, data4: data4 } as UefiGuid
+		}
+	}
+
+	pack UefiConfigurationTable {
+		vendor_guid: UefiGuid
+		vendor_table: link
+	}
+
+	plain UefiSystemTable {
+		inline header: UefiTableHeader
+		firmware_vendor: link
+		firmware_revision: u32
+		padding: u32
+		console_in_handle: link
+		console_in: link
+		console_out_handle: link
+		console_out: UefiSimpleTextOutputInterface
+		console_error_handle: link
+		console_error: link
+		runtime_services: link
+		boot_services: link
+		number_of_table_entries: u64
+		configuration_table: UefiConfigurationTable*
+	}
+
+	plain UefiSimpleTextOutputInterface {
+		reset: link
+		output_string: link
+		test_string: link
+		query_mode: link
+		set_mode: link
+		set_attribute: link
+		clear_screen: link
+		set_cursor_position: link
+		enable_cursor: link
+		mode: link
+	}
+
+	plain UefiInformation {
+		system_table: UefiSystemTable
+		regions: Segment*
+		region_count: u64
+		physical_memory_size: u64
+		memory_map_end: u64
+		bitmap_font_file: link
+		bitmap_font_file_size: u64
+		bitmap_font_descriptor_file: link
+		bitmap_font_descriptor_file_size: u64
+	}
 }
 
 import kernel
@@ -105,21 +180,18 @@ import kernel.devices.keyboard
 import kernel.file_systems.memory_file_system
 import kernel.file_systems.ext2
 import kernel.file_systems
+import kernel.low
 
 export start(
 	multiboot_information: link,
 	interrupt_tables: link,
 	interrupt_stack_pointer: link,
-	gdtr_physical_address: link
+	gdtr_physical_address: link,
+	uefi_information: link
 ) {
 	serial.initialize()
 
 	allocator = BufferAllocator(buffer: u8[0x4000], 0x4000)
-
-	clear_boot_console_with_white()
-
-	interrupts.tables = interrupt_tables
-	interrupts.scheduler = scheduler.Scheduler()
 
 	memory_information = SystemMemoryInformation()
 	SystemMemoryInformation.instance = memory_information
@@ -128,7 +200,16 @@ export start(
 	memory_information.sections = List<elf.SectionHeader>(allocator)
 	memory_information.symbols = List<SymbolInformation>(allocator)
 
-	multiboot.initialize(multiboot_information, memory_information)
+	interrupts.tables = interrupt_tables
+	interrupts.scheduler = scheduler.Scheduler()
+
+	if uefi_information !== none {
+		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi_information as UefiInformation)
+	} else multiboot_information !== none {
+		multiboot.initialize(multiboot_information, memory_information)
+	}
+
+	clear_boot_console_with_white()
 
 	# Tell the mapper where the quickmap base is, so that quickmapping is possible
 	mapper.quickmap_physical_base = memory_information.quickmap_physical_base
@@ -137,11 +218,18 @@ export start(
 	KernelHeap.initialize()
 	HeapAllocator.initialize(allocator)
 
+	if FramebufferConsole.instance !== none and uefi_information !== none {
+		FramebufferConsole.instance.load_font(uefi_information as UefiInformation)
+	}
+
 	interrupts.scheduler.initialize_processes()
 
 	Processor.count = 1
 	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address, 0)
-	mapper.remap()
+
+	if uefi_information === none {
+		mapper.remap()
+	}
 
 	FileSystems.initialize(HeapAllocator.instance)
 
@@ -156,7 +244,7 @@ export start(
 
 	scheduler.create_idle_process()
 
-	interrupts.apic.initialize(allocator)
+	interrupts.apic.initialize(allocator, uefi_information as UefiInformation)
 
 	system_calls.initialize()
 

@@ -23,7 +23,7 @@ pack SegmentSubtraction {
 }
 
 pack Segment {
-	type: i8
+	type: u64
 	start: link
 	end: link
 	size => (end - start) as u64

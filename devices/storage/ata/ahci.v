@@ -2,6 +2,7 @@
 namespace kernel.ahci
 
 import kernel.acpi
+import kernel.bus
 
 constant PORT_INTERFACE_POWER_MANAGEMENT_ACTIVE = 0x1
 constant PORT_DETECTION_PRESENT = 0x3
@@ -346,6 +347,7 @@ initialize(parser: Parser) {
 			continue
 		}
 
-		scan_ports(device.bar5 as link)
+		interface_physical_address = pci.read_bar_address(device, 5)
+		scan_ports(interface_physical_address as link)
 	}
 }

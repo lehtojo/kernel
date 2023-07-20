@@ -6,6 +6,9 @@ constant MAP_USER = 4
 
 namespace mapper
 
+import kernel.low
+import kernel.scheduler
+
 import 'C' flush_tlb()
 import 'C' flush_tlb_local(virtual_address: link)
 
@@ -47,6 +50,8 @@ constant ENTRIES = 512
 # Summary: Stores the pages for each CPU used for mapping physical pages
 quickmap_physical_base: link
 
+mapper_paging_table: PagingTable
+
 # Structure:
 # [                                           L4 1                                          ] ... [                                           L4 512                                        ]
 # [                  L3 1                   ] ... [                  L3 512                 ]     [                  L3 1                   ] ... [                  L3 512                 ]
@@ -70,6 +75,176 @@ quickmap_physical_base: link
 # Number of L2 entries = 1 + (M - 1) / 4096 / 512
 # Number of L3 entries = 1 + (M - 1) / 4096 / 512^2
 # Number of L4 entries = 512 # Use the maximum amount so that we can use the last entry to edit the pages
+
+# Todo: Uefi stuff should not be in this file
+add_regions(system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+	debug.write_line('Mapper: Regions:')
+
+	system_memory_information.regions.reserve(uefi_information.region_count * 2)
+
+	loop (i = 0, i < uefi_information.region_count, i++) {
+		region = uefi_information.regions[i]
+		system_memory_information.regions.add(region)
+
+		if region.type == REGION_AVAILABLE {
+			debug.write('Available: ') region.print() debug.write_line()
+		} else {
+			debug.write('Reserved: ') region.print() debug.write_line()
+		}
+	}
+
+	debug.write_line('Mapper: All regions added')
+}
+
+# Summary:
+# Finds a suitable region for the physical memory manager from the specified regions
+# and modifies them so that the region gets reserved. Returns the virtual address to the allocated region.
+# If no suitable region can be found, this function panics.
+allocate_physical_memory_manager(system_memory_information: SystemMemoryInformation): _ {
+	# Compute the memory needed by the physical memory manager
+	size = sizeof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * sizeof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
+
+	physical_address = Regions.allocate(system_memory_information.regions, size)
+
+	debug.write('Mapper: Placing physical memory manager at ') debug.write_address(physical_address) debug.write_line()
+	system_memory_information.physical_memory_manager_virtual_address = mapper.to_kernel_virtual_address(physical_address)
+	memory.zero(system_memory_information.physical_memory_manager_virtual_address, size)
+}
+
+# Summary: Finds a suitable region for the boot console framebuffer
+initialize_boot_console_framebuffer(allocator: Allocator, system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+	# Compute the memory needed by the physical memory manager
+	# Todo: Pass the actual resolution in UEFI information (GOP)
+	width = 1024
+	height = 768
+	size = width * height * sizeof(u32)
+
+	physical_address = Regions.allocate(system_memory_information.regions, size)
+
+	if physical_address === none {
+		debug.write_line('Mapper: Could not find a suitable region for the boot console framebuffer')
+		return
+	}
+
+	debug.write('Mapper: Placing boot console framebuffer at ') debug.write_address(physical_address) debug.write_line()
+
+	# Zero out the framebuffer, so we will not have garbage on the screen
+	framebuffer = mapper.to_kernel_virtual_address(physical_address)
+	memory.zero(framebuffer, size)
+
+	console = FramebufferConsole(framebuffer, width, height) using allocator
+	FramebufferConsole.instance = console
+}
+
+remap(allocator: Allocator, gdtr_physical_address: link, system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+	debug.write_line('Mapper: Remapping using UEFI data')
+
+	add_regions(system_memory_information, uefi_information)
+
+	system_memory_information.physical_memory_size = uefi_information.physical_memory_size
+	memory_map_end = uefi_information.memory_map_end
+	debug.write('Mapper: Physical memory size: ') debug.write_address(system_memory_information.physical_memory_size) debug.write_line()
+	debug.write('Mapper: Memory map end: ') debug.write_address(memory_map_end) debug.write_line()
+
+	# Compute how many L1s, L2s, L3s and L4s we need for identity mapping
+	l4_size = 0x8000000000
+	l4_required_count = (memory_map_end + l4_size - 1) / 0x8000000000 # 0x1000*0x200*0x200*0x200
+	l3_required_count = (memory_map_end + 0x40000000 - 1) / 0x40000000 # 0x1000*0x200*0x200
+	l2_required_count = (memory_map_end + 0x200000 - 1) / 0x200000 # 0x1000*0x200
+	l1_required_count = (memory_map_end + 0x1000 - 1) / 0x1000
+
+	# We will always allocate all L4s, because they do not require a lot of memory and we want to use entry at index 0x100 as kernel mapping
+	l4_count = 512
+	l3_count = memory.round_to(l3_required_count, 512)
+	l2_count = memory.round_to(l2_required_count, 512)
+	l1_count = memory.round_to(l1_required_count, 512)
+
+	# Compute how much memory we need to allocate for the page map
+	size = memory.round_to_page((l4_count + l3_count + l2_count + l1_count) * sizeof(u64))
+
+	debug.write('Mapper: Allocating ')
+	debug.write(size)
+	debug.write_line(' bytes for the page map')
+
+	# l4_base = 0xffffffffffffffff
+	l4_base = Regions.allocate(system_memory_information.regions, size) as u64
+	memory.zero(l4_base as link, size)
+
+	debug.write('Mapper: Kernel page table = ')
+	debug.write_address(l4_base)
+	debug.write_line()
+
+	debug.write_line('Mapper: Identity mapping...')
+
+	# Compute where each layer starts
+	l3_base = l4_base + l4_count * sizeof(u64)
+	l2_base = l3_base + l3_count * sizeof(u64)
+	l1_base = l2_base + l2_count * sizeof(u64)
+
+	# Map the kernel
+	l4_base.(u64*)[KERNEL_MAP_BASE_L4] = l3_base | 0b11
+
+	# Identity map L4
+	loop (i = 0, i < l4_required_count, i++) {
+		address = l3_base + i * (512 * sizeof(u64))
+		l4_base.(u64*)[i] = address | 0b11
+	}
+
+	# Identity map L3
+	loop (i = 0, i < l3_required_count, i++) {
+		address = l2_base + i * (512 * sizeof(u64))
+		l3_base.(u64*)[i] = address | 0b11
+	}
+
+	# Identity map L2
+	loop (i = 0, i < l2_required_count, i++) {
+		address = l1_base + i * (512 * sizeof(u64))
+		l2_base.(u64*)[i] = address | 0b11
+	}
+
+	# Identity map L1
+	loop (i = 0, i < l1_required_count, i++) {
+		address = i * 0x1000
+		l1_base.(u64*)[i] = address | 0b11
+	}
+
+	# Unmap the first page as we do not need it and it is reserved for "none" (null)
+	l1_base.(u64*)[] = 0
+
+	debug.write_line('Mapper: Switching to the kernel paging table...')
+
+	# Use the new page mapping
+	mapper_paging_table = (KERNEL_MAP_BASE + l4_base) as PagingTable
+	write_cr3(l4_base as u64)
+
+	# gdtr_virtual_address = GDTR_VIRTUAL_ADDRESS + (gdtr_physical_address as u64) % PAGE_SIZE
+	gdtr_virtual_address = KERNEL_MAP_BASE + gdtr_physical_address as u64
+
+	debug.write_line('Mapper: Mapping GDT to the kernel paging table...')
+
+	# Remap the GDT to the virtual address that is used by process paging tables.
+	# mapper_paging_table.map_gdt(HeapAllocator.instance, gdtr_physical_address)
+
+	# Apply the changes to paging
+	flush_tlb()
+
+	# Update the address of GDTR
+	debug.write('Mapper: Switching GDTR to ')
+	debug.write_address(gdtr_virtual_address)
+	debug.write_line()
+
+	write_gdtr(gdtr_virtual_address)
+
+	allocate_physical_memory_manager(system_memory_information)
+	initialize_boot_console_framebuffer(allocator, system_memory_information, uefi_information)
+
+	debug.write_line('Mapper: Cleaning regions...')
+	Regions.clean(system_memory_information.regions)
+
+	debug.write_line('Mapper: Finding reserved regions...')
+	Regions.find_reserved_physical_regions(system_memory_information.regions, system_memory_information.physical_memory_size, system_memory_information.reserved)
+	debug.write_line('Mapper: Remapping is complete')
+}
 
 # Summary:
 # Removes the first 1 GiB identity mapping from the paging tables.
@@ -114,6 +289,11 @@ region(): Segment {
 
 # Summary: Maps the kernel regions from the current paging tables to the specified L4 entries
 map_kernel_entry(entries: u64*) {
+	debug.write_line('Mapper: Mapping kernel entry...')
+	entries[KERNEL_MAP_BASE_L4] = mapper_paging_table.entries[KERNEL_MAP_BASE_L4]
+
+	# Todo: Remove these commented regions such as this and others below
+	###
 	# Todo: Fix the compiler bug: If L4_BASE is used directly, the compiler tries to inline the constant address into an instruction as a 32-bit address.  
 	l4_base = L4_BASE
 
@@ -122,6 +302,7 @@ map_kernel_entry(entries: u64*) {
 
 	kernel_map_editor_entry = l4_base.(u64*)[ENTRIES - 1]
 	entries[ENTRIES - 1] = (kernel_map_editor_entry & (!0b111100000))
+	###
 }
 
 # Summary: Returns whether the specified page entry is present
@@ -141,8 +322,8 @@ address_from_page_entry(entry: u64): u64* {
 
 # Summary: Returns the physical address stored inside the specified page entry
 virtual_address_from_page_entry(entry: u64): u64* {
-	physical_address = (entry & 0x7fffffffff000) as link
-	return map_kernel_page(physical_address) as u64*
+	physical_address = entry & 0x7fffffffff000
+	return (KERNEL_MAP_BASE + physical_address) as u64*
 }
 
 # Summary: Sets the accessiblity of the specified page entry
@@ -185,6 +366,12 @@ set_address(entry: u64*, physical_address: link) {
 }
 
 to_physical_address(virtual_address: link): link {
+	maybe_physical_address = mapper_paging_table.to_physical_address(virtual_address)
+	if maybe_physical_address has physical_address return physical_address
+
+	panic('Kernel virtual address was not mapped')
+
+	###
 	# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 	offset = virtual_address & 0xFFF
 	l1 = ((virtual_address |> 12) & 0b111111111) as u32
@@ -206,6 +393,7 @@ to_physical_address(virtual_address: link): link {
 	if not is_present(l1_entry) panic('Virtual address was not mapped (L1)')
 
 	return address_from_page_entry(l1_entry) + offset
+	###
 }
 
 to_kernel_virtual_address(physical_address: link): link {
@@ -217,6 +405,9 @@ to_kernel_virtual_address(physical_address: u64): link {
 }
 
 map_page(virtual_address: link, physical_address: link, flags: u32): link {
+	mapper_paging_table.map_page(HeapAllocator.instance, virtual_address, physical_address, flags)
+	return virtual_address
+	###
 	require((virtual_address & (PAGE_SIZE - 1)) == 0, 'Virtual address was not aligned correctly upon mapping')
 	require((physical_address & (PAGE_SIZE - 1)) == 0, 'Physical address was not aligned correctly upon mapping')
 
@@ -267,6 +458,7 @@ map_page(virtual_address: link, physical_address: link, flags: u32): link {
 	if not has_flag(flags, MAP_NO_FLUSH) flush_tlb()
 
 	return virtual_address
+	###
 }
 
 map_page(virtual_address: link, physical_address: link): link {
@@ -274,6 +466,9 @@ map_page(virtual_address: link, physical_address: link): link {
 }
 
 map_region(virtual_address_start: link, physical_address_start: link, size: u64, flags: u32): link {
+	mapper_paging_table.map_region(HeapAllocator.instance, MemoryMapping.new(virtual_address_start as u64, physical_address_start as u64, size), flags)
+	return virtual_address_start & (-PAGE_SIZE)
+	###
 	physical_page = physical_address_start & (-PAGE_SIZE)
 	virtual_page = virtual_address_start & (-PAGE_SIZE)
 	last_physical_page = memory.round_to_page(physical_address_start + size)
@@ -295,6 +490,7 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64,
 	if not has_flag(flags, MAP_NO_CACHE) flush_tlb()
 
 	return virtual_address_start & (-PAGE_SIZE) # Warning: Should not we return the unaligned virtual address?
+	###
 }
 
 map_region(virtual_address_start: link, physical_address_start: link, size: u64): link {

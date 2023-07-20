@@ -77,14 +77,14 @@ plain PagingTable {
 	# If the entries required to map the address do not exist,
 	# this function allocates them using the specified allocator.
 	map_page(allocator: Allocator, virtual_address: link, physical_address: link, flags: u32) {
+		#debug.write('Mapping virtual page ')
+		#debug.write_address(virtual_address)
+		#debug.write(' to physical page ')
+		#debug.write_address(physical_address)
+		#debug.write_line()
+
 		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address was not aligned correctly')
 		require((physical_address % PAGE_SIZE) == 0, 'Physical address was not aligned correctly')
-
-		debug.write('Mapping virtual page ')
-		debug.write_address(virtual_address)
-		debug.write(' to physical page ')
-		debug.write_address(physical_address)
-		debug.write_line()
 
 		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 		l1_index = ((virtual_address |> 12) & 0b111111111) as u32

@@ -5,7 +5,7 @@ constant MSR_GS_BASE = 0xc0000101
 plain Processor {
 	shared count: u32
 
-	padding: link
+	temporary: link
 	kernel_stack_pointer: link
 	user_stack_pointer: link
 	general_kernel_stack_pointer: link

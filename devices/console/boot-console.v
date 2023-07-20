@@ -1,6 +1,7 @@
 namespace kernel.devices.console
 
 import kernel.devices.keyboard
+import kernel.low
 
 ConsoleDevice BootConsoleDevice {
 	constant MAJOR = 42
@@ -8,19 +9,39 @@ ConsoleDevice BootConsoleDevice {
 
 	protected framebuffer: link
 
+	# Todo: Move to console device
+	protected terminal: Terminal
+
 	init(allocator: Allocator) {
 		ConsoleDevice.init(allocator, MAJOR, MINOR)
 		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE)
+		terminal = Terminal(cells, width, height) using allocator
 		clear()
 	}
 
 	# Summary: Clears the viewport
 	protected clear() {
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.clear()
+			return
+		}
+
 		loop (i = 0, i < viewport.width * viewport.height, i++) {
 			framebuffer.(u16*)[i] = 0x0020 # Clear with black spaces
 		}
 
 		# Todo: Consider the cursor
+	}
+
+	override write_character(character: u8) {
+		x = cursor % width
+		y = cursor / width
+
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.update(terminal, x, y, Cell.new(character, foreground, background))
+		}
+
+		write_character_default(character)
 	}
 
 	# Summary: Renders the specified viewport line
@@ -62,7 +83,8 @@ ConsoleDevice BootConsoleDevice {
 			write_character(character)
 		}
 
-		render_viewport()
+		# Todo: Figure out what to do with this
+		#render_viewport()
 
 		if character == `\n` { update() }
 	}

@@ -22,7 +22,7 @@ export plain Map<K, V> {
 		this.allocator = allocator
 	}
 
-	init(capacity: i64) {
+	init(allocator: Allocator, capacity: i64) {
 		this.allocator = allocator
 		rehash(capacity)
 	}

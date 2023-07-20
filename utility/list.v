@@ -75,11 +75,11 @@ List<T> {
 		# Allocate more memory for data
 		new_data = allocator.allocate(strideof(T) * reservation)
 
-		# Copy the current data to the allocated memory
-		memory.copy(new_data, data, strideof(T) * size)
-
 		# Deallocate the old memory
 		if data !== none {
+			# Copy the current data to the allocated memory
+			memory.copy(new_data, data, strideof(T) * size)
+
 			allocator.deallocate(data)
 		}
 

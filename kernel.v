@@ -158,6 +158,15 @@ namespace kernel {
 		mode: link
 	}
 
+	pack UefiGraphicsInformation {
+		framebuffer_physical_address: u64
+		horizontal_stride: u64
+		width: u64
+		height: u64
+
+		framebuffer_space_size => width * height * sizeof(u32)
+	}
+
 	plain UefiInformation {
 		system_table: UefiSystemTable
 		regions: Segment*
@@ -168,6 +177,7 @@ namespace kernel {
 		bitmap_font_file_size: u64
 		bitmap_font_descriptor_file: link
 		bitmap_font_descriptor_file_size: u64
+		graphics_information: UefiGraphicsInformation
 	}
 }
 
@@ -238,6 +248,11 @@ export start(
 
 	devices = Devices(HeapAllocator.instance)
 	Devices.instance = devices
+
+	if uefi_information !== none {
+		# Todo: Generalize
+		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi_information as UefiInformation)
+	}
 
 	boot_console = BootConsoleDevice(HeapAllocator.instance)
 	devices.add(boot_console)

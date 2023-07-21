@@ -3,6 +3,7 @@ namespace kernel.devices.gpu.qemu
 import kernel.acpi
 import kernel.system_calls
 
+# Todo: Move the constants below into a protocol file
 constant FRAMEBUFFER_SETTING_ENABLED = 1
 constant FRAMEBUFFER_SETTING_LINEAR_FRAMEBUFFER = 0x40
 
@@ -14,12 +15,14 @@ GenericDisplayConnector DisplayConnector {
 	registers: DisplayMemoryMappedIORegisters
 
 	init(framebuffer: link, framebuffer_space_size: u64, registers: DisplayMemoryMappedIORegisters) {
+		# Todo: Figure out the device id
 		GenericDisplayConnector.init(0x1234, 0x5678, framebuffer, framebuffer_space_size)
 		this.registers = registers
 	}
 
 	override enable() {
 		debug.write_line('QEMU display connector: Enabling...')
+		enable_default()
 		unblank()
 		set_safe_display_mode_setting()
 	}
@@ -92,5 +95,9 @@ GenericDisplayConnector DisplayConnector {
 
 		debug.write_line('QEMU display connector: Successfully set display mode setting')
 		return 0
+	}
+
+	override get_name() {
+		return String.new('fb1')
 	}
 }

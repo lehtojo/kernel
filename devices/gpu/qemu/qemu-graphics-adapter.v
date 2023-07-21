@@ -3,6 +3,7 @@ namespace kernel.devices.gpu.qemu
 import kernel.bus
 import kernel.acpi
 
+# Todo: Move the structures below into a protocol file
 pack DISPIInterface {
 	index_id: u16
 	x_resolution: u16
@@ -34,7 +35,7 @@ plain DisplayMemoryMappedIORegisters {
 GenericGraphicsAdapter Device GraphicsAdapter {
 	shared create(identifier: DeviceIdentifier): GraphicsAdapter {
 		adapter = GraphicsAdapter(identifier) using KernelHeap
-		adapter.initialize()		
+		adapter.initialize()
 
 		return adapter
 	}
@@ -60,6 +61,7 @@ GenericGraphicsAdapter Device GraphicsAdapter {
 		mapped_registers = mapper.map_kernel_page(registers_physical_address as link, MAP_NO_CACHE)
 
 		connector = DisplayConnector(framebuffer_physical_address as link, framebuffer_space_size, mapped_registers as DisplayMemoryMappedIORegisters) using KernelHeap
+		DisplayConnectors.add(connector)
 		Devices.instance.add(connector)
 	}
 }

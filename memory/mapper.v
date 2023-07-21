@@ -114,9 +114,8 @@ allocate_physical_memory_manager(system_memory_information: SystemMemoryInformat
 # Summary: Finds a suitable region for the boot console framebuffer
 initialize_boot_console_framebuffer(allocator: Allocator, system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
 	# Compute the memory needed by the physical memory manager
-	# Todo: Pass the actual resolution in UEFI information (GOP)
-	width = 1024
-	height = 768
+	width = uefi_information.graphics_information.width
+	height = uefi_information.graphics_information.height
 	size = width * height * sizeof(u32)
 
 	physical_address = Regions.allocate(system_memory_information.regions, size)

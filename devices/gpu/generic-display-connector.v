@@ -109,7 +109,11 @@ Device GenericDisplayConnector {
 		this.framebuffer_size = framebuffer_size
 	}
 
-	open enable(): _ {}
+	enable_default(): _ { enabled = true }
+	disable_default(): _ { enabled = false }
+
+	open enable(): _ { enable_default() }
+	open disable(): _ { disable_default() }
 
 	private get_screen_information(information: ScreenInformation): i32 {
 		debug.write_line('Generic display connector: Loading screen information...')
@@ -205,6 +209,11 @@ Device GenericDisplayConnector {
 	}
 
 	override control(request: u32, argument: u64) {
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.enabled = false
+		}
+
 		if not enabled {
 			enabled = true
 			enable()
@@ -219,6 +228,6 @@ Device GenericDisplayConnector {
 	}
 
 	override get_name() {
-		return String.new('fb0')
+		return String.new('fb')
 	}
 }

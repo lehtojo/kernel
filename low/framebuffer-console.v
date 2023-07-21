@@ -1,6 +1,7 @@
 namespace kernel.low
 
 import kernel.devices.console
+import kernel.devices.gpu
 
 pack Rect {
 	x: u32
@@ -170,6 +171,7 @@ plain FramebufferConsole {
 	private height: u32
 	private counter: u32 = 0
 	bitmap_font: BitmapFont = none as BitmapFont
+	enabled: bool = true
 
 	init(framebuffer: link, width: u32, height: u32) {
 		this.framebuffer = framebuffer
@@ -182,8 +184,14 @@ plain FramebufferConsole {
 	}
 
 	tick(): _ {
-		# Todo: Retrieve the correct framebuffer physical address
-		hardware_framebuffer = mapper.map_kernel_region(0xc0000000 as link, width * height * sizeof(u32), MAP_NO_CACHE)
+		if not enabled return
+
+		if DisplayConnectors.current === none {
+			debug.write_line('Framebuffer console: No display connector found')
+			return
+		}
+
+		hardware_framebuffer = mapper.map_kernel_region(DisplayConnectors.current.framebuffer, width * height * sizeof(u32), MAP_NO_CACHE)
 		memory.forward_copy(hardware_framebuffer, framebuffer, width * height * sizeof(u32))
 	}
 

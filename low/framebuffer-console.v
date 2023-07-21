@@ -4,8 +4,8 @@ import kernel.devices.console
 import kernel.devices.gpu
 
 pack Rect {
-	x: u32
-	y: u32
+	x: i32
+	y: i32
 	width: u32
 	height: u32
 
@@ -18,8 +18,12 @@ pack Rect {
 		return pack { x: 0, y: 0, width: 0, height: 0 } as Rect
 	}
 
-	shared new(x: u32, y: u32, width: u32, height: u32): Rect {
+	shared new(x: i32, y: i32, width: u32, height: u32): Rect {
 		return pack { x: x, y: y, width: width, height: height } as Rect
+	}
+
+	print(): _ {
+		debug.put(`[`) debug.write(x) debug.write(', ') debug.write(y) debug.write(', ') debug.write(width) debug.write(', ') debug.write(height) debug.put(`]`)
 	}
 }
 
@@ -200,6 +204,17 @@ plain FramebufferConsole {
 		memory.zero(framebuffer, width * height * sizeof(u32))
 	}
 
+	clear(rect: Rect): _ {
+		debug.write_line('Framebuffer console: Clearing a region')
+
+		destination = address_of(rect.x, rect.y)
+
+		loop (iy = 0, iy < rect.height, iy++) {
+			memory.zero(destination, rect.width * sizeof(u32))
+			destination += width * sizeof(u32)
+		}
+	}
+
 	load_font(uefi_information: UefiInformation): _ {
 		bitmap_font_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_file)
 		bitmap_font_descriptor_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_descriptor_file)
@@ -283,8 +298,7 @@ plain FramebufferConsole {
 	}
 
 	# Summary: Computes the current rect of the specified cell in the framebuffer
-	get_cell_rect(terminal: Terminal, x: u32, y: u32): Rect {
-		character = bitmap_font.get_character(terminal[x, y].value)
+	get_cell_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
 		rect = Rect.new(0, y * bitmap_font.line_height + character.y_offset, character.width, character.height)
 
 		x_offset = character.x_offset as i64
@@ -295,24 +309,47 @@ plain FramebufferConsole {
 		}
 
 		rect.x = math.max(x_offset, 0)
+
+		# Todo: Remove
+		debug.write('Rect for ') debug.write(x) debug.write(', ') debug.write(y) debug.write(' is ') rect.print() debug.write_line()
 		return rect
 	}
 
 	scroll(lines: u32): _ {
-		panic('Todo')
+		###
+		debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
+
+		vertical_movement = lines * bitmap_font
+
+		if lines >= 0 {
+			source_rect = Rect.new(0, )
+		}
+
+		# Determine the region that should be moved
+		screen_rect = Rect.new(0, 0, width, height)
+		screen_rect.y += lines * bitmap_font.line_height
+
+		###
 	}
 
 	# Summary: Updates the specified cell by rendering it to the framebuffer
 	update(terminal: Terminal, x: u32, y: u32, new: Cell): _ {
 		debug.write('Framebuffer console: Updating cell at ') debug.write(x) debug.write(', ') debug.write_line(y)
 
+		# Remove the old character from the framebuffer
+		old_character = bitmap_font.get_character(terminal[x, y].value)
+		character_rect = get_cell_rect(terminal, x, y, old_character)
+		clear(character_rect)
+
+		# Compute the rect for the new character
 		new_character = bitmap_font.get_character(new.value)
-		character_rect = get_cell_rect(terminal, x, y)
+		character_rect = get_cell_rect(terminal, x, y, new_character)
 
 		# We need to move the characters after the cell to the correct positions:
 
 		# Compute the rect that contains all the characters after the current character:
-		last_character_rect = get_cell_rect(terminal, terminal.width - 1, y)
+		last_character = bitmap_font.get_character(terminal[terminal.width - 1, y].value)
+		last_character_rect = get_cell_rect(terminal, terminal.width - 1, y, last_character)
 		source_rect = Rect.new(character_rect.right, character_rect.top, last_character_rect.right - character_rect.right, character_rect.height)
 
 		# Compute the rect where the characters should be moved to:

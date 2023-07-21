@@ -229,11 +229,10 @@ CharacterDevice ConsoleDevice {
 	protected remove_input_character(): _ {
 		if input.size == 0 return
 
-		# Move to the previous character
-		cursor--
-
 		# Remove the character
-		cells[cursor] = Cell.new(0, background, foreground)
+		cursor--
+		write_character(0)
+		cursor--
 	}
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {

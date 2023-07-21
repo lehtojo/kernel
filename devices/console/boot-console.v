@@ -34,6 +34,8 @@ ConsoleDevice BootConsoleDevice {
 	}
 
 	override write_character(character: u8) {
+		debug.write('Boot console: Writing character ') debug.write_address(character) debug.write_line()
+
 		x = cursor % width
 		y = cursor / width
 

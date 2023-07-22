@@ -5,9 +5,6 @@ import kernel.devices.console
 
 constant KEYCODE_COUNT = 128
 
-constant LEFT_SHIFT = 0x2a
-constant RIGHT_SHIFT = 0x36
-
 layout: u8*
 shift_layout: u8*
 states: u8*
@@ -117,6 +114,7 @@ resolve_keycode(scancode: u8, keycode: u8, is_shift_down: bool): u8 {
 }
 
 export process() {
+	# Todo: Remove these constants
 	scancode = ports.read_u8(0x60)
 	down = (scancode & 0x80) == 0
 	scancode &= 0x7f # Remove the last bit

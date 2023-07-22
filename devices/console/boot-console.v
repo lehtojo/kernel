@@ -15,7 +15,7 @@ ConsoleDevice BootConsoleDevice {
 	init(allocator: Allocator) {
 		ConsoleDevice.init(allocator, MAJOR, MINOR)
 		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE)
-		terminal = Terminal(cells, width, height) using allocator
+		terminal = Terminal(cells, width, height, viewport) using allocator
 		clear()
 	}
 
@@ -80,6 +80,12 @@ ConsoleDevice BootConsoleDevice {
 		if character == BACKSPACE {
 			remove_input_character()
 			input.remove()
+
+		# Todo: Remove
+		} else character == `9` {
+			scroll(1)
+		} else character == `0` {
+			scroll(-1)
 		} else {
 			input.emit(character)
 			write_character(character)
@@ -89,6 +95,15 @@ ConsoleDevice BootConsoleDevice {
 		#render_viewport()
 
 		if character == `\n` { update() }
+	}
+
+	override scroll(lines: i32) {
+		scroll_default(lines)
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.scroll(terminal, lines)
+		}
 	}
 
 	# Summary: Called when the console content is updated

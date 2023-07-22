@@ -77,10 +77,72 @@ constant TCGETS = 0x5401
 constant TIOCSPGRP = 0x5410
 constant TIOCGPGRP = 0x540F
 
-pack Viewport {
+pack Rect {
+	x: i32
+	y: i32
 	width: u32
 	height: u32
-	line: u32
+
+	left => x
+	top => y
+	right => x + width
+	bottom => y + height
+
+	shared new(): Rect {
+		return pack { x: 0, y: 0, width: 0, height: 0 } as Rect
+	}
+
+	shared new(x: i32, y: i32, width: u32, height: u32): Rect {
+		return pack { x: x, y: y, width: width, height: height } as Rect
+	}
+
+	shared from_sides(left: i32, top: i32, right: i32, bottom: i32): Rect {
+		require(left <= right and top <= bottom, 'Invalid sides')
+		return pack { x: left, y: top, width: right - left, height: bottom - top } as Rect
+	}
+
+	clamp(rect: Rect): Rect {
+		return Rect.from_sides(
+			math.clamp(left, rect.left, rect.right),
+			math.clamp(top, rect.top, rect.bottom),
+			math.clamp(right, rect.left, rect.right),
+			math.clamp(bottom, rect.top, rect.bottom)
+		)
+	}
+
+	print(): _ {
+		debug.put(`[`) debug.write(x) debug.write(', ') debug.write(y) debug.write(', ') debug.write(width) debug.write(', ') debug.write(height) debug.put(`]`)
+	}
+}
+
+plain Viewport {
+	width: u32
+	height: u32
+	line: u32 = 0
+
+	init(width: u32, height: u32) {
+		this.width = width
+		this.height = height
+	}
+}
+
+plain Terminal {
+	cells: Array<Cell>
+	width: u32
+	height: u32
+	viewport: Viewport
+
+	init(cells: Array<Cell>, width: u32, height: u32, viewport: Viewport) {
+		this.width = width
+		this.height = height
+		this.cells = cells
+		this.viewport = viewport
+	}
+
+	get(x: u32, y: u32): Cell {
+		require(x < width and y < height, 'Invalid cell coordinates')
+		return cells[y * width + x]
+	}
 }
 
 pack ConsoleInputBuffer {
@@ -137,8 +199,7 @@ CharacterDevice ConsoleDevice {
 		this.width = DEFAULT_WIDTH
 		this.height = DEFAULT_BUFFER_HEIGHT
 		this.cursor = 0
-		this.viewport.width = DEFAULT_WIDTH
-		this.viewport.height = DEFAULT_HEIGHT
+		this.viewport = Viewport(DEFAULT_WIDTH, DEFAULT_HEIGHT) using allocator
 		initialize_lines(allocator)
 		initialize_terminal_information()
 	}
@@ -304,6 +365,15 @@ CharacterDevice ConsoleDevice {
 
 		input.emit(character)
 		write_character(character)
+		update()
+	}
+
+	scroll_default(lines: i32): _ {
+		viewport.line = (viewport.line + lines) % height
+	}
+
+	open scroll(lines: i32): _ {
+		scroll_default(lines)
 		update()
 	}
 

@@ -3,47 +3,6 @@ namespace kernel.low
 import kernel.devices.console
 import kernel.devices.gpu
 
-pack Rect {
-	x: i32
-	y: i32
-	width: u32
-	height: u32
-
-	left => x
-	top => y
-	right => x + width
-	bottom => y + height
-
-	shared new(): Rect {
-		return pack { x: 0, y: 0, width: 0, height: 0 } as Rect
-	}
-
-	shared new(x: i32, y: i32, width: u32, height: u32): Rect {
-		return pack { x: x, y: y, width: width, height: height } as Rect
-	}
-
-	print(): _ {
-		debug.put(`[`) debug.write(x) debug.write(', ') debug.write(y) debug.write(', ') debug.write(width) debug.write(', ') debug.write(height) debug.put(`]`)
-	}
-}
-
-plain Terminal {
-	cells: Array<Cell>
-	width: u32
-	height: u32
-
-	init(cells: Array<Cell>, width: u32, height: u32) {
-		this.width = width
-		this.height = height
-		this.cells = cells
-	}
-
-	get(x: u32, y: u32): Cell {
-		require(x < width and y < height, 'Invalid cell coordinates')
-		return cells[y * width + x]
-	}
-}
-
 plain BitmapDescriptorBlockHeader {
 	id: u8
 	size: u32
@@ -184,6 +143,7 @@ plain FramebufferConsole {
 	}
 
 	address_of(x: u32, y: u32): link {
+		require(x >= 0 and x < width and y >= 0 and y < height, 'Pixel coordinates out of bounds')
 		return framebuffer + (y * width + x) * sizeof(u32)
 	}
 
@@ -206,6 +166,10 @@ plain FramebufferConsole {
 
 	clear(rect: Rect): _ {
 		debug.write_line('Framebuffer console: Clearing a region')
+		require(rect.left >= 0 and rect.top >= 0 and rect.right <= width and rect.bottom <= height, 'Region is out of bounds')
+
+		# Return if we have nothing to do
+		if rect.width == 0 or rect.height == 0 return
 
 		destination = address_of(rect.x, rect.y)
 
@@ -213,6 +177,21 @@ plain FramebufferConsole {
 			memory.zero(destination, rect.width * sizeof(u32))
 			destination += width * sizeof(u32)
 		}
+	}
+
+	clear_line(terminal: Terminal, y: u32): _ {
+		# Compute the rect that contains the specified line
+		line_rect = Rect.new(0, y * bitmap_font.line_height, width, bitmap_font.line_height)
+
+		# Clamp the rect inside viewport
+		viewport_rect = Rect.new(0, terminal.viewport.line * bitmap_font.line_height, width, height)
+		clamped_rect = line_rect.clamp(viewport_rect)
+
+		clamped_rect.x -= viewport_rect.x
+		clamped_rect.y -= viewport_rect.y
+
+		# Clear the line
+		clear(clamped_rect)
 	}
 
 	load_font(uefi_information: UefiInformation): _ {
@@ -224,9 +203,12 @@ plain FramebufferConsole {
 	move_area(area: Rect, x: u32, y: u32): _ {
 		if (x == area.x and y == area.y) or (area.width == 0 and area.height == 0) return
 
+		destination_rect = Rect.new(x, y, area.width, area.height)
+		require(destination_rect.left >= 0 and destination_rect.top >= 0 and destination_rect.right <= width and destination_rect.bottom <= height, 'Region is out of bounds')
+
 		framebuffer: link = this.framebuffer
 
-		if y > area.y {
+		if y < area.y {
 			if x > area.x {
 				# Source: Before, Under
 				# Copy: Inversed, Top-Right corner
@@ -234,7 +216,7 @@ plain FramebufferConsole {
 				destination = address_of(x + area.width - 1, y + area.height)
 
 				loop (iy = 0, iy < area.height, iy++) {
-					memory.inverse_copy(destination, source, area.width)
+					memory.reverse_copy(destination, source, area.width * sizeof(u32))
 					source += width * 4
 					destination += width * 4
 				}
@@ -246,7 +228,7 @@ plain FramebufferConsole {
 				destination = address_of(x, y)
 
 				loop (iy = 0, iy < area.height, iy++) {
-					memory.direct_copy(destination, source, area.width)
+					memory.forward_copy(destination, source, area.width * sizeof(u32))
 					source += width * 4
 					destination += width * 4
 				}
@@ -259,7 +241,7 @@ plain FramebufferConsole {
 				destination = address_of(x + area.width - 1, y + area.height - 1)
 
 				loop (iy = 0, iy < area.height, iy++) {
-					memory.inverse_copy(destination, source, area.width)
+					memory.reverse_copy(destination, source, area.width * sizeof(u32))
 					source -= width * 4
 					destination -= width * 4
 				}
@@ -271,7 +253,7 @@ plain FramebufferConsole {
 				destination = address_of(x, y + area.height - 1)
 
 				loop (iy = 0, iy < area.height, iy++) {
-					memory.direct_copy(destination, source, area.width)
+					memory.forward_copy(destination, source, area.width * sizeof(u32))
 					source -= width * 4
 					destination -= width * 4
 				}
@@ -279,26 +261,30 @@ plain FramebufferConsole {
 		}
 	}
 
-	fill(x: u32, y: u32, character: BitmapDescriptorCharacter, cell: Cell): _ {
+	fill(rect: Rect, character: BitmapDescriptorCharacter, cell: Cell): _ {
 		debug.write('Framebuffer console: Rendering bitmap character ')
-		character.print()
-		debug.write(' at ') debug.write(x) debug.write(', ') debug.write_line(y)
+		character.print() debug.write(' at ') rect.print() debug.write_line()
+
+		require(rect.left >= 0 and rect.top >= 0 and rect.right <= width and rect.bottom <= height, 'Region is out of bounds')
+
+		# Return if we have nothing to do
+		if rect.width == 0 or rect.height == 0 return
 
 		source: link = bitmap_font.address_of(character)
-		destination: link = address_of(x, y)
-		character_width: u16 = character.width
-		character_height: u16 = character.height
+		destination: link = address_of(rect.x, rect.y)
 
-		loop (iy = 0, iy < character_height, iy++) {
-			memory.copy(destination, source, character_width * sizeof(u32))
+		loop (iy = 0, iy < rect.height, iy++) {
+			memory.copy(destination, source, rect.width * sizeof(u32))
 			
 			destination += width * sizeof(u32)
 			source += bitmap_font.width * sizeof(u32)
 		}
 	}
 
-	# Summary: Computes the current rect of the specified cell in the framebuffer
-	get_cell_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+	# Summary: Computes the rect in which the specified character should be rendered without taking the viewport into account
+	absolute_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		require(x < terminal.width and y < terminal.height, 'Invalid cell coordinates')
+
 		rect = Rect.new(0, y * bitmap_font.line_height + character.y_offset, character.width, character.height)
 
 		x_offset = character.x_offset as i64
@@ -309,27 +295,91 @@ plain FramebufferConsole {
 		}
 
 		rect.x = math.max(x_offset, 0)
-
-		# Todo: Remove
-		debug.write('Rect for ') debug.write(x) debug.write(', ') debug.write(y) debug.write(' is ') rect.print() debug.write_line()
 		return rect
 	}
 
-	scroll(lines: u32): _ {
-		###
+	# Summary: Computes the rect in which the specified character should be rendered
+	viewport_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		rect = absolute_rect(terminal, x, y, character)
+
+		viewport_rect = Rect.new(0, terminal.viewport.line * bitmap_font.line_height, width, height)
+		clamped_rect = rect.clamp(viewport_rect)
+
+		clamped_rect.x -= viewport_rect.x
+		clamped_rect.y -= viewport_rect.y
+		return clamped_rect
+	}
+
+	# Summary: Renders the specified line
+	render_line(terminal: Terminal, y: u32): _ {
+		debug.write('Framebuffer console: Rendering line ') debug.write_line(y)
+
+		# Clear the line
+		clear_line(terminal, y)
+
+		# Render the line
+		loop (x = 0, x < terminal.width, x++) {
+			character = bitmap_font.get_character(terminal[x, y].value)
+			rect = viewport_rect(terminal, x, y, character)
+			fill(rect, character, terminal[x, y])
+		}
+	}
+
+	# Summary: Render all lines
+	render_all_lines(terminal: Terminal): _ {
+		debug.write_line('Framebuffer console: Rendering viewport')
+
+		# Render the lines
+		loop (y = 0, y < terminal.height, y++) {
+			render_line(terminal, y)
+		}
+	}
+
+	scroll(terminal: Terminal, lines: u32): _ {
 		debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
 
-		vertical_movement = lines * bitmap_font
-
-		if lines >= 0 {
-			source_rect = Rect.new(0, )
+		# If we scroll more than "one viewport", we can just render everything
+		if math.abs(lines) >= terminal.viewport.height {
+			render_all_lines(terminal)
+			return
 		}
 
-		# Determine the region that should be moved
-		screen_rect = Rect.new(0, 0, width, height)
-		screen_rect.y += lines * bitmap_font.line_height
+		# Compute the destination rect:
+		destination_rect = Rect.new(0, 0, width, height)
 
-		###
+		# Apply the movement to the viewport rect
+		destination_rect.y -= lines * bitmap_font.line_height
+
+		# Clamp the viewport rect to the framebuffer
+		destination_rect = destination_rect.clamp(Rect.new(0, 0, width, height))
+
+		# Compute the source rect:
+		# Apply the movement in reverse to the destination rect
+		source_rect = destination_rect
+		source_rect.y += lines * bitmap_font.line_height
+
+		# Move the source rect to the destination rect
+		move_area(source_rect, destination_rect.x, destination_rect.y)
+
+		first_new_line = 0
+
+		if lines >= 0 {
+			# We are scrolling down:
+
+			# Render the lines at the bottom that became visible
+			first_new_line = terminal.viewport.line + terminal.viewport.height - lines
+
+		} else {
+			# We are scrolling up:
+
+			# Render the lines at the top that became visible
+			first_new_line = terminal.viewport.line
+		}
+
+		# Render the new lines that became visible
+		loop (y = 0, y < math.abs(lines), y++) {
+			render_line(terminal, first_new_line + y)
+		}
 	}
 
 	# Summary: Updates the specified cell by rendering it to the framebuffer
@@ -338,28 +388,14 @@ plain FramebufferConsole {
 
 		# Remove the old character from the framebuffer
 		old_character = bitmap_font.get_character(terminal[x, y].value)
-		character_rect = get_cell_rect(terminal, x, y, old_character)
+		character_rect = viewport_rect(terminal, x, y, old_character)
 		clear(character_rect)
 
 		# Compute the rect for the new character
 		new_character = bitmap_font.get_character(new.value)
-		character_rect = get_cell_rect(terminal, x, y, new_character)
-
-		# We need to move the characters after the cell to the correct positions:
-
-		# Compute the rect that contains all the characters after the current character:
-		last_character = bitmap_font.get_character(terminal[terminal.width - 1, y].value)
-		last_character_rect = get_cell_rect(terminal, terminal.width - 1, y, last_character)
-		source_rect = Rect.new(character_rect.right, character_rect.top, last_character_rect.right - character_rect.right, character_rect.height)
-
-		# Compute the rect where the characters should be moved to:
-		destination_rect = Rect.new(character_rect.left + new_character.width, character_rect.top, source_rect.width, source_rect.height)
-
-		# Move the characters:
-		# Todo: Enable and test
-		# move_area(source_rect, destination_rect.x, destination_rect.y)
+		character_rect = viewport_rect(terminal, x, y, new_character)
 
 		# Render the new character
-		fill(character_rect.left, character_rect.top, new_character, new)
+		fill(character_rect, new_character, new)
 	}
 }

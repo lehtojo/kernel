@@ -126,17 +126,14 @@ plain Viewport {
 	}
 }
 
-plain Terminal {
+pack Terminal {
 	cells: Array<Cell>
 	width: u32
 	height: u32
 	viewport: Viewport
 
-	init(cells: Array<Cell>, width: u32, height: u32, viewport: Viewport) {
-		this.width = width
-		this.height = height
-		this.cells = cells
-		this.viewport = viewport
+	shared new(cells: Array<Cell>, width: u32, height: u32, viewport: Viewport): Terminal {
+		return pack { cells: cells, width: width, height: height, viewport: viewport } as Terminal
 	}
 
 	get(x: u32, y: u32): Cell {
@@ -177,7 +174,7 @@ pack ConsoleInputBuffer {
 
 CharacterDevice ConsoleDevice {
 	protected constant DEFAULT_WIDTH = 80
-	protected constant DEFAULT_HEIGHT = 25
+	protected constant DEFAULT_HEIGHT = 20
 	protected constant DEFAULT_BUFFER_HEIGHT = 100
 
 	protected width: u32

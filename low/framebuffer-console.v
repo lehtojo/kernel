@@ -130,21 +130,26 @@ plain FramebufferConsole {
 	shared instance: FramebufferConsole
 
 	private framebuffer: link
+	private framebuffer_width: u32
+	private framebuffer_height: u32
 	private width: u32
 	private height: u32
 	private counter: u32 = 0
+	private terminal: Terminal
 	bitmap_font: BitmapFont = none as BitmapFont
 	enabled: bool = true
 
-	init(framebuffer: link, width: u32, height: u32) {
+	init(framebuffer: link, framebuffer_width: u32, framebuffer_height: u32) {
 		this.framebuffer = framebuffer
-		this.width = width
-		this.height = height
+		this.framebuffer_width = framebuffer_width
+		this.framebuffer_height = framebuffer_height
+		this.width = 0
+		this.height = 0
 	}
 
 	address_of(x: u32, y: u32): link {
-		require(x >= 0 and x < width and y >= 0 and y < height, 'Pixel coordinates out of bounds')
-		return framebuffer + (y * width + x) * sizeof(u32)
+		require(x < width and y < height, 'Pixel coordinates out of bounds')
+		return framebuffer + (y * framebuffer_width + x) * sizeof(u32)
 	}
 
 	tick(): _ {
@@ -155,13 +160,14 @@ plain FramebufferConsole {
 			return
 		}
 
-		hardware_framebuffer = mapper.map_kernel_region(DisplayConnectors.current.framebuffer, width * height * sizeof(u32), MAP_NO_CACHE)
-		memory.forward_copy(hardware_framebuffer, framebuffer, width * height * sizeof(u32))
+		framebuffer_size = framebuffer_width * framebuffer_height * sizeof(u32)
+		hardware_framebuffer = mapper.map_kernel_region(DisplayConnectors.current.framebuffer, framebuffer_size, MAP_NO_CACHE)
+		memory.forward_copy(hardware_framebuffer, framebuffer, framebuffer_size)
 	}
 
 	clear(): _ {
 		debug.write_line('Framebuffer console: Clearing')
-		memory.zero(framebuffer, width * height * sizeof(u32))
+		memory.zero(framebuffer, framebuffer_width * framebuffer_height * sizeof(u32))
 	}
 
 	clear(rect: Rect): _ {
@@ -175,16 +181,16 @@ plain FramebufferConsole {
 
 		loop (iy = 0, iy < rect.height, iy++) {
 			memory.zero(destination, rect.width * sizeof(u32))
-			destination += width * sizeof(u32)
+			destination += framebuffer_width * sizeof(u32)
 		}
 	}
 
-	clear_line(terminal: Terminal, y: u32): _ {
+	clear_line(y: u32): _ {
 		# Compute the rect that contains the specified line
-		line_rect = Rect.new(0, y * bitmap_font.line_height, width, bitmap_font.line_height)
+		line_rect = Rect.new(0, y * line_height, width, line_height)
 
 		# Clamp the rect inside viewport
-		viewport_rect = Rect.new(0, terminal.viewport.line * bitmap_font.line_height, width, height)
+		viewport_rect = Rect.new(0, terminal.viewport.line * line_height, width, height)
 		clamped_rect = line_rect.clamp(viewport_rect)
 
 		clamped_rect.x -= viewport_rect.x
@@ -194,10 +200,38 @@ plain FramebufferConsole {
 		clear(clamped_rect)
 	}
 
+	set_terminal(terminal: Terminal): _ {
+		debug.write_line('Framebuffer console: Setting terminal...')
+
+		this.terminal = terminal
+
+		if terminal.width == 0 or terminal.height == 0 or terminal.cells === none or terminal.viewport === none {
+			debug.write_line('Framebuffer console: Terminal is incomplete, not initializing')
+			return
+		}
+
+		this.width = framebuffer_width
+		this.height = terminal.viewport.height * line_height
+
+		debug.write('Framebuffer console: Terminal width: ') debug.write_line(this.width)
+		debug.write('Framebuffer console: Terminal height: ') debug.write_line(this.height)
+		
+		require(this.height <= framebuffer_height, 'Terminal pixel height exceeds framebuffer height')
+
+		clear()
+		render_all_lines()
+	}
+
+	line_height(): u32 {
+		if bitmap_font === none return 0
+		return bitmap_font.line_height
+	}
+
 	load_font(uefi_information: UefiInformation): _ {
 		bitmap_font_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_file)
 		bitmap_font_descriptor_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_descriptor_file)
 		bitmap_font = BitmapFont(HeapAllocator.instance, bitmap_font_file, uefi_information.bitmap_font_file_size, bitmap_font_descriptor_file, uefi_information.bitmap_font_descriptor_file_size) using KernelHeap
+		set_terminal(terminal)
 	}
 
 	move_area(area: Rect, x: u32, y: u32): _ {
@@ -276,16 +310,16 @@ plain FramebufferConsole {
 		loop (iy = 0, iy < rect.height, iy++) {
 			memory.copy(destination, source, rect.width * sizeof(u32))
 			
-			destination += width * sizeof(u32)
+			destination += framebuffer_width * sizeof(u32)
 			source += bitmap_font.width * sizeof(u32)
 		}
 	}
 
 	# Summary: Computes the rect in which the specified character should be rendered without taking the viewport into account
-	absolute_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+	absolute_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
 		require(x < terminal.width and y < terminal.height, 'Invalid cell coordinates')
 
-		rect = Rect.new(0, y * bitmap_font.line_height + character.y_offset, character.width, character.height)
+		rect = Rect.new(0, y * line_height + character.y_offset, character.width, character.height)
 
 		x_offset = character.x_offset as i64
 
@@ -299,10 +333,10 @@ plain FramebufferConsole {
 	}
 
 	# Summary: Computes the rect in which the specified character should be rendered
-	viewport_rect(terminal: Terminal, x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
-		rect = absolute_rect(terminal, x, y, character)
+	viewport_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		rect = absolute_rect(x, y, character)
 
-		viewport_rect = Rect.new(0, terminal.viewport.line * bitmap_font.line_height, width, height)
+		viewport_rect = Rect.new(0, terminal.viewport.line * line_height, width, height)
 		clamped_rect = rect.clamp(viewport_rect)
 
 		clamped_rect.x -= viewport_rect.x
@@ -311,36 +345,36 @@ plain FramebufferConsole {
 	}
 
 	# Summary: Renders the specified line
-	render_line(terminal: Terminal, y: u32): _ {
+	render_line(y: u32): _ {
 		debug.write('Framebuffer console: Rendering line ') debug.write_line(y)
 
 		# Clear the line
-		clear_line(terminal, y)
+		clear_line(y)
 
 		# Render the line
 		loop (x = 0, x < terminal.width, x++) {
 			character = bitmap_font.get_character(terminal[x, y].value)
-			rect = viewport_rect(terminal, x, y, character)
+			rect = viewport_rect(x, y, character)
 			fill(rect, character, terminal[x, y])
 		}
 	}
 
 	# Summary: Render all lines
-	render_all_lines(terminal: Terminal): _ {
+	render_all_lines(): _ {
 		debug.write_line('Framebuffer console: Rendering viewport')
 
 		# Render the lines
 		loop (y = 0, y < terminal.height, y++) {
-			render_line(terminal, y)
+			render_line(y)
 		}
 	}
 
-	scroll(terminal: Terminal, lines: u32): _ {
+	scroll(lines: u32): _ {
 		debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
 
 		# If we scroll more than "one viewport", we can just render everything
 		if math.abs(lines) >= terminal.viewport.height {
-			render_all_lines(terminal)
+			render_all_lines()
 			return
 		}
 
@@ -348,7 +382,7 @@ plain FramebufferConsole {
 		destination_rect = Rect.new(0, 0, width, height)
 
 		# Apply the movement to the viewport rect
-		destination_rect.y -= lines * bitmap_font.line_height
+		destination_rect.y -= lines * line_height
 
 		# Clamp the viewport rect to the framebuffer
 		destination_rect = destination_rect.clamp(Rect.new(0, 0, width, height))
@@ -356,7 +390,7 @@ plain FramebufferConsole {
 		# Compute the source rect:
 		# Apply the movement in reverse to the destination rect
 		source_rect = destination_rect
-		source_rect.y += lines * bitmap_font.line_height
+		source_rect.y += lines * line_height
 
 		# Move the source rect to the destination rect
 		move_area(source_rect, destination_rect.x, destination_rect.y)
@@ -378,22 +412,22 @@ plain FramebufferConsole {
 
 		# Render the new lines that became visible
 		loop (y = 0, y < math.abs(lines), y++) {
-			render_line(terminal, first_new_line + y)
+			render_line(first_new_line + y)
 		}
 	}
 
 	# Summary: Updates the specified cell by rendering it to the framebuffer
-	update(terminal: Terminal, x: u32, y: u32, new: Cell): _ {
+	update(x: u32, y: u32, new: Cell): _ {
 		debug.write('Framebuffer console: Updating cell at ') debug.write(x) debug.write(', ') debug.write_line(y)
 
 		# Remove the old character from the framebuffer
 		old_character = bitmap_font.get_character(terminal[x, y].value)
-		character_rect = viewport_rect(terminal, x, y, old_character)
+		character_rect = viewport_rect(x, y, old_character)
 		clear(character_rect)
 
 		# Compute the rect for the new character
 		new_character = bitmap_font.get_character(new.value)
-		character_rect = viewport_rect(terminal, x, y, new_character)
+		character_rect = viewport_rect(x, y, new_character)
 
 		# Render the new character
 		fill(character_rect, new_character, new)

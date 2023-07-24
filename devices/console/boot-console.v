@@ -9,13 +9,15 @@ ConsoleDevice BootConsoleDevice {
 
 	protected framebuffer: link
 
-	# Todo: Move to console device
-	protected terminal: Terminal
-
 	init(allocator: Allocator) {
 		ConsoleDevice.init(allocator, MAJOR, MINOR)
 		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE)
-		terminal = Terminal(cells, width, height, viewport) using allocator
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.set_terminal(Terminal.new(cells, width, height, viewport))
+		}
+
 		clear()
 	}
 
@@ -40,7 +42,7 @@ ConsoleDevice BootConsoleDevice {
 		y = cursor / width
 
 		if FramebufferConsole.instance !== none {
-			FramebufferConsole.instance.update(terminal, x, y, Cell.new(character, foreground, background))
+			FramebufferConsole.instance.update(x, y, Cell.new(character, foreground, background))
 		}
 
 		write_character_default(character)
@@ -98,11 +100,14 @@ ConsoleDevice BootConsoleDevice {
 	}
 
 	override scroll(lines: i32) {
+		# If we are scrolling up, we can not go past the top
+		lines = math.max(lines as i64, -(viewport.line as i64))
+
 		scroll_default(lines)
 
 		# Todo: Generalize
 		if FramebufferConsole.instance !== none {
-			FramebufferConsole.instance.scroll(terminal, lines)
+			FramebufferConsole.instance.scroll(lines)
 		}
 	}
 

@@ -4,6 +4,8 @@ import kernel.devices.keyboard
 import kernel.low
 
 ConsoleDevice BootConsoleDevice {
+	shared instance: BootConsoleDevice
+
 	constant MAJOR = 42
 	constant MINOR = 42
 
@@ -36,13 +38,8 @@ ConsoleDevice BootConsoleDevice {
 	}
 
 	override write_character(character: u8) {
-		debug.write('Boot console: Writing character ') debug.write_address(character) debug.write_line()
-
-		x = cursor % width
-		y = cursor / width
-
 		if FramebufferConsole.instance !== none {
-			FramebufferConsole.instance.update(x, y, Cell.new(character, foreground, background))
+			FramebufferConsole.instance.update(cursor_x, cursor_y, Cell.new(character, foreground, background))
 		}
 
 		write_character_default(character)

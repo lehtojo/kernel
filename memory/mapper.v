@@ -52,6 +52,12 @@ quickmap_physical_base: link
 
 mapper_paging_table: PagingTable
 
+memory_map_end: u64
+l4_required_count: u32
+l3_required_count: u32
+l2_required_count: u32
+l1_required_count: u32
+
 # Structure:
 # [                                           L4 1                                          ] ... [                                           L4 512                                        ]
 # [                  L3 1                   ] ... [                  L3 512                 ]     [                  L3 1                   ] ... [                  L3 512                 ]
@@ -154,7 +160,7 @@ remap(allocator: Allocator, gdtr_physical_address: link, system_memory_informati
 
 	# We will always allocate all L4s, because they do not require a lot of memory and we want to use entry at index 0x100 as kernel mapping
 	l4_count = 512
-	l3_count = memory.round_to(l3_required_count, 512)
+	l3_count = 256 * 512 # Todo: Explain
 	l2_count = memory.round_to(l2_required_count, 512)
 	l1_count = memory.round_to(l1_required_count, 512)
 
@@ -181,7 +187,11 @@ remap(allocator: Allocator, gdtr_physical_address: link, system_memory_informati
 	l1_base = l2_base + l2_count * sizeof(u64)
 
 	# Map the kernel
-	l4_base.(u64*)[KERNEL_MAP_BASE_L4] = l3_base | 0b11
+	# Todo: Explain
+	loop (i = 0, i < 256, i++) {
+		address = l3_base + i * (512 * sizeof(u64))
+		l4_base.(u64*)[KERNEL_MAP_BASE_L4 + i] = address | 0b11
+	}
 
 	# Identity map L4
 	loop (i = 0, i < l4_required_count, i++) {
@@ -287,9 +297,14 @@ region(): Segment {
 }
 
 # Summary: Maps the kernel regions from the current paging tables to the specified L4 entries
-map_kernel_entry(entries: u64*) {
-	debug.write_line('Mapper: Mapping kernel entry...')
-	entries[KERNEL_MAP_BASE_L4] = mapper_paging_table.entries[KERNEL_MAP_BASE_L4]
+map_kernel(entries: u64*) {
+	debug.write_line('Mapper: Mapping kernel...')
+
+	# Map the kernel
+	# Todo: Explain
+	loop (i = 0, i < 256, i++) {
+		entries[KERNEL_MAP_BASE_L4 + i] = mapper_paging_table.entries[KERNEL_MAP_BASE_L4 + i]
+	}
 
 	# Todo: Remove these commented regions such as this and others below
 	###
@@ -497,22 +512,22 @@ map_region(virtual_address_start: link, physical_address_start: link, size: u64)
 }
 
 map_kernel_page(physical_address: link): link {
-	map_page(physical_address, physical_address)
+	map_page(KERNEL_MAP_BASE as link + physical_address, physical_address)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
 map_kernel_region(physical_address: link, size: u64): link {
-	map_region(physical_address, physical_address, size)
+	map_region(KERNEL_MAP_BASE as link + physical_address, physical_address, size)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
 map_kernel_page(physical_address: link, flags: u32): link {
-	map_page(physical_address, physical_address, flags)
+	map_page(KERNEL_MAP_BASE as link + physical_address, physical_address, flags)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 
 map_kernel_region(physical_address: link, size: u64, flags: u32): link {
-	map_region(physical_address, physical_address, size, flags)
+	map_region(KERNEL_MAP_BASE as link + physical_address, physical_address, size, flags)
 	return KERNEL_MAP_BASE as link + physical_address as u64
 }
 

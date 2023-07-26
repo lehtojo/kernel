@@ -137,7 +137,8 @@ pack Terminal {
 	}
 
 	get(x: u32, y: u32): Cell {
-		require(x < width and y < height, 'Invalid cell coordinates')
+		x = x % width
+		y = y % height
 		return cells[y * width + x]
 	}
 }
@@ -174,12 +175,13 @@ pack ConsoleInputBuffer {
 
 CharacterDevice ConsoleDevice {
 	protected constant DEFAULT_WIDTH = 80
-	protected constant DEFAULT_HEIGHT = 20
+	protected constant DEFAULT_HEIGHT = 36
 	protected constant DEFAULT_BUFFER_HEIGHT = 100
 
 	protected width: u32
 	protected height: u32
-	protected cursor: u32
+	protected cursor_x: u32
+	protected cursor_y: u32
 	protected cells: Array<Cell>
 	protected lines: Array<Line>
 	protected input: ConsoleInputBuffer
@@ -195,10 +197,18 @@ CharacterDevice ConsoleDevice {
 		CharacterDevice.init(major, minor)
 		this.width = DEFAULT_WIDTH
 		this.height = DEFAULT_BUFFER_HEIGHT
-		this.cursor = 0
+		this.cursor_x = 0
+		this.cursor_y = 0
 		this.viewport = Viewport(DEFAULT_WIDTH, DEFAULT_HEIGHT) using allocator
 		initialize_lines(allocator)
 		initialize_terminal_information()
+	}
+
+	# Summary: Returns the index of the cell that maps to the current cursor position
+	protected cell_index(): u32 {
+		x = cursor_x % viewport.width
+		y = cursor_y % height
+		return y * viewport.width + x
 	}
 
 	# Summary: Creates lines and their cells with the specified allocator
@@ -244,38 +254,44 @@ CharacterDevice ConsoleDevice {
 
 	# Summary: Moves to the next line
 	protected next_line(): _ {
-		new_cursor = (cursor / width + 1) * width
+		# If the cursor is at the last line of the viewport, scroll down the viewport
+		viewport_last_line = viewport.line + viewport.height - 1
+		scroll_down = cursor_y == viewport_last_line
 
-		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_cursor == cells.size { new_cursor = 0 }
+		# Move the start of the next line
+		cursor_x = 0
+		cursor_y++
 
-		# Update the cursor
-		cursor = new_cursor
+		# Reset the new line
+		line_start = cell_index
+
+		loop (i = 0, i < viewport.width, i++) {
+			cells[line_start + i] = Cell.new(0, background, foreground)
+		}
+
+		# Scroll down if needed
+		if scroll_down scroll(1)
 	}
 
-	# Summary: Moves to the next character
-	protected next_character(): _ {
-		new_cursor = cursor + 1
+	# Summary: Moves the cursor to the next character while taking into account line width
+	private next_character(): _ {
+		cursor_x++
 
-		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_cursor == cells.size { new_cursor = 0 }
-
-		# Update the cursor
-		cursor = new_cursor
+		# If we have gone past the end of the line, move to the next line
+		if cursor_x % viewport.width == 0 next_line()
 	}
 
 	# Summary: Writes the specified character
 	protected write_character_default(character: u8): _ {
-		cells[cursor] = Cell.new(character, background, foreground)
-
-		# Move over the written character
-		next_character()
-
-		# If we are at start of a line, no need to do anything
-		if cursor % width == 0 return
+		cells[cell_index] = Cell.new(character, background, foreground)
 
 		# If a line ending was written, move to the next line
-		if character == `\n` next_line()
+		if character == `\n` {
+			next_line()
+			return
+		}
+
+		next_character()
 	}
 
 	# Summary: Writes the specified character
@@ -287,23 +303,49 @@ CharacterDevice ConsoleDevice {
 	protected remove_input_character(): _ {
 		if input.size == 0 return
 
-		# Remove the character
-		cursor--
+		# Move to the previous character
+		if cursor_x == 0 {
+			cursor_x = viewport.width - 1
+			cursor_y--
+		} else {
+			cursor_x--
+		}
+
+		# Write over the character
 		write_character(0)
-		cursor--
+
+		# Move to the previous character
+		if cursor_x == 0 {
+			cursor_x = viewport.width - 1
+			cursor_y--
+		} else {
+			cursor_x--
+		}
 	}
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {
 		debug.write_line('Console device: Writing bytes...')
 
-		loop (i = 0, i < data.size, i++) {
-			write_character(data[i])	
+		truncated_size = math.min(data.size, viewport.width - cursor_x)
+
+		loop (i = 0, i < truncated_size, i++) {
+			write_character(data[i])
 		}
 
-		description.offset = cursor
+		description.offset = cursor_y * viewport.width + cursor_x
 
 		update()
 		return data.size
+	}
+
+	write_bytes(data: link, size: u64): _ {
+		truncated_size = math.min(size, viewport.width - cursor_x)
+
+		loop (i = 0, i < truncated_size, i++) {
+			write_character(data[i])	
+		}
+
+		update()
 	}
 
 	override read(description: OpenFileDescription, destination: link, offset: u64, size: u64) {
@@ -366,7 +408,7 @@ CharacterDevice ConsoleDevice {
 	}
 
 	scroll_default(lines: i32): _ {
-		viewport.line = (viewport.line + lines) % height
+		viewport.line = math.max(viewport.line + lines, 0)
 	}
 
 	open scroll(lines: i32): _ {

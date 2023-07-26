@@ -129,6 +129,8 @@ plain BitmapFont {
 plain FramebufferConsole {
 	shared instance: FramebufferConsole
 
+	output_framebuffer: link = none as link
+	output_framebuffer_horizontal_stride: u32 = 0
 	private framebuffer: link
 	private framebuffer_width: u32
 	private framebuffer_height: u32
@@ -147,13 +149,20 @@ plain FramebufferConsole {
 		this.height = 0
 	}
 
-	address_of(x: u32, y: u32): link {
+	address_of(base: link, stride: u32, x: u32, y: u32): link {
 		require(x < width and y < height, 'Pixel coordinates out of bounds')
-		return framebuffer + (y * framebuffer_width + x) * sizeof(u32)
+		return base + y * stride + x * sizeof(u32)
+	}
+
+	address_of(x: u32, y: u32): link {
+		return address_of(framebuffer, framebuffer_width * sizeof(u32), x, y)
 	}
 
 	tick(): _ {
 		if not enabled return
+
+		###
+		Take horizontal stride into account
 
 		if DisplayConnectors.current === none {
 			debug.write_line('Framebuffer console: No display connector found')
@@ -163,15 +172,21 @@ plain FramebufferConsole {
 		framebuffer_size = framebuffer_width * framebuffer_height * sizeof(u32)
 		hardware_framebuffer = mapper.map_kernel_region(DisplayConnectors.current.framebuffer, framebuffer_size, MAP_NO_CACHE)
 		memory.forward_copy(hardware_framebuffer, framebuffer, framebuffer_size)
+		###
 	}
 
 	clear(): _ {
-		debug.write_line('Framebuffer console: Clearing')
-		memory.zero(framebuffer, framebuffer_width * framebuffer_height * sizeof(u32))
+		#debug.write_line('Framebuffer console: Clearing')
+		memory.zero(address_of(0, 0), framebuffer_width * framebuffer_height * sizeof(u32))
+
+		# Output the cleared area
+		if output_framebuffer !== none {
+			memory.zero(address_of(output_framebuffer, output_framebuffer_horizontal_stride, 0, 0), output_framebuffer_horizontal_stride * framebuffer_height)
+		}
 	}
 
 	clear(rect: Rect): _ {
-		debug.write_line('Framebuffer console: Clearing a region')
+		#debug.write_line('Framebuffer console: Clearing a region')
 		require(rect.left >= 0 and rect.top >= 0 and rect.right <= width and rect.bottom <= height, 'Region is out of bounds')
 
 		# Return if we have nothing to do
@@ -183,6 +198,8 @@ plain FramebufferConsole {
 			memory.zero(destination, rect.width * sizeof(u32))
 			destination += framebuffer_width * sizeof(u32)
 		}
+
+		output(rect)
 	}
 
 	clear_line(y: u32): _ {
@@ -240,8 +257,6 @@ plain FramebufferConsole {
 		destination_rect = Rect.new(x, y, area.width, area.height)
 		require(destination_rect.left >= 0 and destination_rect.top >= 0 and destination_rect.right <= width and destination_rect.bottom <= height, 'Region is out of bounds')
 
-		framebuffer: link = this.framebuffer
-
 		if y < area.y {
 			if x > area.x {
 				# Source: Before, Under
@@ -293,11 +308,13 @@ plain FramebufferConsole {
 				}
 			}
 		}
+
+		output(destination_rect)
 	}
 
 	fill(rect: Rect, character: BitmapDescriptorCharacter, cell: Cell): _ {
-		debug.write('Framebuffer console: Rendering bitmap character ')
-		character.print() debug.write(' at ') rect.print() debug.write_line()
+		#debug.write('Framebuffer console: Rendering bitmap character ')
+		#character.print() debug.write(' at ') rect.print() debug.write_line()
 
 		require(rect.left >= 0 and rect.top >= 0 and rect.right <= width and rect.bottom <= height, 'Region is out of bounds')
 
@@ -313,12 +330,28 @@ plain FramebufferConsole {
 			destination += framebuffer_width * sizeof(u32)
 			source += bitmap_font.width * sizeof(u32)
 		}
+
+		output(rect)
+	}
+
+	# Summary: Output the specified area to the output framebuffer
+	output(rect: Rect): _ {
+		if output_framebuffer === none return
+
+		#debug.write('Framebuffer console: Outputting ') rect.print() debug.write_line()
+
+		destination = address_of(output_framebuffer, output_framebuffer_horizontal_stride, rect.x, rect.y)
+		source = address_of(rect.x, rect.y)
+
+		loop (iy = 0, iy < rect.height, iy++) {
+			memory.copy(destination, source, rect.width * sizeof(u32))
+			destination += output_framebuffer_horizontal_stride
+			source += framebuffer_width * sizeof(u32)
+		}
 	}
 
 	# Summary: Computes the rect in which the specified character should be rendered without taking the viewport into account
 	absolute_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
-		require(x < terminal.width and y < terminal.height, 'Invalid cell coordinates')
-
 		rect = Rect.new(0, y * line_height + character.y_offset, character.width, character.height)
 
 		x_offset = character.x_offset as i64
@@ -346,7 +379,7 @@ plain FramebufferConsole {
 
 	# Summary: Renders the specified line
 	render_line(y: u32): _ {
-		debug.write('Framebuffer console: Rendering line ') debug.write_line(y)
+		#debug.write('Framebuffer console: Rendering line ') debug.write_line(y)
 
 		# Clear the line
 		clear_line(y)
@@ -361,7 +394,7 @@ plain FramebufferConsole {
 
 	# Summary: Render all lines
 	render_all_lines(): _ {
-		debug.write_line('Framebuffer console: Rendering viewport')
+		#debug.write_line('Framebuffer console: Rendering viewport')
 
 		# Render the lines
 		loop (y = 0, y < terminal.height, y++) {
@@ -370,7 +403,7 @@ plain FramebufferConsole {
 	}
 
 	scroll(lines: u32): _ {
-		debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
+		#debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
 
 		# If we scroll more than "one viewport", we can just render everything
 		if math.abs(lines) >= terminal.viewport.height {
@@ -418,7 +451,7 @@ plain FramebufferConsole {
 
 	# Summary: Updates the specified cell by rendering it to the framebuffer
 	update(x: u32, y: u32, new: Cell): _ {
-		debug.write('Framebuffer console: Updating cell at ') debug.write(x) debug.write(', ') debug.write_line(y)
+		#debug.write('Framebuffer console: Updating cell at ') debug.write(x) debug.write(', ') debug.write_line(y)
 
 		# Remove the old character from the framebuffer
 		old_character = bitmap_font.get_character(terminal[x, y].value)

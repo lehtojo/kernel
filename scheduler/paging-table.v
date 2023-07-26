@@ -365,7 +365,7 @@ plain PagingTable {
 
 			# If we are at the top layer, do not destruct shared kernel paging tables etc.
 			# Todo: Implement this better, use page entry flags such as the required privilege level
-			if layer == 4 and (i == KERNEL_MAP_BASE_L4 or i == mapper.ENTRIES - 1) continue
+			if layer == 4 and i >= KERNEL_MAP_BASE_L4 continue
 
 			# Dispose the table, its tables and so on until the bottom layer is reached 
 			table = mapper.virtual_address_from_page_entry(entry) as PagingTable

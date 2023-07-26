@@ -18,7 +18,7 @@ pack Subscribers {
 	}
 
 	update(): _ {
-		debug.write_line('Subscribers: Updating subscribers')
+		#debug.write_line('Subscribers: Updating subscribers')
 		if subscribers.size == 0 return
 
 		loop (i = 0, i < subscribers.size, i++) {

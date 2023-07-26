@@ -51,6 +51,9 @@ pack Timer {
 
 TimerManager {
 	timers: List<Timer>
+
+	# Todo: We need to support 32-bit mode, because of the laptop
+	# Todo: Use FSB instead of APIC (it is like MSI-x) (Timer N FSB Interrupt Route Register) (Value | Address)
 	registers: u64*
 
 	init(allocator: Allocator) {
@@ -127,7 +130,7 @@ export initialize(allocator: Allocator, header: HPETHeader*) {
 	registers = mapper.map_kernel_page(header[].address.address as link, MAP_NO_CACHE) as u64*
 	require(registers !== none, 'Missing HPET registers')
 
-	debug.write('HPET: Registers=')
+	debug.write('HPET: Registers = ')
 	debug.write_address(registers)
 	debug.write_line()
 

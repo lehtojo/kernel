@@ -357,6 +357,9 @@ export initialize(allocator: Allocator, uefi_information: UefiInformation) {
 		hpet.initialize(allocator, hpet_table)
 	}
 
+	#Beeper.play(100) # Todo: Remove
+	#panic('Finished :^)') # Todo: Remove
+
 	fadt_table = find_table(rsdp, 'FACP') as acpi.FADT
 	debug.write('APIC: FADT=') debug.write_address(fadt_table as u64) debug.write_line()
 	require(fadt_table !== none, 'Failed to initialize ACPI')

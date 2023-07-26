@@ -24,6 +24,10 @@ export write(memory: link, size: u32) {
 	}
 }
 
+export write(string: link): _ {
+	write(string, length_of(string))
+}
+
 export put(character: char) {
 	loop (not is_transmit_empty()) {}
 	ports.write_u8(COM1, character)

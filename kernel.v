@@ -197,7 +197,7 @@ export start(
 	interrupt_tables: link,
 	interrupt_stack_pointer: link,
 	gdtr_physical_address: link,
-	uefi_information: link
+	uefi_information: UefiInformation
 ) {
 	serial.initialize()
 
@@ -214,7 +214,7 @@ export start(
 	interrupts.scheduler = scheduler.Scheduler()
 
 	if uefi_information !== none {
-		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi_information as UefiInformation)
+		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi_information)
 	} else multiboot_information !== none {
 		multiboot.initialize(multiboot_information, memory_information)
 	}
@@ -229,8 +229,17 @@ export start(
 	HeapAllocator.initialize(allocator)
 
 	if FramebufferConsole.instance !== none and uefi_information !== none {
+		# Output console content to the actual framebuffer
+		graphics_information = uefi_information.graphics_information
+		framebuffer_size = graphics_information.horizontal_stride * graphics_information.height
+		FramebufferConsole.instance.output_framebuffer = mapper.map_kernel_region(graphics_information.framebuffer_physical_address as link, framebuffer_size, MAP_NO_CACHE)
+		FramebufferConsole.instance.output_framebuffer_horizontal_stride = graphics_information.horizontal_stride
+
 		FramebufferConsole.instance.load_font(uefi_information as UefiInformation)
 	}
+
+	boot_console = BootConsoleDevice(HeapAllocator.instance)
+	BootConsoleDevice.instance = boot_console
 
 	interrupts.scheduler.initialize_processes()
 
@@ -251,15 +260,14 @@ export start(
 
 	if uefi_information !== none {
 		# Todo: Generalize
-		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi_information as UefiInformation)
+		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi_information)
 	}
 
-	boot_console = BootConsoleDevice(HeapAllocator.instance)
 	devices.add(boot_console)
 
 	scheduler.create_idle_process()
 
-	interrupts.apic.initialize(allocator, uefi_information as UefiInformation)
+	interrupts.apic.initialize(allocator, uefi_information)
 
 	system_calls.initialize()
 
@@ -277,6 +285,9 @@ export start(
 		scheduler.create_boot_shell_process(HeapAllocator.instance, boot_console)
 
 		debug.write_line('Kernel thread: All done')
+
+		# Do not redirect debug information to boot console anymore
+		debug.booted = true
 
 		# Exit this thread
 		system_call(0x3c, 0, 0, 0, 0, 0, 0)

@@ -396,8 +396,12 @@ export enable() {
 
 export enable_interrupts(registers: u32*) {
 	# Spurious Interrupt Vector Register: "Spurious interrupt usually means an interrupt whose origin is unknown"
-	value = (registers + 0xF0)[]
-	(registers + 0xF0)[] = value | 0x100
+	spurious_interrupt = 0xff
+
+	value = (registers + 0xf0)[]
+	value |= spurious_interrupt # Map spurious interrupts
+	value |= 0x100 # Enable APIC
+	(registers + 0xf0)[] = value
 }
 
 # Summary:

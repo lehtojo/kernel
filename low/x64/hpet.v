@@ -142,7 +142,7 @@ pack Timer {
 		# Basically writing to the address will cause the wanted interrupt.
 		address = (apic.local_apic_registers_physical_address + apic.LOCAL_APIC_REGISTERS_INTERRUPT_COMMAND_REGISTER) as u64
 		data = interrupt # | EDGETRIGGER_FLAG | DEASSERT_FLAG
-		write_u64(registers, timer_fsb_interrupt_route(id), (data <| 32) | address)
+		write_u64(registers, timer_fsb_interrupt_route(id), (address <| 32) | data)
 	}
 
 	reset(): _ {

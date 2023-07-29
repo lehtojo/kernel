@@ -145,6 +145,9 @@ Process {
 		user_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
 		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
 		kernel_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
+		global.memory.zero(user_fpu_state, PAGE_SIZE)
+		global.memory.zero(kernel_fpu_state, PAGE_SIZE)
+
 		configure_process_before_startup(allocator, user_frame, memory, load_information, arguments, environment_variables)
 
 		# Attach the standard files for the new process
@@ -325,6 +328,7 @@ Process {
 		kernel_fpu_state: link = allocator.allocate(PAGE_SIZE)
 		user_frame[] = this.user_frame[]
 		global.memory.copy(user_fpu_state, this.user_fpu_state, PAGE_SIZE)
+		global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 		# Clone the parent memory for sharing, but use a separate kernel stack
 		child_memory = ProcessMemory(memory) using allocator

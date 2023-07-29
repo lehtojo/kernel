@@ -28,7 +28,7 @@ pack SchedulerProcesses {
 }
 
 Scheduler {
-	current: Process
+	current: Process = none as Process
 	processes: SchedulerProcesses
 	next_process_id: u32
 
@@ -157,6 +157,8 @@ create_kernel_thread(rip: u64): Process {
 	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	global.memory.zero(user_fpu_state, PAGE_SIZE)
+	global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
@@ -194,6 +196,8 @@ create_idle_process(): Process {
 	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	global.memory.zero(user_fpu_state, PAGE_SIZE)
+	global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 

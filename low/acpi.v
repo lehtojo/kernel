@@ -296,8 +296,8 @@ Device {
 		table_physical_address = pci.read_bar_address(identifier, bar) + table_offset_in_bar
 		debug.write('MSI-X: Table physical address: ') debug.write_address(table_physical_address) debug.write_line()
 
-		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size, MAP_NO_CACHE) as MsixTableEntry*
-		msix_table_entry_count = table_size / sizeof(MsixTableEntry)
+		msix_table = mapper.map_kernel_region(table_physical_address as link, table_size * sizeof(MsixTableEntry), MAP_NO_CACHE) as MsixTableEntry*
+		msix_table_entry_count = table_size
 	}
 
 	private load_interrupt_table(): bool {
@@ -321,6 +321,7 @@ Device {
 		debug.write_line('PCI device: Writing MSI-X table entry')
 		require(index < msix_table_entry_count, 'Invalid MSI-x entry index')
 
+		# Todo: Fix this non-sense
 		local_apic_registers_physical_address = 0xfee00000 # apic.local_apic_registers_physical_address
 
 		address = (local_apic_registers_physical_address + apic.LOCAL_APIC_REGISTERS_INTERRUPT_COMMAND_REGISTER) as u64
@@ -513,6 +514,9 @@ plain HostController {
 	}
 
 	scan_function(bus: u8, device: u8, function: u8, devices: List<DeviceIdentifier>) {
+		# debug.write('ACPI: Scanning function ') debug.write(function) debug.write(' of device ') debug.write(device)
+		# debug.write(' on bus ') debug.write(bus) debug.write_line('...')
+
 		id = HardwareId.new(read_u16(bus, device, function, REGISTER_VENDOR_ID), read_u16(bus, device, function, REGISTER_DEVICE_ID))
 		revision_id = read_u8(bus, device, function, REGISTER_REVISION_ID)
 		class_code = read_u8(bus, device, function, REGISTER_CLASS)
@@ -544,12 +548,20 @@ plain HostController {
 	}
 
 	scan_device(bus: u8, device: u8, devices: List<DeviceIdentifier>) {
+		# debug.write('ACPI: Scanning device ') debug.write(device) debug.write(' on bus ') debug.write(bus) debug.write_line('...')
+
 		if read_u16(bus, device, 0, REGISTER_VENDOR_ID) == PCI_NONE return
 		scan_function(bus, device, 0, devices)
 
 		# If the last bit of the header type is set, then the this device has multiple functions
 		header_type = read_u8(bus, device, 0, REGISTER_HEADER_TYPE)
-		if (header_type & 0x80) == 0 return
+
+		if (header_type & 0x80) == 0 {
+			# debug.write_line('ACPI: Device does not have multiple functions')
+			return
+		}
+
+		# debug.write_line('ACPI: Device has multiple functions')
 
 		# Scan the functions of this device
 		loop (function = 1, function < MAX_FUNCTIONS_PER_DEVICE, function++) {
@@ -559,23 +571,30 @@ plain HostController {
 	}
 
 	scan_bus(bus: u8, devices: List<DeviceIdentifier>) {
+		# debug.write('ACPI: Scanning bus ') debug.write(bus) debug.write_line('...')
+
 		loop (device = 0, device < MAX_DEVICES_PER_BUS, device++) {
 			scan_device(bus, device, devices)
 		}
 	}
 
 	scan(devices: List<DeviceIdentifier>) {
+		debug.write_line('ACPI: Scanning PCI...')
 		header_type = read_u16(0, 0, 0, REGISTER_HEADER_TYPE)
 
-		# If the last bit of the header type is set, then there are multiple PCI host controllers
 		if (header_type & 0x80) == 0 {
+			debug.write_line('ACPI: System has one PCI host controller')
 			scan_bus(0, devices)
 		} else {
+			debug.write_line('ACPI: System has multiple PCI host controllers')
+
 			loop (function = 0, function < MAX_FUNCTIONS_PER_DEVICE, function++) {
-				if read_u16(0, 0, function, REGISTER_VENDOR_ID) != PCI_NONE stop
+				if read_u16(0, 0, function, REGISTER_VENDOR_ID) == PCI_NONE continue
 				scan_bus(function, devices)
 			}
 		}
+
+		debug.write_line('ACPI: Scanning is complete')
 	}
 }
 
@@ -777,12 +796,14 @@ plain Parser {
 
 		loop (i = 0, i < device_identifiers.size, i++) {
 			device_identifier = device_identifiers[i]
+			class_code = device_identifier.class_code
+			subclass_code = device_identifier.subclass_code
 			vendor = device_identifier.id.vendor
 
 			if vendor == 0x1234 {
 				debug.write_line('PCI: Found QEMU graphics device')
 				adapter = devices.gpu.qemu.GraphicsAdapter.create(device_identifier)
-			} else vendor == 0x1b36 {
+			} else class_code == CLASS_MASS_STORAGE_CONTROLLER and subclass_code == SUBCLASS_NVME_CONTROLLER {
 				debug.write_line('PCI: Found NVME controller')
 				controller = Nvme.try_create(HeapAllocator.instance, device_identifier)
 			}

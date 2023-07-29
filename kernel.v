@@ -1,7 +1,8 @@
 constant PAGE_SIZE = 0x1000
 
-constant KiB = 1024
-constant MiB = 1048576
+constant KiB = 0x400
+constant MiB = 0x100000
+constant GiB = 0x40000000
 
 namespace kernel {
 	constant KERNEL_CODE_SELECTOR = 0x8
@@ -267,12 +268,13 @@ export start(
 
 	scheduler.create_idle_process()
 
-	interrupts.apic.initialize(allocator, uefi_information)
+	interrupts.apic.initialize(HeapAllocator.instance, uefi_information)
 
 	system_calls.initialize()
 
 	kernel_thread_start = () -> {
 		debug.write_line('Kernel thread: Starting...')
+		loop {}
 
 		Ext2.instance.initialize()
 

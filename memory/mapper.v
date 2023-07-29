@@ -265,28 +265,28 @@ remap() {
 	# because it is generally reserved for user applications. 
 	# However, the kernel must be mapped to the same virtual address region in each process 
 	# so that we do not have to switch page tables during system calls.
-	l4_base = L4_BASE
-	l4_base.(u64*)[] = 0
+	# l4_base = L4_BASE
+	# l4_base.(u64*)[] = 0 # Todo: Revert
 
 	# Apply the changes to paging
-	flush_tlb()	
+	# flush_tlb()	
 
-	gdtr_physical_address = Processor.current.gdtr_physical_address
-	gdtr_virtual_address = GDTR_VIRTUAL_ADDRESS + (gdtr_physical_address as u64) % PAGE_SIZE
+	# gdtr_physical_address = Processor.current.gdtr_physical_address
+	# gdtr_virtual_address = GDTR_VIRTUAL_ADDRESS + (gdtr_physical_address as u64) % PAGE_SIZE
 
 	# Remap the GDT to the virtual address that is used by process paging tables.
-	paging_table = mapper.map_kernel_page(read_cr3() as link, MAP_NO_CACHE) as scheduler.PagingTable
-	paging_table.map_gdt(HeapAllocator.instance, gdtr_physical_address)
+	# paging_table = mapper.map_kernel_page(read_cr3() as link, MAP_NO_CACHE) as scheduler.PagingTable
+	# paging_table.map_gdt(HeapAllocator.instance, gdtr_physical_address)
 
 	# Apply the changes to paging
-	flush_tlb()
+	# flush_tlb()
 
 	# Update the address of GDTR
-	debug.write('Mapper: Switching GDTR to ')
-	debug.write_address(gdtr_virtual_address)
-	debug.write_line()
+	# debug.write('Mapper: Switching GDTR to ')
+	# debug.write_address(gdtr_virtual_address)
+	# debug.write_line()
 
-	write_gdtr(gdtr_virtual_address)
+	# write_gdtr(gdtr_virtual_address)
 }
 
 # Summary: Returns the memory region that the mapper uses

@@ -55,9 +55,114 @@ pack MADT {
 	flags: u32
 }
 
-pack MADTEntryHeader {
+plain MADTEntryHeader {
 	type: u8
 	length: u8
+}
+
+plain LocalApicEntry {
+	inline header: MADTEntryHeader
+	processor_id: u8
+	id: u8
+	flags: u32
+
+	print(): _ {
+		debug.write('Local APIC entry: ')
+		debug.write('processor_id = ') debug.write(processor_id as i64)
+		debug.write(', id = ') debug.write(id as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicEntry {
+	inline header: MADTEntryHeader
+	id: u8
+	reserved: u8
+	address: u32
+	gsi_base: u32
+
+	print(): _ {
+		debug.write('IOAPIC entry: ')
+		debug.write('id = ') debug.write(id as i64)
+		debug.write(', address = ') debug.write_address(address as i64)
+		debug.write(', gsi_base = ') debug.write(gsi_base as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicInterruptSourceOverrideEntry {
+	inline header: MADTEntryHeader
+	bus_source: u8
+	irq_source: u8
+	gsi: u32
+	flags: u16
+
+	print(): _ {
+		debug.write('IOAPIC interrupt source override entry: ')
+		debug.write('bus_source = ') debug.write(bus_source as i64)
+		debug.write(', irq_source = ') debug.write(irq_source as i64)
+		debug.write(', gsi = ') debug.write(gsi as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicNonMaskableInterruptSourceEntry {
+	inline header: MADTEntryHeader
+	nmi_source: u8
+	reserved: u8
+	flags: u16
+	global_system_interrupt: u32
+
+	print(): _ {
+		debug.write('IOAPIC NMI source entry: ')
+		debug.write('nmi_source = ') debug.write(nmi_source as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write(', global_system_interrupt = ') debug.write(global_system_interrupt as i64)
+		debug.write_line()
+	}
+}
+
+plain LocalApicNonMaskableInterruptsEntry {
+	inline header: MADTEntryHeader
+	flags: u16
+	lint: u8
+
+	print(): _ {
+		debug.write('Local APIC NMI entry: ')
+		debug.write('flags = ') debug.write_address(flags as i64)
+		debug.write(', lint = ') debug.write(lint as i64)
+		debug.write_line()
+	}
+}
+
+plain LocalApicAddressOverrideEntry {
+	inline header: MADTEntryHeader
+	reserved: u16
+	address: u64
+
+	print(): _ {
+		debug.write('Local APIC address override: ')
+		debug.write('address = ') debug.write_address(address as i64)
+		debug.write_line()
+	}
+}
+
+plain ProcessorLocalX2ApicEntry {
+	inline header: MADTEntryHeader
+	reserved: u16
+	processor_id: u32
+	flags: u32
+	id: u32
+
+	print(): _ {
+		debug.write('Processor local x2 APIC: ')
+		debug.write('processor_id = ') debug.write(processor_id as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write(', id = ') debug.write(id as i64)
+		debug.write_line()
+	}
 }
 
 ApicInformation {
@@ -216,31 +321,49 @@ export find_root_system_descriptor_table(uefi_information: UefiInformation) {
 export process_madt_entries(madt: MADT*, information: ApicInformation) {
 	# Compute the end address of the specified table, so we know when to stop
 	end = madt + madt[].header.length
-	entry = (madt + sizeof(MADT)) as MADTEntryHeader*
+	entry = (madt + sizeof(MADT)) as MADTEntryHeader
 
 	loop (entry < end) {
 		# Load the type of the current entry
-		type = entry[].type
+		type = entry.type
 
 		if type == 0 {
+			local_apic_entry = entry as LocalApicEntry
+			# local_apic_entry.print() # Todo: Enable
+
 			# Single logical processor with a local apic
-			information.local_apic_ids[information.local_apic_count] = entry.(u8*)[3]
+			information.local_apic_ids[information.local_apic_count] = local_apic_entry.id
 			information.local_apic_count++
 		} else type == 1 {
-			# Address of ioapic
-			ioapic_registers_physical_address = (entry + 4).(u32*)[] as link
-			ioapic_gsi_base = (entry + 8).(u32*)[]
-			debug.write('IOAPIC: GSI base: ') debug.write_line(ioapic_gsi_base)
-			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address, MAP_NO_CACHE)
+			ioapic_entry = entry as IoApicEntry
+			ioapic_entry.print()
+
+			# Todo: Support multiple IOAPICs as you can not do everything with one
+			if information.ioapic_registers === none {
+				information.ioapic_registers = mapper.map_kernel_page(ioapic_entry.address as link, MAP_NO_CACHE)
+			}
+		} else type == 2 {
+			ioapic_interrupt_source_override_entry = entry as IoApicInterruptSourceOverrideEntry
+			ioapic_interrupt_source_override_entry.print()
+		} else type == 3 {
+			ioapic_nmi_source_entry = entry as IoApicNonMaskableInterruptSourceEntry
+			# ioapic_nmi_source_entry.print() # Todo: Enable
+		} else type == 4 {
+			local_apic_nmi_entry = entry as LocalApicNonMaskableInterruptsEntry
+			# local_apic_nmi_entry.print() # Todo: Enable
 		} else type == 5 {
-			# Address of the local apic (64-bit system version)
-			information.local_apic_registers_physical_address = (entry + 4).(u64*)[] as link
-			debug.write('IOAPIC: Local apic registers: ') debug.write_address(local_apic_registers_physical_address) debug.write_line()
-			information.local_apic_registers = mapper.map_kernel_page(local_apic_registers_physical_address, MAP_NO_CACHE)
+			local_apic_address_override_entry = entry as LocalApicAddressOverrideEntry
+			local_apic_address_override_entry.print()
+	
+			information.local_apic_registers_physical_address = local_apic_address_override_entry.address as link
+			information.local_apic_registers = mapper.map_kernel_page(information.local_apic_registers_physical_address, MAP_NO_CACHE)
+		} else type == 9 {
+			processor_local_x2apic_entry = entry as ProcessorLocalX2ApicEntry
+			processor_local_x2apic_entry.print()
 		}
 
 		# Move to the next entry
-		entry += entry[].length
+		entry += entry.length
 	}
 }
 
@@ -261,9 +384,11 @@ export enable() {
 	# mov al, 0xff
 	# out 0xa1, al
 	# out 0x21, al
+	debug.write_line('APIC: Disabling 8259 PIC...')
 	ports.write_u8(0xa1, 0xff)
 	ports.write_u8(0x21, 0xff)
 
+	debug.write_line('APIC: Enabling IOAPIC...')
 	base = get_apic_base()
 	mapper.map_kernel_page(base as link, MAP_NO_CACHE)
 	set_apic_base(base)
@@ -306,19 +431,25 @@ export initialize(allocator: Allocator, uefi_information: UefiInformation) {
 	apic_table = find_table(rsdp, 'APIC') as MADT*
 	require(apic_table !== none, 'Failed to find MADT')
 
-	debug.write('APIC: MADT=')
+	debug.write('APIC: MADT = ')
 	debug.write_address(apic_table as u64)
 	debug.write_line()
 
-	debug.write('APIC: Has legacy APIC: ')
+	debug.write('APIC: 8259 PIC = ')
 	debug.write_line((apic_table[].flags & 1) != 0)
 
 	information = ApicInformation()
-	information.local_apic_registers = mapper.map_kernel_page(apic_table[].local_apic_address as link, MAP_NO_CACHE)
+	information.ioapic_registers = none as link
+	information.local_apic_registers_physical_address = apic_table[].local_apic_address as link
+	information.local_apic_registers = mapper.map_kernel_page(information.local_apic_registers_physical_address, MAP_NO_CACHE)
 	process_madt_entries(apic_table, information)
 
 	local_apic_registers_physical_address = information.local_apic_registers_physical_address
 	local_apic_registers = information.local_apic_registers
+
+	debug.write('APIC: Local APIC registers physical address = ')
+	debug.write_address(information.local_apic_registers_physical_address)
+	debug.write_line()
 
 	debug.write('APIC: Local APIC Registers = ')
 	debug.write_address(information.local_apic_registers)
@@ -344,12 +475,16 @@ export initialize(allocator: Allocator, uefi_information: UefiInformation) {
 	enable_interrupts(information.local_apic_registers)
 
 	ioapic.initialize(information.ioapic_registers)
-	ioapic.redirect(1, 83)
-	ioapic.redirect(3, 83)
-	ioapic.redirect(4, 83)
+
+	# Enable PS/2 keyboard
+	ioapic.redirect(1, 0) # Todo: CPU id?
+
+	# Todo: Remove
+	# ioapic.redirect(3, 0)
+	# ioapic.redirect(4, 0)
 
 	hpet_table = find_table(rsdp, 'HPET') as hpet.HPETHeader*
-	debug.write('APIC: HPET=')
+	debug.write('APIC: HPET = ')
 	debug.write_address(hpet_table as u64)
 	debug.write_line()
 
@@ -357,19 +492,16 @@ export initialize(allocator: Allocator, uefi_information: UefiInformation) {
 		hpet.initialize(allocator, hpet_table)
 	}
 
-	#Beeper.play(100) # Todo: Remove
-	#panic('Finished :^)') # Todo: Remove
-
 	fadt_table = find_table(rsdp, 'FACP') as acpi.FADT
-	debug.write('APIC: FADT=') debug.write_address(fadt_table as u64) debug.write_line()
+	debug.write('APIC: FADT = ') debug.write_address(fadt_table as u64) debug.write_line()
 	require(fadt_table !== none, 'Failed to initialize ACPI')
 
 	mcfg_table = find_table(rsdp, 'MCFG') as acpi.MCFG
-	debug.write('APIC: MCFG=') debug.write_address(mcfg_table as u64) debug.write_line()
+	debug.write('APIC: MCFG = ') debug.write_address(mcfg_table as u64) debug.write_line()
 	require(mcfg_table !== none, 'Failed to initialize MCFG')
 
 	pci.initialize()
 	acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
 
-	ahci.initialize(acpi.Parser.instance)
+	# ahci.initialize(acpi.Parser.instance)
 }

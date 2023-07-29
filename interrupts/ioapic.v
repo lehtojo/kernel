@@ -50,7 +50,7 @@ namespace ioapic {
 		polarity = 0      # Active high
 		trigger = 0       # Edge
 
-		flags = (0x20 + interrupt) | (delivery <| 8) | (mode <| 11) | (status <| 12) | (polarity <| 13) | (trigger <| 15)
+		flags = (INTERRUPT_BASE + interrupt) | (delivery <| 8) | (mode <| 11) | (status <| 12) | (polarity <| 13) | (trigger <| 15)
 		destination = cpu # APIC ID of CPU
 
 		register = REDIRECTION_ENTRY_OFFSET + interrupt * 2 # Compute the index of the first register associated with the specified interrupt

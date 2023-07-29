@@ -71,6 +71,8 @@ Device Nvme {
 		result = start_controller()
 		if result != 0 return result
 
+		return 0 # Todo: Remove
+
 		debug.write('Nvme: Creating ') debug.write(queue_count) debug.write_line(' io-queue(s)...')
 
 		loop (i = 0, i < queue_count, i++) {

@@ -1,21 +1,21 @@
 namespace kernel.devices.gpu.gop
 
 GenericGraphicsAdapter GraphicsAdapter {
-	shared create(uefi_information: UefiInformation): GraphicsAdapter {
+	shared create(uefi: UefiInformation): GraphicsAdapter {
 		adapter = GraphicsAdapter() using KernelHeap
-		adapter.initialize(uefi_information)
+		adapter.initialize(uefi)
 
 		return adapter
 	}
 
-	initialize(uefi_information: UefiInformation): _ {
+	initialize(uefi: UefiInformation): _ {
 		debug.write_line('GOP graphics adapter: Initializing...')
 
-		framebuffer_physical_address = uefi_information.graphics_information.framebuffer_physical_address as link
-		framebuffer_space_size = uefi_information.graphics_information.framebuffer_space_size
-		horizontal_stride = uefi_information.graphics_information.horizontal_stride
-		width = uefi_information.graphics_information.width
-		height = uefi_information.graphics_information.height
+		framebuffer_physical_address = uefi.graphics_information.framebuffer_physical_address as link
+		framebuffer_space_size = uefi.graphics_information.framebuffer_space_size
+		horizontal_stride = uefi.graphics_information.horizontal_stride
+		width = uefi.graphics_information.width
+		height = uefi.graphics_information.height
 
 		debug.write('GOP graphics adapter: ')
 		debug.write('framebuffer=') debug.write_address(framebuffer_physical_address)

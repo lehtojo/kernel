@@ -83,13 +83,13 @@ l1_required_count: u32
 # Number of L4 entries = 512 # Use the maximum amount so that we can use the last entry to edit the pages
 
 # Todo: Uefi stuff should not be in this file
-add_regions(system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+add_regions(system_memory_information: SystemMemoryInformation, uefi: UefiInformation): _ {
 	debug.write_line('Mapper: Regions:')
 
-	system_memory_information.regions.reserve(uefi_information.region_count * 2)
+	system_memory_information.regions.reserve(uefi.region_count * 2)
 
-	loop (i = 0, i < uefi_information.region_count, i++) {
-		region = uefi_information.regions[i]
+	loop (i = 0, i < uefi.region_count, i++) {
+		region = uefi.regions[i]
 		system_memory_information.regions.add(region)
 
 		if region.type == REGION_AVAILABLE {
@@ -118,10 +118,10 @@ allocate_physical_memory_manager(system_memory_information: SystemMemoryInformat
 }
 
 # Summary: Finds a suitable region for the boot console framebuffer
-initialize_boot_console_framebuffer(allocator: Allocator, system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+initialize_boot_console_framebuffer(allocator: Allocator, system_memory_information: SystemMemoryInformation, uefi: UefiInformation): _ {
 	# Compute the memory needed by the physical memory manager
-	width = uefi_information.graphics_information.width
-	height = uefi_information.graphics_information.height
+	width = uefi.graphics_information.width
+	height = uefi.graphics_information.height
 	size = width * height * sizeof(u32)
 
 	physical_address = Regions.allocate(system_memory_information.regions, size)
@@ -141,13 +141,13 @@ initialize_boot_console_framebuffer(allocator: Allocator, system_memory_informat
 	FramebufferConsole.instance = console
 }
 
-remap(allocator: Allocator, gdtr_physical_address: link, system_memory_information: SystemMemoryInformation, uefi_information: UefiInformation): _ {
+remap(allocator: Allocator, gdtr_physical_address: link, system_memory_information: SystemMemoryInformation, uefi: UefiInformation): _ {
 	debug.write_line('Mapper: Remapping using UEFI data')
 
-	add_regions(system_memory_information, uefi_information)
+	add_regions(system_memory_information, uefi)
 
-	system_memory_information.physical_memory_size = uefi_information.physical_memory_size
-	memory_map_end = uefi_information.memory_map_end
+	system_memory_information.physical_memory_size = uefi.physical_memory_size
+	memory_map_end = uefi.memory_map_end
 	debug.write('Mapper: Physical memory size: ') debug.write_address(system_memory_information.physical_memory_size) debug.write_line()
 	debug.write('Mapper: Memory map end: ') debug.write_address(memory_map_end) debug.write_line()
 
@@ -245,7 +245,7 @@ remap(allocator: Allocator, gdtr_physical_address: link, system_memory_informati
 	write_gdtr(gdtr_virtual_address)
 
 	allocate_physical_memory_manager(system_memory_information)
-	initialize_boot_console_framebuffer(allocator, system_memory_information, uefi_information)
+	initialize_boot_console_framebuffer(allocator, system_memory_information, uefi)
 
 	debug.write_line('Mapper: Cleaning regions...')
 	Regions.clean(system_memory_information.regions)

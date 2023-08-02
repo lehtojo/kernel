@@ -244,10 +244,10 @@ plain FramebufferConsole {
 		return bitmap_font.line_height
 	}
 
-	load_font(uefi_information: UefiInformation): _ {
-		bitmap_font_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_file)
-		bitmap_font_descriptor_file = mapper.to_kernel_virtual_address(uefi_information.bitmap_font_descriptor_file)
-		bitmap_font = BitmapFont(HeapAllocator.instance, bitmap_font_file, uefi_information.bitmap_font_file_size, bitmap_font_descriptor_file, uefi_information.bitmap_font_descriptor_file_size) using KernelHeap
+	load_font(uefi: UefiInformation): _ {
+		bitmap_font_file = mapper.to_kernel_virtual_address(uefi.bitmap_font_file)
+		bitmap_font_descriptor_file = mapper.to_kernel_virtual_address(uefi.bitmap_font_descriptor_file)
+		bitmap_font = BitmapFont(HeapAllocator.instance, bitmap_font_file, uefi.bitmap_font_file_size, bitmap_font_descriptor_file, uefi.bitmap_font_descriptor_file_size) using KernelHeap
 		set_terminal(terminal)
 	}
 

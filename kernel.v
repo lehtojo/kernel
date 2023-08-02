@@ -50,14 +50,6 @@ namespace kernel {
 	import 'C' save_fpu_state_xsave(destination: link): _
 	import 'C' load_fpu_state_xrstor(source: link): _
 
-	import 'C' uefi_call_wrapper(function: link, argument_0: u64, argument_1: u64): _
-
-	call_uefi(function: link, argument_0, argument_1) {
-		debug.write('UEFI: Calling ') debug.write_address(function) debug.write(' with arguments ')
-		debug.write_address(argument_0 as u64) debug.write(', ') debug.write_address(argument_1 as u64) debug.write_line()
-		uefi_call_wrapper(function, argument_0 as u64, argument_1 as u64)
-	}
-
 	# Summary: Returns whether the specified result code is an error
 	is_error_code(code: u64) {
 		return (code as i64) < 0
@@ -103,83 +95,6 @@ namespace kernel {
 		physical_memory_manager_virtual_address: link
 		quickmap_physical_base: link
 	}
-
-	plain UefiTableHeader {
-		signature: u64
-		revision: u32
-		header_size: u32
-		crc32: u32
-		reserved: u32
-	}
-
-	pack UefiGuid {
-		data1: u32
-		data2: u16
-		data3: u16
-		data4: u64
-
-		shared new(data1: u32, data2: u16, data3: u16, data4_1: u8, data4_2: u8, data4_3: u8, data4_4: u8, data4_5: u8, data4_6: u8, data4_7: u8, data4_8: u8): UefiGuid {
-			data4: u64 = data4_1 | (data4_2 <| 8) | (data4_3 <| 16) | (data4_4 <| 24) | (data4_5 <| 32) | (data4_6 <| 40) | (data4_7 <| 48) | (data4_8 <| 56)
-			return pack { data1: data1, data2: data2, data3: data3, data4: data4 } as UefiGuid
-		}
-	}
-
-	pack UefiConfigurationTable {
-		vendor_guid: UefiGuid
-		vendor_table: link
-	}
-
-	plain UefiSystemTable {
-		inline header: UefiTableHeader
-		firmware_vendor: link
-		firmware_revision: u32
-		padding: u32
-		console_in_handle: link
-		console_in: link
-		console_out_handle: link
-		console_out: UefiSimpleTextOutputInterface
-		console_error_handle: link
-		console_error: link
-		runtime_services: link
-		boot_services: link
-		number_of_table_entries: u64
-		configuration_table: UefiConfigurationTable*
-	}
-
-	plain UefiSimpleTextOutputInterface {
-		reset: link
-		output_string: link
-		test_string: link
-		query_mode: link
-		set_mode: link
-		set_attribute: link
-		clear_screen: link
-		set_cursor_position: link
-		enable_cursor: link
-		mode: link
-	}
-
-	pack UefiGraphicsInformation {
-		framebuffer_physical_address: u64
-		horizontal_stride: u64
-		width: u64
-		height: u64
-
-		framebuffer_space_size => width * height * sizeof(u32)
-	}
-
-	plain UefiInformation {
-		system_table: UefiSystemTable
-		regions: Segment*
-		region_count: u64
-		physical_memory_size: u64
-		memory_map_end: u64
-		bitmap_font_file: link
-		bitmap_font_file_size: u64
-		bitmap_font_descriptor_file: link
-		bitmap_font_descriptor_file_size: u64
-		graphics_information: UefiGraphicsInformation
-	}
 }
 
 import kernel
@@ -193,12 +108,14 @@ import kernel.file_systems.ext2
 import kernel.file_systems
 import kernel.low
 
+import kernel.time
+
 export start(
 	multiboot_information: link,
 	interrupt_tables: link,
 	interrupt_stack_pointer: link,
 	gdtr_physical_address: link,
-	uefi_information: UefiInformation
+	uefi: UefiInformation
 ) {
 	serial.initialize()
 
@@ -214,8 +131,9 @@ export start(
 	interrupts.tables = interrupt_tables
 	interrupts.scheduler = scheduler.Scheduler()
 
-	if uefi_information !== none {
-		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi_information)
+	if uefi !== none {
+		uefi.paging_table = read_cr3()
+		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi)
 	} else multiboot_information !== none {
 		multiboot.initialize(multiboot_information, memory_information)
 	}
@@ -229,14 +147,14 @@ export start(
 	KernelHeap.initialize()
 	HeapAllocator.initialize(allocator)
 
-	if FramebufferConsole.instance !== none and uefi_information !== none {
+	if FramebufferConsole.instance !== none and uefi !== none {
 		# Output console content to the actual framebuffer
-		graphics_information = uefi_information.graphics_information
+		graphics_information = uefi.graphics_information
 		framebuffer_size = graphics_information.horizontal_stride * graphics_information.height
 		FramebufferConsole.instance.output_framebuffer = mapper.map_kernel_region(graphics_information.framebuffer_physical_address as link, framebuffer_size, MAP_NO_CACHE)
 		FramebufferConsole.instance.output_framebuffer_horizontal_stride = graphics_information.horizontal_stride
 
-		FramebufferConsole.instance.load_font(uefi_information as UefiInformation)
+		FramebufferConsole.instance.load_font(uefi as UefiInformation)
 	}
 
 	boot_console = BootConsoleDevice(HeapAllocator.instance)
@@ -247,7 +165,10 @@ export start(
 	Processor.count = 1
 	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address, 0)
 
-	if uefi_information === none {
+	if uefi !== none {
+		Time.initialize(allocator, uefi)
+		Time.instance.output_current_time()
+	} else {
 		mapper.remap()
 	}
 
@@ -259,22 +180,21 @@ export start(
 	devices = Devices(HeapAllocator.instance)
 	Devices.instance = devices
 
-	if uefi_information !== none {
+	if uefi !== none {
 		# Todo: Generalize
-		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi_information)
+		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi)
 	}
 
 	devices.add(boot_console)
 
 	scheduler.create_idle_process()
 
-	interrupts.apic.initialize(HeapAllocator.instance, uefi_information)
+	interrupts.apic.initialize(HeapAllocator.instance, uefi)
 
 	system_calls.initialize()
 
 	kernel_thread_start = () -> {
 		debug.write_line('Kernel thread: Starting...')
-		loop {}
 
 		Ext2.instance.initialize()
 

@@ -18,7 +18,7 @@ internal_init(stack: link) {
 		stack.(link*)[1],
 		stack.(link*)[2],
 		stack.(link*)[3],
-		stack.(link*)[4] as kernel.UefiInformation,
+		stack.(link*)[4] as kernel.low.UefiInformation,
 	)
 }
 

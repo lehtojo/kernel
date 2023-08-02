@@ -263,11 +263,11 @@ export find_table(rsdp: RSDPDescriptor20*, signature: link): link {
 # Summary:
 # Attempts to find the RSDP from the specified UEFI information.
 # Panics upon failure.
-export find_root_system_descriptor_table_from_uefi_uefi_information(uefi_information: UefiInformation) {
+export find_root_system_descriptor_table_from_uefi(uefi: UefiInformation) {
 	debug.write_line('APIC: Finding RSDP 2.0 using UEFI information...')
 
-	configuration_table = uefi_information.system_table.configuration_table
-	number_of_table_entries = uefi_information.system_table.number_of_table_entries
+	configuration_table = uefi.system_table.configuration_table
+	number_of_table_entries = uefi.system_table.number_of_table_entries
 
 	debug.write('APIC: Number of configuration table entries = ') debug.write_line(number_of_table_entries)
 
@@ -290,9 +290,9 @@ export find_root_system_descriptor_table_from_uefi_uefi_information(uefi_informa
 # Summary:
 # Attempts to find the root system descriptor table from EBDA.
 # Returns none pointer upon failure.
-export find_root_system_descriptor_table(uefi_information: UefiInformation) {
-	if uefi_information !== none {
-		return find_root_system_descriptor_table_from_uefi_uefi_information(uefi_information)
+export find_root_system_descriptor_table(uefi: UefiInformation) {
+	if uefi !== none {
+		return find_root_system_descriptor_table_from_uefi(uefi)
 	}
 
 	# EBDA = Extended BIOS Data Area
@@ -420,11 +420,11 @@ export max_redirection(registers: u32*) {
 	return result |> 16
 }
 
-export initialize(allocator: Allocator, uefi_information: UefiInformation) {
+export initialize(allocator: Allocator, uefi: UefiInformation) {
 	debug.write_line('APIC: Finding root system descriptor table')
 
 	# Find the root system descriptor table, so that we can use the hardware
-	rsdp = find_root_system_descriptor_table(uefi_information)
+	rsdp = find_root_system_descriptor_table(uefi)
 	debug.write('APIC: RSDP=')
 	debug.write_address(rsdp as u64)
 	debug.write_line()

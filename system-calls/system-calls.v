@@ -277,12 +277,16 @@ export process(frame: RegisterState*): u64 {
 		result = system_statfs(frame[].rdi as link, frame[].rsi as link)
 	} else system_call_number == 0x9e {
 		result = system_arch_prctl(frame[].rdi as u32, frame[].rsi as u64)
+	} else system_call_number == 0xca {
+		result = system_futex()
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(frame[].rdi as u32, frame[].rsi as link, frame[].rdx as u64)
 	} else system_call_number == 0xda {
 		result = system_set_tid_address(frame[].rdi as u64)
 	} else system_call_number == 0xdd {
 		result = system_fadvice(frame[].rdi as u32, frame[].rsi as u64, frame[].rdx as u64, frame[].r10 as u32)
+	} else system_call_number == 0xe4 {
+		result = system_clock_getttime(frame[].rdi as u64, frame[].rsi as u64)
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
 	} else system_call_number == 0x101 {

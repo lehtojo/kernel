@@ -30,6 +30,13 @@ pack TerminalInformation {
 	characters: u8[NCCS]
 }
 
+plain WindowSize {
+	row: u16
+	column: u16
+	horizontal_size: u16
+	vertical_size: u16
+}
+
 constant CTRL = 0x1f
 
 constant VINTR = 0
@@ -76,6 +83,7 @@ constant TERMINAL_DEFAULT_SPEED = B9600
 constant TCGETS = 0x5401
 constant TIOCSPGRP = 0x5410
 constant TIOCGPGRP = 0x540F
+constant TIOCGWINSZ = 0x5413
 
 pack Rect {
 	x: i32
@@ -385,11 +393,22 @@ CharacterDevice ConsoleDevice {
 		return 0
 	}
 
+	protected get_terminal_window_size(output: WindowSize): i32 {
+		debug.write_line('Console device: Get window size')
+
+		output.row = viewport.height
+		output.column = viewport.width
+		output.horizontal_size = viewport.width
+		output.vertical_size = viewport.height
+		return 0
+	}
+
 	override control(request: u32, argument: u64) {
 		return when (request) {
 			TCGETS => get_terminal_information(argument as link),
 			TIOCSPGRP => set_terminal_process_gid(argument as u32*),
 			TIOCGPGRP => get_terminal_process_gid(argument as u32*),
+			TIOCGWINSZ => get_terminal_window_size(argument as WindowSize),
 			else => {
 				debug.write('Console device: Unsupported control request ')
 				debug.write_line(request)

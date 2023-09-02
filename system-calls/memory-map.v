@@ -1,9 +1,11 @@
 namespace kernel.system_calls
 
-constant MAP_ANONYMOUS = 0x20
+constant MAP_ANONYMOUS = 1 <| 5
+
+constant PROT_EXEC = 1 <| 2
 
 # Summary: Creates process memory options based on the specified data
-create_process_memory_region_options(process: Process, flags: u32, file_descriptor: u32, offset: u64): Result<ProcessMemoryRegionOptions, u32> {
+create_process_memory_region_options(process: Process, protection: u32, flags: u32, file_descriptor: u32, offset: u64): Result<ProcessMemoryRegionOptions, u32> {
 	options = ProcessMemoryRegionOptions.new()
 	options.offset = offset
 
@@ -44,6 +46,11 @@ create_process_memory_region_options(process: Process, flags: u32, file_descript
 		}
 	}
 
+	if has_flag(protection, PROT_EXEC) {
+		debug.write_line('System call: Memory map: Setting region as executable')
+		options.flags |= REGION_EXECUTABLE
+	}
+
 	debug.write_line('System call: Memory map: Creating memory region options')
 	return Results.new<ProcessMemoryRegionOptions, u32>(options)
 }
@@ -79,7 +86,7 @@ export system_memory_map(
 	result = Optionals.empty<u64>()
 
 	# Todo: Support MAP_FIXED that forces the specified address and updates its settings
-	options_result = create_process_memory_region_options(process, flags, file_descriptor, offset)
+	options_result = create_process_memory_region_options(process, protection, flags, file_descriptor, offset)
 	if not options_result.has_value return options_result.error
 
 	options = options_result.value

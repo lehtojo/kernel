@@ -52,7 +52,7 @@ load_program_headers(file: Array<u8>, program_header_table: link, program_header
 # Copies one page from the data to the destination while taking into account the paging table.
 # If the destination page is already mapped to physical memory, the mapped physical memory will be used.
 # Otherwise new physical page will be allocated and mapped for copying.
-copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_destination: u64, source: link, remaining: u64): u64 {
+copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_destination: u64, source: link, remaining: u64, mapping_flags: u64): u64 {
 	# Compute the next virtual page starting from the specified virtual address
 	next_virtual_page = memory.round_to_page(unaligned_virtual_destination)
 	if next_virtual_page == unaligned_virtual_destination { next_virtual_page += PAGE_SIZE }
@@ -84,7 +84,7 @@ copy_page(allocator: Allocator, paging_table: PagingTable, unaligned_virtual_des
 		new_physical_page = PhysicalMemoryManager.instance.allocate_physical_region(PAGE_SIZE)
 
 		# Map the new page to the paging table
-		paging_table.map_page(allocator, virtual_page, new_physical_page, MAP_USER)
+		paging_table.map_page(allocator, virtual_page, new_physical_page, mapping_flags)
 
 		# Map the new physical memory into kernel space, so that we can copy into it
 		mapped_unaligned_physical_page = mapper.map_kernel_region(new_physical_page, size) + offset
@@ -167,9 +167,14 @@ export load_executable(allocator: Allocator, paging_table: PagingTable, file: Ar
 		debug.write_address(destination_virtual_address)
 		debug.write_line()
 
-		# Determine the type of this segment
+		# Configure the region
+		mapping_flags = MAP_USER
 		segment_type = PROCESS_ALLOCATION_PROGRAM_DATA
-		if has_flag(program_header.flags, ELF_SEGMENT_FLAG_EXECUTE) { segment_type = PROCESS_ALLOCATION_PROGRAM_TEXT }
+
+		if has_flag(program_header.flags, ELF_SEGMENT_FLAG_EXECUTE) {
+			mapping_flags |= MAP_EXECUTABLE
+			segment_type = PROCESS_ALLOCATION_PROGRAM_TEXT
+		}
 
 		# Add the memory mapping to allocations
 		start_virtual_address = memory.page_of(destination_virtual_address) as link
@@ -178,7 +183,7 @@ export load_executable(allocator: Allocator, paging_table: PagingTable, file: Ar
 
 		# Copy pages from the executable until there is no data left
 		loop (remaining > 0) {
-			copied = copy_page(allocator, paging_table, destination_virtual_address, source_data, remaining)
+			copied = copy_page(allocator, paging_table, destination_virtual_address, source_data, remaining, mapping_flags)
 
 			destination_virtual_address += copied
 			source_data += copied

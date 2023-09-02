@@ -4,7 +4,7 @@
 		{
 			"label": "Build",
 			"type": "shell",
-			"command": "./compile.sh",
+			"command": "./compile-uefi.sh",
 			"problemMatcher": [],
 			"group": {
 				"kind": "build",

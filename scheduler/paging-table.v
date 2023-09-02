@@ -177,6 +177,7 @@ plain PagingTable {
 		mapper.set_writable(entry_address)
 		mapper.set_cached(entry_address, not has_flag(flags, MAP_NO_CACHE))
 		mapper.set_accessibility(entry_address, has_flag(flags, MAP_USER))
+		mapper.set_executable(entry_address, has_flag(flags, MAP_EXECUTABLE))
 		mapper.set_present(entry_address)
 
 		if not has_flag(flags, MAP_NO_FLUSH) mapper.flush_tlb()

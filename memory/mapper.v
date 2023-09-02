@@ -3,6 +3,7 @@ namespace kernel
 constant MAP_NO_FLUSH = 1
 constant MAP_NO_CACHE = 2
 constant MAP_USER = 4
+constant MAP_EXECUTABLE = 8
 
 namespace mapper
 
@@ -14,6 +15,7 @@ import 'C' flush_tlb_local(virtual_address: link)
 
 constant PAGE_CONFIGURATION_PRESENT = 1
 constant PAGE_CONFIGURATION_WRITABLE = 0b10
+constant PAGE_CONFIGURATION_DISABLE_EXECUTION = 1 <| 63
 
 constant INVALID_PHYSICAL_ADDRESS = -1
 
@@ -377,6 +379,15 @@ set_address(entry: u64, physical_address: link) {
 set_address(entry: u64*, physical_address: link) {
 	current = entry[] & (!0x7fffffffff000)
 	entry[] = current | ((physical_address as u64) & 0x7fffffffff000)
+}
+
+# Summary: Controls whether the specified page can be executed
+set_executable(entry: u64*, executable: bool) {
+	if executable {
+		entry[] &= !PAGE_CONFIGURATION_DISABLE_EXECUTION
+	} else {
+		entry[] |= PAGE_CONFIGURATION_DISABLE_EXECUTION
+	}
 }
 
 to_physical_address(virtual_address: link): link {

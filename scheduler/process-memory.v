@@ -6,6 +6,8 @@ constant PROCESS_ALLOCATION_PROGRAM_TEXT = 1
 constant PROCESS_ALLOCATION_PROGRAM_DATA = 2
 constant PROCESS_ALLOCATION_RUNTIME_DATA = 4
 
+constant REGION_EXECUTABLE = 1
+
 # Summary: Stores all processes that share the memory region
 plain MemoryRegionOwners {
 	# Summary: Stores the process ids that own this memory region
@@ -21,6 +23,8 @@ plain MemoryRegionOwners {
 }
 
 pack ProcessMemoryRegionOptions {
+	flags: u64
+
 	# Summary: Stores an inode if this region is mapped to an inode
 	inode: Optional<Inode>
 
@@ -32,6 +36,7 @@ pack ProcessMemoryRegionOptions {
 
 	shared new(): ProcessMemoryRegionOptions {
 		return pack {
+			flags: 0,
 			inode: Optionals.empty<Inode>(),
 			device: Optionals.empty<Device>(),
 			offset: 0 as u64
@@ -40,6 +45,8 @@ pack ProcessMemoryRegionOptions {
 }
 
 pack ProcessMemoryRegion {
+	flags: u64
+
 	# Summary: Stores the virtual address region of this memory region
 	region: Segment
 
@@ -56,8 +63,9 @@ pack ProcessMemoryRegion {
 	owners: MemoryRegionOwners
 
 	# Summary: Returns a process memory region mapped to the specified inode
-	shared new(region: Segment, inode: Optional<Inode>, device: Optional<Device>, offset: u64): ProcessMemoryRegion {
+	shared new(flags: u64, region: Segment, inode: Optional<Inode>, device: Optional<Device>, offset: u64): ProcessMemoryRegion {
 		return pack {
+			flags: flags,
 			region: region,
 			inode: inode,
 			device: device,
@@ -69,6 +77,7 @@ pack ProcessMemoryRegion {
 	# Summary: Returns a normal process memory region
 	shared new(region: Segment): ProcessMemoryRegion {
 		return pack {
+			flags: 0,
 			region: region,
 			inode: Optionals.empty<Inode>(),
 			device: Optionals.empty<Device>(),
@@ -80,6 +89,7 @@ pack ProcessMemoryRegion {
 	# Summary: Returns a process memory region based on the specified options
 	shared new(region: Segment, options: ProcessMemoryRegionOptions): ProcessMemoryRegion {
 		return pack {
+			flags: options.flags,
 			region: region,
 			inode: options.inode,
 			device: options.device,
@@ -95,7 +105,7 @@ pack ProcessMemoryRegion {
 		require(slice.start <= slice.end, 'Slice start must be less than slice end')
 
 		internal_offset = (slice.start - region.start) as u64
-		return ProcessMemoryRegion.new(slice, inode, device, offset + internal_offset)
+		return ProcessMemoryRegion.new(flags, slice, inode, device, offset + internal_offset)
 	}
 
 	# Summary: Returns a slice of this region
@@ -105,6 +115,9 @@ pack ProcessMemoryRegion {
 
 	# Summary: Returns whether this region can be merged with the specified region
 	can_merge(other: ProcessMemoryRegion): bool {
+		# Regions can not be merged if they have different flags
+		if not (flags == other.flags) return false
+
 		# Regions can not be merged if they have different inodes
 		if not (inode == other.inode) return false
 
@@ -258,6 +271,8 @@ plain ProcessMemory {
 					require(paging_table.set_page_configuration(virtual_page, 0), 'Failed to reset page configuration')
 					PhysicalMemoryManager.instance.deallocate_all(physical_page)
 				}
+
+				mapper.flush_tlb()
 			}
 
 			# Subtract the allocation region from the current region
@@ -607,11 +622,17 @@ plain ProcessMemory {
 		initialize_physical_page(allocation, virtual_page, physical_page)
 
 		# Map the new physical page to the accessed virtual page and continue as normal
-		if process.is_kernel_process {
-			paging_table.map_page(allocator, virtual_page, physical_page)
-		} else {
-			paging_table.map_page(allocator, virtual_page, physical_page, MAP_USER)
+		mapping_flags = 0
+
+		if has_flag(allocation.flags, REGION_EXECUTABLE) {
+			mapping_flags |= MAP_EXECUTABLE
 		}
+
+		if not process.is_kernel_process {
+			mapping_flags |= MAP_USER
+		}
+
+		paging_table.map_page(allocator, virtual_page, physical_page, mapping_flags)
 
 		return true
 	}

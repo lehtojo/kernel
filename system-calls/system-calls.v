@@ -15,6 +15,7 @@ constant ENXIO = -6
 constant ENOEXEC = -8
 constant EBADF = -9
 constant ECHILD = -10
+constant EAGAIN = -11
 constant ENOMEM = -12
 constant EFAULT = -14
 constant EBUSY = -16

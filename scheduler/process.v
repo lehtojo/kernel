@@ -255,15 +255,17 @@ Process {
 			require(is_kernel_space, 'Attempted to save userspace frame twice')
 
 			# Save the kernel frame
-			debug.write('Process: Saving kernel frame of process ') debug.write_line(tid)
 			kernel_frame[] = frame[]
 			save_fpu_state(kernel_fpu_state)
+
+			debug.write('Process: Saved kernel frame of process ') debug.write_line(tid)
 			return kernel_frame
 		}
 
-		debug.write('Process: Saving user frame of process ') debug.write_line(tid)
 		user_frame[] = frame[]
 		save_fpu_state(user_fpu_state)
+
+		debug.write('Process: Saved user frame of process ') debug.write_line(tid)
 		return user_frame
 	}
 
@@ -371,13 +373,16 @@ Process {
 
 			stack_address = arguments.stack
 
+			debug.write('Process: Using stack at address ') debug.write_address(stack_address)
+			debug.write(' with size of ') debug.write(arguments.stack_size) debug.write_line(' bytes')
+
 			# Verify the stack is correctly aligned
 			if not global.memory.is_aligned(stack_address, 16) {
 				debug.write_line('Process: Clone: Stack is not aligned correctly')
 				return Results.error<Process, i64>(EINVAL)
 			}
 
-			user_frame[].rsp = stack_address
+			user_frame[].userspace_rsp = stack_address + PAGE_SIZE
 			# Todo: Once we have proper stack support, take the stack size into account
 		}
 

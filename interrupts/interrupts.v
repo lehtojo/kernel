@@ -2,7 +2,8 @@ pack RegisterState {
 	rdi: u64
 	rsi: u64
 	rbp: u64
-	rsp: u64
+	# Todo: What is this?
+	_rsp: u64
 	rbx: u64
 	rdx: u64
 	rcx: u64

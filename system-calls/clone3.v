@@ -5,6 +5,7 @@ write_tids(arguments: CloneArguments, parent: Process, child: Process): i64 {
 	parent_tid = arguments.parent_tid as u32*
 	flags = arguments.flags
 
+	# Todo: Handle these differently we support cloning with CLONE_STOPPED
 	# Todo: Maybe replace is_valid_region with something more readable?
 	if has_flag(flags, CLONE_CHILD_SETTID) {
 		if not is_valid_region(parent, child_tid, sizeof(u32), true) return EINVAL

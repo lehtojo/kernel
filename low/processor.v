@@ -7,7 +7,7 @@ plain Processor {
 
 	temporary: link
 	kernel_stack_pointer: link
-	user_stack_pointer: link
+	padding: link
 	general_kernel_stack_pointer: link
 	gdtr_physical_address: link
 	index: u32

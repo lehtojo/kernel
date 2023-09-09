@@ -142,6 +142,19 @@ pack ProcessMemoryRegion {
 	}
 }
 
+plain ProcessMemoryState {
+	usages: u32 = 1
+
+	# Summary: Minimum address that automatic memory mapping may return
+	min_memory_map_address: u64 = DEFAULT_MIN_MEMORY_MAP_ADDRESS
+
+	# Summary: Stores the current program break address that the process can adjust
+	break: u64 = 0
+
+	# Summary: Stores the maximum allowed value for the program break
+	max_break: u64 = mapper.PAGE_MAP_VIRTUAL_BASE
+}
+
 plain ProcessMemory {
 	# Summary: Stores the pid of the process that owns this memory
 	pid: u32
@@ -161,25 +174,15 @@ plain ProcessMemory {
 	# Summary: Stores the kernel stack pointer
 	kernel_stack_pointer: u64
 
-	# Todo: Consider moving the members below into an object (name might be limits?)
-
-	# Summary: Minimum address that automatic memory mapping may return
-	min_memory_map_address: u64
-
-	# Summary: Stores the current program break address that the process can adjust
-	break: u64
-
-	# Summary: Stores the maximum allowed value for the program break
-	max_break: u64
+	# Summary: Stores the memory state and configuration
+	state: ProcessMemoryState
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.allocations = List<ProcessMemoryRegion>(allocator) using allocator
 		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
-		this.min_memory_map_address = DEFAULT_MIN_MEMORY_MAP_ADDRESS
-		this.break = 0
-		this.max_break = mapper.PAGE_MAP_VIRTUAL_BASE
+		this.state = ProcessMemoryState() using allocator
 
 		# Kernel regions must be mapped to every process, so that the kernel does not need to 
 		# change the paging tables during system calls in order to access the kernel memory.
@@ -189,8 +192,8 @@ plain ProcessMemory {
 		paging_table.map_gdt(allocator, Processor.current.gdtr_physical_address)
 
 		# Add available address regions
-		available_regions_by_address.add(Segment.new(0 as link, min_memory_map_address as link))
-		available_regions_by_address.add(Segment.new(min_memory_map_address as link, mapper.PAGE_MAP_VIRTUAL_BASE as link))
+		available_regions_by_address.add(Segment.new(0 as link, state.min_memory_map_address as link))
+		available_regions_by_address.add(Segment.new(state.min_memory_map_address as link, state.max_break as link))
 
 		# Reserve the GDTR page
 		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(GDTR_VIRTUAL_ADDRESS, GDTR_VIRTUAL_ADDRESS + PAGE_SIZE)))
@@ -206,9 +209,10 @@ plain ProcessMemory {
 		this.available_regions_by_address = other.available_regions_by_address
 		this.paging_table = other.paging_table
 		this.kernel_stack_pointer = other.kernel_stack_pointer
-		this.min_memory_map_address = other.min_memory_map_address
-		this.break = other.break
-		this.max_break = other.max_break
+		this.state = other.state
+
+		# Increment the number of usages of the specified process memory as we use its resources
+		state.usages++
 	}
 
 	# Summary:
@@ -429,7 +433,7 @@ plain ProcessMemory {
 			address_list_region = available_regions_by_address[i]
 
 			# Skip regions that are below the minimum address
-			if address_list_region.start < min_memory_map_address continue
+			if address_list_region.start < state.min_memory_map_address continue
 
 			# Skip regions that are not suitable for storing the specified amount of bytes
 			if address_list_region.size < size + alignment continue
@@ -651,7 +655,7 @@ plain ProcessMemory {
 		}
 
 		# Reset the break as well
-		break = 0
+		state.break = 0
 	}
  
 	# Summary: Deallocates the specified region allowing fragmentation
@@ -711,6 +715,9 @@ plain ProcessMemory {
 	}
 
 	destruct() {
+		# Decrement the number of usages and check if all resources can be released
+		if --state.usages > 0 return
+
 		deallocate()
 
 		# Destruct the lists

@@ -168,7 +168,7 @@ cli # Disable interrupts
 
 # Save the interrupt stack pointer and load the kernel stack pointer
 # Note: Each thread has its own kernel stack for saving the state in kernel easily
-mov [gs:16], rsp
+mov [gs:0], rsp
 mov rsp, [gs:8]
 
 # Interrupt stack has data we do not have in this new stack, reserve space for it and copy it later
@@ -194,7 +194,7 @@ push rdi
 
 # Copy the data pushed in the interrupt stack to the allocated region
 lea rdi, [rsp+128]
-mov rsi, [gs:16]
+mov rsi, [gs:0]
 mov rcx, 7
 rep movsq
 
@@ -208,7 +208,8 @@ jl kernel_switch_return
 
 # Copy changes to the interrupt stack
 lea rsi, [rsp+128]
-mov rdi, [gs:16]
+mov rdi, [gs:24]
+sub rdi, 56 # 7 * 8
 mov rcx, 7
 rep movsq
 
@@ -230,7 +231,8 @@ pop r14
 pop r15
 
 # Switch back to the interrupt stack
-mov rsp, [gs:16]
+mov rsp, [gs:24]
+sub rsp, 56
 
 add rsp, 16 # Remove the interrupt number and padding (Added by the interrupt entry)
 
@@ -241,11 +243,11 @@ system_call_entry:
 # Interrupts are disabled
 
 # Save the user stack pointer and load the kernel stack pointer
-mov [gs:16], rsp
+mov [gs:0], rsp
 mov rsp, [gs:8]
 
 pushq 0x1b # User ss (0x18 | 3)
-pushq [gs:16] # User rsp
+pushq [gs:0] # User rsp
 
 push r11 # RFLAGS
 pushq 0x23 # User cs (0x20 | 3)
@@ -324,7 +326,7 @@ pop r15
 # Note: Kernel switches are done using syscall instruction, so we have rcx and r11 to work with
 
 add rsp, 16 # Remove the interrupt number and padding
-popq [gs:0]     # Load rip
+popq [gs:0] # Save rip temporarily
 add rsp, 8  # Do not restore cs as it is correct already
 popfq       # Load rflags
 pop rsp     # Load the stack pointer

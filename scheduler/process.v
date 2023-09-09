@@ -31,6 +31,18 @@ plain CloneArguments {
 	control_group: u64
 }
 
+pack ThreadEvents {
+	set_child_tid: u32*
+	clear_child_tid: u32*
+
+	shared new(): ThreadEvents {
+		return pack {
+			set_child_tid: none as u32*,
+			clear_child_tid: none as u32*
+		} as ThreadEvents
+	}
+}
+
 Process {
 	constant NORMAL_PRIORITY = 50
 
@@ -69,7 +81,7 @@ Process {
 			memory.add_allocation(allocation.type, ProcessMemoryRegion.new(allocation, options))
 
 			# Set the program break after all loaded segments
-			memory.break = math.max(memory.break, allocation.end as u64)
+			memory.state.break = math.max(memory.state.break, allocation.end as u64)
 		}
 	}
 
@@ -212,6 +224,7 @@ Process {
 	working_directory: String
 	credentials: Credentials
 	blocker: Blocker
+	events: ThreadEvents
 	readable state: u32
 	parent: Process = none as Process
 	childs: List<Process>
@@ -449,6 +462,14 @@ Process {
 			child.is_borrowing_parent_resources = true
 		}
 
+		if has_flag(arguments.flags, CLONE_CHILD_CLEARTID) {
+			debug.write('Process: Clone: Clear child TID = ')
+			debug.write_address(arguments.child_tid)
+			debug.write_line()
+
+			child.events.clear_child_tid = arguments.child_tid as u32*
+		}
+
 		return Results.new<Process, u64>(child)
 	}
 
@@ -498,7 +519,18 @@ Process {
 		subscribers.update()
 	}
 
+	execute_destruct_events(): _ {
+		if events.clear_child_tid !== none and 
+			is_valid_region(this, events.clear_child_tid, sizeof(u32), true) {
+
+			events.clear_child_tid[] = 0
+			Futexes.wake(events.clear_child_tid as u64)
+		}
+	}
+
 	destruct(allocator: Allocator): _ {
+		execute_destruct_events()
+
 		# Remove the process from the list of child processes
 		if parent !== none {
 			parent.childs.remove(this)

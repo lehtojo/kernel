@@ -8,9 +8,9 @@ export system_brk(new_break: u64) {
 
 	# Ensure the break address is allowed
 	process = get_process()
-	old_break = process.memory.break
+	old_break = process.memory.state.break
 
-	if new_break == 0 or new_break > process.memory.max_break {
+	if new_break == 0 or new_break > process.memory.state.max_break {
 		debug.write('System call: Break: Returning the current break ')
 		debug.write_address(old_break)
 		debug.write_line()
@@ -27,6 +27,6 @@ export system_brk(new_break: u64) {
 	}
 
 	# Update the break address
-	process.memory.break = new_break
+	process.memory.state.break = new_break
 	return new_break 
 }

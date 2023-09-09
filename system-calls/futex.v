@@ -195,6 +195,17 @@ namespace Futexes {
 
 		return wake_count
 	}
+
+	wake(address: u64): i64 {
+		key_or_error = Futexes.key(address as u64)
+
+		if key_or_error has not key {
+			debug.write_line('Futexes: Failed to get the futex key')
+			return key_or_error.error
+		}
+
+		return Futexes.wake(key, FUTEX_OPERATION_WAKE, 0xffffffff, FUTEX_BITSET_MATCH_ANY)
+	}
 }
 
 # System call: futex

@@ -146,6 +146,7 @@ copy(destination: link, source: link, size: u64) {
 }
 
 copy_into(destination, destination_offset, source, source_offset, size) {
+	# Todo: Add safety checks
 	copy(destination.data + destination_offset, source.data + source_offset, size)
 }
 

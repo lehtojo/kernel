@@ -28,6 +28,7 @@
 				"./devices/keyboard/ps2/",
 				"./devices/storage/ata/",
 				"./devices/storage/nvme/",
+				"./terminal/",
 				"./time/"
 			]
 		}

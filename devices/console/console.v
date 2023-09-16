@@ -2,6 +2,7 @@ namespace kernel.devices.console
 
 import kernel.system_calls
 import kernel.file_systems
+import kernel.terminal
 
 pack Cell {
 	value: u8
@@ -149,6 +150,12 @@ pack Terminal {
 		y = y % height
 		return cells[y * width + x]
 	}
+
+	set(x: u32, y: u32, value: Cell): _ {
+		x = x % width
+		y = y % height
+		cells[y * width + x] = value
+	}
 }
 
 pack ConsoleInputBuffer {
@@ -181,6 +188,39 @@ pack ConsoleInputBuffer {
 	}
 }
 
+terminal.TerminalController DefaultTerminalController {
+	device: ConsoleDevice
+
+	init(device: ConsoleDevice) {
+		this.device = device
+	}
+
+	override write_raw(data: Array<u8>, size: u64) {
+		debug.write_line('Terminal controller: Writing raw bytes...')
+		device.write_raw(data.data, size)
+	}
+
+	override set_background_color(color: u32) {
+		debug.write('Terminal controller: Setting background color to ')
+		debug.write_address(color)
+		debug.write_line()
+		device.background = color
+	}
+
+	override set_foreground_color(color: u32) {
+		debug.write('Terminal controller: Setting foreground color to ')
+		debug.write_address(color)
+		debug.write_line()
+		device.foreground = color
+	}
+
+	override reset_attributes() {
+		debug.write_line('Terminal controller: Resetting attributes')
+		device.background = 0
+		device.foreground = 0xffffff
+	}
+}
+
 CharacterDevice ConsoleDevice {
 	protected constant DEFAULT_WIDTH = 80
 	protected constant DEFAULT_HEIGHT = 36
@@ -196,10 +236,11 @@ CharacterDevice ConsoleDevice {
 
 	protected viewport: Viewport
 
-	protected background: u32
-	protected foreground: u32
+	background: u32 = 0x000000
+	foreground: u32 = 0xffffff
 
 	protected information: TerminalInformation
+	protected interpreter: TerminalInterpreter
 
 	init(allocator: Allocator, major: u32, minor: u32) {
 		CharacterDevice.init(major, minor)
@@ -208,6 +249,10 @@ CharacterDevice ConsoleDevice {
 		this.cursor_x = 0
 		this.cursor_y = 0
 		this.viewport = Viewport(DEFAULT_WIDTH, DEFAULT_HEIGHT) using allocator
+
+		controller = DefaultTerminalController(this) using allocator
+		this.interpreter = TerminalInterpreter(allocator, controller) using allocator
+
 		initialize_lines(allocator)
 		initialize_terminal_information()
 	}
@@ -334,11 +379,7 @@ CharacterDevice ConsoleDevice {
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {
 		debug.write_line('Console device: Writing bytes...')
 
-		truncated_size = math.min(data.size, viewport.width - cursor_x)
-
-		loop (i = 0, i < truncated_size, i++) {
-			write_character(data[i])
-		}
+		interpreter.interpret(data)
 
 		description.offset = cursor_y * viewport.width + cursor_x
 
@@ -346,7 +387,7 @@ CharacterDevice ConsoleDevice {
 		return data.size
 	}
 
-	write_bytes(data: link, size: u64): _ {
+	write_raw(data: link, size: u64): _ {
 		truncated_size = math.min(size, viewport.width - cursor_x)
 
 		loop (i = 0, i < truncated_size, i++) {

@@ -3,6 +3,8 @@ namespace kernel.low
 import kernel.devices.console
 import kernel.devices.gpu
 
+import 'C' color_area(pixels: u32*, width: u32, height: u32, stride: u32, foreground: u32, background: u32): _
+
 plain BitmapDescriptorBlockHeader {
 	id: u8
 	size: u32
@@ -30,11 +32,15 @@ plain BitmapDescriptorCharacter {
 	y: u16
 	width: u16
 	height: u16
-	x_offset: i16
-	y_offset: i16
-	x_advance: i16
+	_x_offset: i16
+	_y_offset: i16
+	_x_advance: i16
 	page: u8
 	channel: u8
+
+	x_offset => math.max(_x_offset, 0)
+	y_offset => math.max(_y_offset, 0)
+	x_advance => math.max(_x_advance, 0)
 
 	print(): _ {
 		debug.put(`[`) debug.write(x) debug.write(', ') debug.write(y) debug.write(', ') debug.write(width) debug.write(', ') debug.write(height) debug.put(`]`)
@@ -150,7 +156,7 @@ plain FramebufferConsole {
 	}
 
 	address_of(base: link, stride: u32, x: u32, y: u32): link {
-		require(x < width and y < height, 'Pixel coordinates out of bounds')
+		require(x <= width and y <= height, 'Pixel coordinates out of bounds')
 		return base + y * stride + x * sizeof(u32)
 	}
 
@@ -176,7 +182,6 @@ plain FramebufferConsole {
 	}
 
 	clear(): _ {
-		#debug.write_line('Framebuffer console: Clearing')
 		memory.zero(address_of(0, 0), framebuffer_width * framebuffer_height * sizeof(u32))
 
 		# Output the cleared area
@@ -313,9 +318,6 @@ plain FramebufferConsole {
 	}
 
 	fill(rect: Rect, character: BitmapDescriptorCharacter, cell: Cell): _ {
-		#debug.write('Framebuffer console: Rendering bitmap character ')
-		#character.print() debug.write(' at ') rect.print() debug.write_line()
-
 		require(rect.left >= 0 and rect.top >= 0 and rect.right <= width and rect.bottom <= height, 'Region is out of bounds')
 
 		# Return if we have nothing to do
@@ -330,15 +332,11 @@ plain FramebufferConsole {
 			destination += framebuffer_width * sizeof(u32)
 			source += bitmap_font.width * sizeof(u32)
 		}
-
-		output(rect)
 	}
 
 	# Summary: Output the specified area to the output framebuffer
 	output(rect: Rect): _ {
 		if output_framebuffer === none return
-
-		#debug.write('Framebuffer console: Outputting ') rect.print() debug.write_line()
 
 		destination = address_of(output_framebuffer, output_framebuffer_horizontal_stride, rect.x, rect.y)
 		source = address_of(rect.x, rect.y)
@@ -350,11 +348,11 @@ plain FramebufferConsole {
 		}
 	}
 
-	# Summary: Computes the rect in which the specified character should be rendered without taking the viewport into account
-	absolute_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
-		rect = Rect.new(0, y * line_height + character.y_offset, character.width, character.height)
+	# Summary: Computes the rect in which the background of the specified character should be rendered without taking the viewport into account
+	absolute_background_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		rect = Rect.new(0, y * line_height, character.x_offset + character.x_advance, line_height)
 
-		x_offset = character.x_offset as i64
+		x_offset = 0
 
 		loop (ix = 0, ix < x, ix++) {
 			character = bitmap_font.get_character(terminal[ix, y].value)
@@ -365,9 +363,22 @@ plain FramebufferConsole {
 		return rect
 	}
 
-	# Summary: Computes the rect in which the specified character should be rendered
-	viewport_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
-		rect = absolute_rect(x, y, character)
+	# Summary: Computes the rect in which the specified character should be rendered without taking the viewport into account
+	character_rect_from_background_rect(background_rect: Rect, character: BitmapDescriptorCharacter): Rect {
+		# Clone the background rect and apply character setting to it
+		character_rect = background_rect
+		character_rect.x += character.x_offset
+		character_rect.y += character.y_offset
+		character_rect.width = character.width
+		character_rect.height = character.height
+
+		# Clamp the character rect inside background rect
+		return character_rect.clamp(background_rect)
+	}
+
+	# Summary: Computes the background rect in which the specified character should be rendered
+	background_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		rect = absolute_background_rect(x, y, character)
 
 		viewport_rect = Rect.new(0, terminal.viewport.line * line_height, width, height)
 		clamped_rect = rect.clamp(viewport_rect)
@@ -377,25 +388,40 @@ plain FramebufferConsole {
 		return clamped_rect
 	}
 
+	character_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
+		rect = background_rect(x, y, character)
+		return character_rect_from_background_rect(rect, character)
+	}
+
+	# Summary: Colors the specified cell
+	color_cell(rect: Rect, cell: Cell): _ {
+		if cell.background == 0x000000 and cell.foreground == 0xffffff return
+
+		destination = address_of(rect.x, rect.y)
+
+		color_area(destination, rect.width, rect.height, framebuffer_width * sizeof(u32), cell.foreground, cell.background)
+	}
+
 	# Summary: Renders the specified line
 	render_line(y: u32): _ {
-		#debug.write('Framebuffer console: Rendering line ') debug.write_line(y)
-
 		# Clear the line
 		clear_line(y)
 
 		# Render the line
 		loop (x = 0, x < terminal.width, x++) {
-			character = bitmap_font.get_character(terminal[x, y].value)
-			rect = viewport_rect(x, y, character)
-			fill(rect, character, terminal[x, y])
+			cell = terminal[x, y]
+			character = bitmap_font.get_character(cell.value)
+			character_rect = character_rect(x, y, character)
+			backgrond_rect = background_rect(x, y, character)
+
+			fill(character_rect, character, cell) 
+			color_cell(backgrond_rect, cell)
+			output(backgrond_rect)
 		}
 	}
 
 	# Summary: Render all lines
 	render_all_lines(): _ {
-		#debug.write_line('Framebuffer console: Rendering viewport')
-
 		# Render the lines
 		loop (y = 0, y < terminal.height, y++) {
 			render_line(y)
@@ -403,8 +429,6 @@ plain FramebufferConsole {
 	}
 
 	scroll(lines: u32): _ {
-		#debug.write('Framebuffer console: Scrolling ') debug.write_line(lines)
-
 		# If we scroll more than "one viewport", we can just render everything
 		if math.abs(lines) >= terminal.viewport.height {
 			render_all_lines()
@@ -451,18 +475,48 @@ plain FramebufferConsole {
 
 	# Summary: Updates the specified cell by rendering it to the framebuffer
 	update(x: u32, y: u32, new: Cell): _ {
-		#debug.write('Framebuffer console: Updating cell at ') debug.write(x) debug.write(', ') debug.write_line(y)
+		# Find the old character from the framebuffer
+		old = terminal[x, y]
+		old_character = bitmap_font.get_character(old.value)
+		old_background_rect = background_rect(x, y, old_character)
 
-		# Remove the old character from the framebuffer
-		old_character = bitmap_font.get_character(terminal[x, y].value)
-		character_rect = viewport_rect(x, y, old_character)
-		clear(character_rect)
+		# Compute rect that contains the characters after the character to update
+		rest_of_line_source_rect = Rect.new(
+			old_background_rect.right,
+			old_background_rect.top,
+			framebuffer_width - old_background_rect.right,
+			old_background_rect.height
+		)
 
 		# Compute the rect for the new character
 		new_character = bitmap_font.get_character(new.value)
-		character_rect = viewport_rect(x, y, new_character)
+		new_character_rect = character_rect(x, y, new_character)
+		new_background_rect = background_rect(x, y, new_character)
+
+		# Compute where the rest of the line should be placed
+		rest_of_line_destination_x = new_background_rect.right
+		rest_of_line_destination_y = new_background_rect.top
+
+		# Because the rest of the line can move to the right, the copied are can shrink in width.
+		# Update the width and the height of the source rect.
+		rest_of_line_source_rect.width = math.min(rest_of_line_source_rect.width, framebuffer_width - rest_of_line_destination_x)
+
+		# Move the rest of the line out of the way
+		move_area(rest_of_line_source_rect, rest_of_line_destination_x, rest_of_line_destination_y)
+
+		# Clear the background of the new character before rendering it
+		clear(new_background_rect)
 
 		# Render the new character
-		fill(character_rect, new_character, new)
+		fill(new_character_rect, new_character, new)
+		color_cell(new_background_rect, new)
+
+		# Output the new character
+		output(new_background_rect)
+
+		# Output the rest of the updated line
+		rest_of_line_source_rect.x = rest_of_line_destination_x
+		rest_of_line_source_rect.y = rest_of_line_destination_y
+		output(rest_of_line_source_rect)
 	}
 }

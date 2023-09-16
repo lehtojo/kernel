@@ -129,7 +129,7 @@ export process() {
 	is_shift_down = states[LEFT_SHIFT] or states[RIGHT_SHIFT]
 	keycode = resolve_keycode(scancode, keycode, is_shift_down)
 
-	if keycode !== 0 and not state {
+	if keycode !== 0 and down {
 		require(Devices.instance.find(BootConsoleDevice.MAJOR, BootConsoleDevice.MINOR) has boot_console, 'Missing boot console device')
 		boot_console.(ConsoleDevice).emit(keycode)
 	}

@@ -39,7 +39,7 @@ ConsoleDevice BootConsoleDevice {
 
 	override write_character(character: u8) {
 		if FramebufferConsole.instance !== none {
-			FramebufferConsole.instance.update(cursor_x, cursor_y, Cell.new(character, foreground, background))
+			FramebufferConsole.instance.update(cursor_x, cursor_y, Cell.new(character, background, foreground))
 		}
 
 		write_character_default(character)

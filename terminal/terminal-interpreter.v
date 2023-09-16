@@ -1,6 +1,6 @@
 namespace kernel.terminal
 
-constant MAX_COMMAND_SIZE = 256
+constant MAX_COMMAND_SIZE = 4096
 constant MAX_ARGUMENTS = 4
 
 constant COMMAND_START = `\e`
@@ -34,14 +34,14 @@ TerminalInterpreter {
 	}
 
 	private output_until(position: u32): _ {
-		require(position <= buffer_size, 'Terminal interpreter: Invalid buffer position')
+		require(position <= buffer_size, 'Terminal interpreter: Invalid buffer position (output)')
 
 		controller.write_raw(buffer, position)
 		remove_until(position)
 	}
 
 	private remove_until(position: u32): _ {
-		require(position <= buffer_size, 'Terminal interpreter: Invalid buffer position')
+		require(position <= buffer_size, 'Terminal interpreter: Invalid buffer position (remove)')
 
 		data_after_position = buffer_size - position
 		memory.copy_into(buffer, 0, buffer, position, data_after_position)
@@ -68,12 +68,12 @@ TerminalInterpreter {
 	}
 
 	private peek(): u8 {
-		if interpretation_position >= buffer_position return 0
+		if interpretation_position >= buffer_size return 0
 		return buffer[interpretation_position]
 	}
 
 	private consume(): u8 {
-		if interpretation_position >= buffer_position return 0
+		if interpretation_position >= buffer_size return 0
 		return buffer[interpretation_position++]
 	}
 
@@ -103,9 +103,12 @@ TerminalInterpreter {
 		parameter_end = parameter_start
 
 		# Update the interpretation position before returning
-		deinit { interpretation_position = parameter_end + 1 }
+		deinit { interpretation_position = math.min(parameter_end + 1, buffer_size) }
 
 		loop (parameter_end < buffer_size) {
+			# Return an error if we can not consume more arguments, because there are more
+			if arguments.size >= max_arguments return ERROR_TOO_MANY
+
 			character = buffer[parameter_end]
 
 			if character == ARGUMENT_SEPARATOR {
@@ -113,9 +116,6 @@ TerminalInterpreter {
 				arguments.add(argument)
 	
 				parameter_start = parameter_end + 1
-
-				# Return an error if we can not consume more arguments, because there are more
-				if arguments.size >= max_arguments return ERROR_TOO_MANY
 
 			} else character == ARGUMENTS_END {
 				argument = String.new(buffer.data + parameter_start, parameter_end - parameter_start)
@@ -127,7 +127,7 @@ TerminalInterpreter {
 		}
 
 		# Arguments are always terminated, but we did not find the terminator character
-		return ERROR_INVALID_COMMAND
+		return ERROR_INCOMPLETE
 	}
 
 	private interpret_sgr_sequence(id: u32): i64 {
@@ -240,9 +240,9 @@ TerminalInterpreter {
 	}
 
 	private interpret_command(): i64 {
-		if buffer_size == 0 return ERROR_NO_DATA
-
 		reset_interpretation_state()
+
+		if buffer_size == 0 return ERROR_NO_DATA
 
 		# Pattern: ESC ...
 		if consume() != COMMAND_START return ERROR_NOT_COMMAND

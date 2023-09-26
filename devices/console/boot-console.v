@@ -37,7 +37,7 @@ ConsoleDevice BootConsoleDevice {
 		# Todo: Consider the cursor
 	}
 
-	override write_character(character: u8) {
+	override write_character(character: u16) {
 		if FramebufferConsole.instance !== none {
 			FramebufferConsole.instance.update(cursor_x, cursor_y, Cell.new(character, background, foreground))
 		}

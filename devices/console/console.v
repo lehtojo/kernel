@@ -5,13 +5,17 @@ import kernel.file_systems
 import kernel.terminal
 
 pack Cell {
-	value: u8
+	value: u16
+	components: u16
 	background: u32
 	foreground: u32
-	flags: u16
 
-	shared new(value: u8, background: u32, foreground: u32): Cell {
-		return pack { value: value, background: background, foreground: foreground, flags: 0 as u16 } as Cell
+	shared new(value: u16, background: u32, foreground: u32): Cell {
+		return pack { value: value, components: 0 as u16, background: background, foreground: foreground } as Cell
+	}
+
+	shared new(value: u16, components: u16, background: u32, foreground: u32): Cell {
+		return pack { value: value, components: components, background: background, foreground: foreground } as Cell
 	}
 }
 
@@ -335,7 +339,7 @@ CharacterDevice ConsoleDevice {
 	}
 
 	# Summary: Writes the specified character
-	protected write_character_default(character: u8): _ {
+	protected write_character_default(character: u16): _ {
 		cells[cell_index] = Cell.new(character, background, foreground)
 
 		# If a line ending was written, move to the next line
@@ -348,7 +352,7 @@ CharacterDevice ConsoleDevice {
 	}
 
 	# Summary: Writes the specified character
-	open write_character(character: u8): _ {
+	open write_character(character: u16): _ {
 		write_character_default(character)
 	}
 
@@ -391,7 +395,53 @@ CharacterDevice ConsoleDevice {
 		truncated_size = math.min(size, viewport.width - cursor_x)
 
 		loop (i = 0, i < truncated_size, i++) {
-			write_character(data[i])	
+			character = data[i]
+
+			# 7-bit characters characters: 0xxxxxxx
+			if (character & 0b10000000) == 0 {
+				write_character(character)
+				continue
+			}
+
+			# 16-bit characters: 1110zzzz 10yyyyyy 10xxxxxx => zzzzyyyyyyxxxxxx
+			if (character |> 4) == 0b1110 {
+				cells[cell_index] = Cell.new(character & 0b1111, 2, background, foreground)
+				continue
+			}
+
+			# 11-bit characters: 110yyyyy 10xxxxxx => yyyyyxxxxxx
+			if (character |> 5) == 0b110 {
+				cells[cell_index] = Cell.new(character & 0b11111, 1, background, foreground)
+				continue
+			}
+
+			# Character component: 10xxxxxx
+			if (character |> 6) == 0b10 {
+				cell = cells[cell_index]
+				value = character & 0b111111
+
+				if cell.components > 0 {
+					# Add the value of the component to the current cell and 
+					# decrease the number of remaining components it expects
+					cell.value = (cell.value <| 6) | value
+					cell.components--
+
+					# Remember to update the cell
+					cells[cell_index] = cell
+
+					# If there are more components, do not update yet
+					if cell.components != 0 continue
+
+					write_character(cell.value)
+					continue
+				}
+
+				# We have found a rogue component, just write its value as character
+				write_character(value)
+				continue
+			}
+
+			write_character(character)
 		}
 
 		update()

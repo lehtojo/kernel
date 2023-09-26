@@ -196,7 +196,7 @@ TerminalInterpreter {
 		# If the next character is not a digit, we do not have a display attribute sequence
 		if not is_digit(next_character) return ERROR_CONTINUE
 
-		# Read the command integer 
+		# Read the command integer
 		command = consume_integer(3)
 
 		# Expect a terminator character (m, ;)
@@ -222,6 +222,32 @@ TerminalInterpreter {
 		return interpret_sgr_sequence(command, arguments)
 	}
 
+	private interpret_terminal_mode_sequence(id: u32, state: u8): i64 {
+		return when (id) {
+			25 => 0,
+			1003 => 0,
+			else => ERROR_NOT_SUPPORTED
+		}
+	}
+
+	private interpret_terminal_mode_sequence(): i64 {
+		# CSI = ESC [
+		# Pattern: CSI ? n h/l
+		if consume() != `?` return ERROR_CONTINUE
+
+		# Expect an integer
+		if is_end() or not is_digit(peek()) return ERROR_INVALID_COMMAND
+
+		# Read the command integer
+		command = consume_integer(4)
+
+		# Expect h/l
+		state = consume()
+		if state != `h` or state != `l` return ERROR_INVALID_COMMAND
+
+		return interpret_terminal_mode_sequence(command, state)
+	}
+
 	private interpret_csi_sequence(): i64 {
 		# CSI = ESC [
 		# Pattern: CSI ... 
@@ -230,6 +256,9 @@ TerminalInterpreter {
 		if is_end() return ERROR_INCOMPLETE
 
 		result = interpret_sgr_sequence()
+		if result != ERROR_CONTINUE return result
+
+		result = interpret_terminal_mode_sequence()
 		if result != ERROR_CONTINUE return result
 
 		return ERROR_NOT_SUPPORTED

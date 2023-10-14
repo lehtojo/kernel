@@ -258,12 +258,14 @@ configure_port(configuration: Configuration, port: ControllerPort*, i: u32) {
 	stop_commands(port)
 
 	# Register a command list for the specified port
+	###
 	port[].command_list_base_address = configuration.lists + i * sizeof(CommandList)
 	memory.zero(port[].command_list_base_address, sizeof(CommandList))
 
 	# Register a FIS packet for the specified port
 	port[].fis_base_address = configuration.fis + i * sizeof(FIS)
 	memory.zero(port[].fis_base_address, sizeof(FIS))
+	###
 
 	# Register the command tables
 	headers: CommandHeader* = configuration.lists[i].headers
@@ -274,8 +276,8 @@ configure_port(configuration: Configuration, port: ControllerPort*, i: u32) {
 		headers[i].physical_region_descriptor_table_entry_count = PHYSICAL_REGION_DESCRIPTORS_PER_COMMAND_TABLE
 
 		# Register the command table
-		headers[i].command_table_descriptor_base_address = tables + i * sizeof(CommandTable)
-		memory.zero(headers[i].command_table_descriptor_base_address, sizeof(CommandTable))
+		#headers[i].command_table_descriptor_base_address = tables + i * sizeof(CommandTable)
+		#memory.zero(headers[i].command_table_descriptor_base_address, sizeof(CommandTable))
 	}
 
 	# Enable commands, because we are done configuring
@@ -338,6 +340,7 @@ scan_ports(interface_physical_address: link) {
 }
 
 initialize(parser: Parser) {
+	return
 	loop (i = 0, i < parser.device_identifiers.size, i++) {
 		device = parser.device_identifiers[i]
 

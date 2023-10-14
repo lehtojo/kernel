@@ -701,4 +701,24 @@ FileSystem Ext2 {
 
 		return Results.new<Custody, u32>(container)
 	}
+
+   override load_information(information: FileSystemInformation) {
+      debug.write_line('Ext2: Loading file system information')
+
+      information.type = SIGNATURE
+      information.block_size = get_block_size()
+      information.blocks = superblock.block_count
+      information.free_blocks = superblock.unallocated_block_count
+      information.free_blocks_unprivileged_user = superblock.unallocated_block_count
+      # Todo: Figure out what to with the superuser reserved blocks
+      information.inodes = superblock.inode_count
+      information.free_inodes = superblock.unallocated_inode_count
+      information.file_system_id = id
+      information.name_length = 50
+      # Todo: Figure out the max name length
+      information.fragment_size = fragment_size
+      information.flags = 0
+
+      return 0
+   }
 }

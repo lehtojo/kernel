@@ -347,6 +347,25 @@ FileSystem MemoryFileSystem {
 
 		return Results.new<Custody, u32>(container)
 	}
+
+   override load_information(information: FileSystemInformation) {
+      debug.write_line('Memory file system: Loading file system information')
+
+      information.type = 0x01021994 # Todo: Make a constant (TMPFS_MAGIC?)
+      information.block_size = get_block_size()
+      information.blocks = 0
+      information.free_blocks = -1
+      information.free_blocks_unprivileged_user = -1
+      information.inodes = inode_index
+      information.free_inodes = -1
+      information.file_system_id = id
+      information.name_length = 50
+      # Todo: Figure out the max name length
+      information.fragment_size = -1
+      information.flags = 0
+
+      return 0
+   }
 }
 
 pack BootFileHeader {

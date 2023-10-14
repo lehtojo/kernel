@@ -59,6 +59,20 @@ DirectoryIterator {
 	iterator(): DirectoryIterator { return this }
 }
 
+plain FileSystemInformation {
+   type: u64
+   block_size: u64
+   blocks: u64
+   free_blocks: u64
+   free_blocks_unprivileged_user: u64
+   inodes: u64
+   free_inodes: u64
+   file_system_id: u64
+   name_length: u64
+   fragment_size: u64
+   flags: u64
+}
+
 FileSystem {
 	id: u32
 
@@ -86,4 +100,6 @@ FileSystem {
 	open iterate_directory(allocator: Allocator, inode: Inode): Result<DirectoryIterator, u32>
 	open allocate_inode_index(): u64
 	open open_path(allocator: Allocator, container: Custody, path: String, create_options: u8): Result<Custody, u32>
+
+   open load_information(information: FileSystemInformation): u64
 }

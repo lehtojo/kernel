@@ -25,6 +25,10 @@ pack SchedulerProcesses {
 		debug.write('Scheduler: Removing process ') debug.write_line(process.tid)
 		return running.remove(process) or blocked.remove(process)
 	}
+
+   size(): u64 {
+      return running.size + blocked.size
+   }
 }
 
 Scheduler {

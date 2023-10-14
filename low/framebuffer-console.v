@@ -38,8 +38,8 @@ plain BitmapDescriptorCharacter {
 	page: u8
 	channel: u8
 
-	x_offset => math.max(_x_offset, 0)
-	y_offset => math.max(_y_offset, 0)
+	x_offset => _x_offset
+   y_offset => math.max(_y_offset, 0)
 	x_advance => math.max(_x_advance, 0)
 
 	print(): _ {
@@ -350,13 +350,13 @@ plain FramebufferConsole {
 
 	# Summary: Computes the rect in which the background of the specified character should be rendered without taking the viewport into account
 	absolute_background_rect(x: u32, y: u32, character: BitmapDescriptorCharacter): Rect {
-		rect = Rect.new(0, y * line_height, character.x_offset + character.x_advance, line_height)
+		rect = Rect.new(0, y * line_height, character.x_advance, line_height)
 
 		x_offset = 0
 
 		loop (ix = 0, ix < x, ix++) {
 			character = bitmap_font.get_character(terminal[ix, y].value)
-			x_offset += character.x_offset + character.x_advance
+			x_offset += character.x_advance
 		}
 
 		rect.x = math.max(x_offset, 0)

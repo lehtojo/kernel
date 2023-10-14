@@ -265,7 +265,9 @@ export process(frame: RegisterState*): u64 {
 		result = system_fcntl(frame[].rdi as u32, frame[].rsi as u32, frame[].rdx as u64)
 	} else system_call_number == 0x4f {
 		result = system_getcwd(frame[].rdi as link, frame[].rsi as u64)
-	} else system_call_number == 0x66 {
+	} else system_call_number == 0x63 {
+      result = system_sysinfo(frame[].rdi as SystemStatistics)
+   } else system_call_number == 0x66 {
 		result = system_getuid()
 	} else system_call_number == 0x68 {
 		result = system_getgid()
@@ -279,15 +281,21 @@ export process(frame: RegisterState*): u64 {
 		result = system_getppid()
 	} else system_call_number == 0x6f {
 		result = system_getpgrp()
+	} else system_call_number == 0x83 {
+		result = system_sigaltstack(frame[].rdi as StackInformation, frame[].rsi as StackInformation)
 	} else system_call_number == 0x89 {
-		result = system_statfs(frame[].rdi as link, frame[].rsi as link)
-	} else system_call_number == 0x9e {
+      result = system_statfs(frame[].rdi as link, frame[].rsi as FileSystemInformation)
+   } else system_call_number == 0x70 {
+      result = system_fstatfs(frame[].rdi as i64, frame[].rsi as FileSystemInformation)
+   } else system_call_number == 0x9e {
 		result = system_arch_prctl(frame[].rdi as u32, frame[].rsi as u64)
 	} else system_call_number == 0xca {
 		result = system_futex(frame[].rdi as u32*, frame[].rsi as i32, frame[].rdx as u32, frame[].r10 as u64, frame[].r8 as u32*, frame[].r9 as u32)
 	} else system_call_number == 0xba {
 		result = system_gettid()
-	} else system_call_number == 0xd9 {
+	} else system_call_number == 0xc9 {
+      result = system_time()
+   } else system_call_number == 0xd9 {
 		result = system_getdents64(frame[].rdi as u32, frame[].rsi as link, frame[].rdx as u64)
 	} else system_call_number == 0xda {
 		result = system_set_tid_address(frame[].rdi as u64)

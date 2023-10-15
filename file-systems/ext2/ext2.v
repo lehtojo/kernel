@@ -587,6 +587,24 @@ FileSystem Ext2 {
 		return 0
 	}
 
+   override read_link(allocator: Allocator, base: Custody, path: String) {
+      custody_or_error = open_path(allocator, base, path, CREATE_OPTION_NONE)
+
+      if custody_or_error.has_error {
+         debug.write_line('Ext2: Failed to open the specified path')
+         return custody_or_error.error
+      }
+
+      # Verify we have an inode
+      inode = custody_or_error.value.inode
+      if inode === none return EINVAL
+
+      # Verify we have a symbolic link
+      if not inode.metadata.is_symbolic_link return EINVAL
+
+      return inode.read_link(allocator)
+   }
+
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
 		debug.write('Ext2: Opening file from path ') debug.write_line(path)
 

@@ -235,6 +235,28 @@ Inode Ext2Inode {
 		return 0
 	}
 
+   override read_link(allocator: Allocator) {
+      require(metadata.is_symbolic_link, 'Inode must represent a symbolic link')
+
+      # Verify the path will not be too long
+      path_size = size()
+      if path_size > PATH_MAX return ENAMETOOLONG
+
+      # Allocate memory for the path
+      path_data = allocator.allocate(path_size)
+      if path_data === none return ENOMEM
+
+      # Read the contents of this inode that is the linked path
+      result = read_bytes(path_data, 0, path_size)
+      if result != 0 return result
+
+      # Todo: Remove
+      debug.write_bytes(path_data, path_size)
+      panic('haha')
+
+      return String.new(path_data, path_size)
+   }
+
 	destruct() {
 		allocator.deallocate(this as link)
 	}

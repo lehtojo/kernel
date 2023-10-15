@@ -24,6 +24,7 @@ constant ENOTTY = -25
 constant ESPIPE = -29
 constant ENOTDIR = -20
 constant ERANGE = -34
+constant ENAMETOOLONG = -36
 constant ENOSYS = -38
 constant EOVERFLOW = -75
 
@@ -265,7 +266,13 @@ export process(frame: RegisterState*): u64 {
 		result = system_fcntl(frame[].rdi as u32, frame[].rsi as u32, frame[].rdx as u64)
 	} else system_call_number == 0x4f {
 		result = system_getcwd(frame[].rdi as link, frame[].rsi as u64)
-	} else system_call_number == 0x63 {
+	} else system_call_number == 0x50 {
+      result = system_chdir(frame[].rdi as link)
+   } else system_call_number == 0x51 {
+      result = system_fchdir(frame[].rdi as u64)
+   } else system_call_number == 0x59 {
+      result = system_readlink(frame[].rdi as link, frame[].rsi as link, frame[].rdx as u64)
+   } else system_call_number == 0x63 {
       result = system_sysinfo(frame[].rdi as SystemStatistics)
    } else system_call_number == 0x66 {
 		result = system_getuid()

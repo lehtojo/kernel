@@ -90,6 +90,7 @@ FileSystem {
 	open link()
 	open unlink()
 	open symbolic_link()
+   open read_link(allocator: Allocator, base: Custody, path: String): Result<String, u64>
 	open remove_directory()
 	open change_mode()
 	open change_owner()

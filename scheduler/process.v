@@ -218,6 +218,8 @@ Process {
 	# Summary: Tells how many register states has been saved
 	private frame_count: u8 = 1
 
+	# Stores which CPUs are allowed to execute this process
+	affinity: u64
 	fs: u64 = 0 # Todo: Group with registers?
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
@@ -246,6 +248,8 @@ Process {
 		this.user_fpu_state = user_fpu_state
 		this.kernel_frame = kernel_frame
 		this.kernel_fpu_state = kernel_fpu_state
+		# Todo: We're don't support SMP yet
+		this.affinity = 1
 		this.memory = memory
 		this.file_descriptors = file_descriptors
 		this.working_directory = String.empty

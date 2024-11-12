@@ -607,350 +607,381 @@ zero:
 # }
 .global color_area
 color_area:
-  push r15
-  mov eax, r9d
-  push r14
-  shr eax, 16
-  push r13
-  mov r13d, r8d
-  push r12
-  mov r12d, r8d
-  shr r13d, 16
-  push rbp
-  shr r12d, 8
-  push rbx
-  mov ebx, esi
-  mov esi, edx
-  sub rsp, 64
-  mov DWORD PTR [rsp+28], edx
-  mov edx, eax
-  mov eax, r9d
-  shr eax, 8
-  test esi, esi
-  je .L1
-  mov esi, ecx
-  and esi, -4
-  mov QWORD PTR [rsp+32], rsi
-  test ebx, ebx
-  je .L1
-  lea esi, [rbx-1]
-  movzx r13d, r13b
-  movzx eax, al
-  mov ecx, ebx
-  mov DWORD PTR [rsp+48], esi
-  mov esi, ebx
-  movd xmm7, r13d
-  movd xmm0, eax
-  and esi, -4
-  pshufd xmm7, xmm7, 0
-  shr ecx, 2
-  mov DWORD PTR [rsp+24], eax
-  mov DWORD PTR [rsp+52], esi
-  movzx esi, dl
-  pshufd xmm0, xmm0, 0
-  sal rcx, 4
-  movaps XMMWORD PTR [rsp-88], xmm7
-  movd xmm2, esi
-  psrlq xmm7, 32
-  xor ebp, ebp
-  mov DWORD PTR [rsp+20], esi
-  movzx r12d, r12b
-  movzx r8d, r8b
-  movzx r9d, r9b
-  pshufd xmm2, xmm2, 0
-  movaps XMMWORD PTR [rsp-40], xmm7
-  movdqa xmm7, xmm2
-  movdqa xmm14, XMMWORD PTR .LC0[rip]
-  psrlq xmm7, 32
-  movaps XMMWORD PTR [rsp-72], xmm2
-  movdqa xmm2, XMMWORD PTR .LC1[rip]
-  movaps XMMWORD PTR [rsp-24], xmm7
-  movdqa xmm7, xmm0
-  psrlq xmm7, 32
-  mov QWORD PTR [rsp+40], rcx
-  movaps XMMWORD PTR [rsp-8], xmm7
-  pxor xmm7, xmm7
-  movdqa xmm13, xmm7
-  movaps XMMWORD PTR [rsp-56], xmm0
-  pcmpgtd xmm13, xmm2
+        push    rbp
+        mov     eax, r8d
+        mov     r10d, esi
+        mov     r11d, r9d
+        shr     eax, 16
+        mov     esi, edx
+        shr     r11d, 8
+        mov     rbp, rsp
+        push    r15
+        push    r14
+        push    r13
+        push    r12
+        push    rbx
+        mov     ebx, r8d
+        shr     ebx, 8
+        and     rsp, -16
+        sub     rsp, 56
+        mov     DWORD PTR [rsp-88], edx
+        mov     edx, eax
+        mov     eax, r9d
+        shr     eax, 16
+        test    esi, esi
+        je      .L1
+        mov     esi, ecx
+        and     esi, -4
+        mov     QWORD PTR [rsp-96], rsi
+        test    r10d, r10d
+        je      .L1
+        lea     esi, [r10-1]
+        mov     ecx, r10d
+        movzx   eax, al
+        xor     r12d, r12d
+        mov     DWORD PTR [rsp-100], esi
+        mov     esi, r10d
+        shr     ecx, 2
+        movd    xmm0, eax
+        and     esi, -4
+        sal     rcx, 4
+        pxor    xmm14, xmm14
+        mov     DWORD PTR [rsp-84], eax
+        mov     DWORD PTR [rsp-104], esi
+        movzx   esi, dl
+        pshufd  xmm0, xmm0, 0
+        movzx   ebx, bl
+        movd    xmm7, esi
+        mov     DWORD PTR [rsp-80], esi
+        movzx   r11d, r11b
+        movzx   r8d, r8b
+        pshufd  xmm7, xmm7, 0
+        mov     QWORD PTR [rsp-112], rcx
+        movdqa  xmm12, xmm14
+        movdqa  xmm13, XMMWORD PTR .LC1[rip]
+        movzx   ecx, r9b
+        movaps  XMMWORD PTR [rsp-24], xmm7
+        psrlq   xmm7, 32
+        movdqa  xmm15, XMMWORD PTR .LC0[rip]
+        movaps  XMMWORD PTR [rsp-56], xmm7
+        pcmpgtd xmm12, xmm13
+        movdqa  xmm7, xmm0
+        mov     DWORD PTR [rsp-76], ecx
+        psrlq   xmm7, 32
+        movaps  XMMWORD PTR [rsp-40], xmm0
+        movaps  XMMWORD PTR [rsp-72], xmm7
 .L4:
-  cmp DWORD PTR [rsp+48], 2
-  jbe .L24
-  movd xmm0, r12d
-  mov rsi, QWORD PTR [rsp+40]
-  mov rax, rdi
-  pshufd xmm12, xmm0, 0
-  movd xmm0, r8d
-  movdqa xmm15, xmm12
-  pshufd xmm11, xmm0, 0
-  movd xmm0, r9d
-  lea rdx, [rdi+rsi]
-  pshufd xmm10, xmm0, 0
-  movdqa xmm0, xmm11
-  psrlq xmm15, 32
-  psrlq xmm0, 32
-  movaps XMMWORD PTR [rsp-120], xmm0
-  movdqa xmm0, xmm10
-  psrlq xmm0, 32
-  movaps XMMWORD PTR [rsp-104], xmm0
+        cmp     DWORD PTR [rsp-100], 2
+        jbe     .L24
+        movd    xmm7, ebx
+        mov     rsi, QWORD PTR [rsp-112]
+        mov     rax, rdi
+        pshufd  xmm11, xmm7, 0
+        movd    xmm7, r11d
+        pshufd  xmm10, xmm7, 0
+        movd    xmm7, r8d
+        lea     rdx, [rsi+rdi]
+        pshufd  xmm9, xmm7, 0
+        movd    xmm7, DWORD PTR [rsp-76]
+        pshufd  xmm8, xmm7, 0
+        movdqa  xmm7, xmm11
+        psrlq   xmm7, 32
+        movaps  XMMWORD PTR [rsp+8], xmm7
+        movdqa  xmm7, xmm10
+        psrlq   xmm7, 32
+        movaps  XMMWORD PTR [rsp-8], xmm7
+        movdqa  xmm7, xmm9
+        psrlq   xmm7, 32
+        movaps  XMMWORD PTR [rsp+40], xmm7
+        movdqa  xmm7, xmm8
+        psrlq   xmm7, 32
+        movaps  XMMWORD PTR [rsp+24], xmm7
 .L5:
-  movdqu xmm1, XMMWORD PTR [rax]
-  movdqa xmm9, xmm15
-  add rax, 16
-  movdqa xmm4, XMMWORD PTR [rsp-88]
-  movdqa xmm3, XMMWORD PTR [rsp-40]
-  movdqa xmm8, XMMWORD PTR [rsp-24]
-  movdqa xmm0, xmm1
-  pandn xmm1, xmm14
-  pand xmm0, xmm14
-  movdqa xmm5, xmm1
-  pmuludq xmm4, xmm0
-  psrlq xmm5, 32
-  movdqa xmm6, xmm0
-  psrlq xmm6, 32
-  pmuludq xmm8, xmm5
-  pmuludq xmm3, xmm6
-  pmuludq xmm9, xmm6
-  pmuludq xmm6, XMMWORD PTR [rsp-120]
-  pshufd xmm6, xmm6, 8
-  pshufd xmm4, xmm4, 8
-  pshufd xmm8, xmm8, 8
-  pshufd xmm3, xmm3, 8
-  pshufd xmm9, xmm9, 8
-  punpckldq xmm4, xmm3
-  movdqa xmm3, XMMWORD PTR [rsp-72]
-  pmuludq xmm3, xmm1
-  pshufd xmm3, xmm3, 8
-  punpckldq xmm3, xmm8
-  movdqa xmm8, XMMWORD PTR [rsp-56]
-  paddd xmm4, xmm3
-  movdqa xmm3, XMMWORD PTR [rsp-8]
-  pmuludq xmm8, xmm1
-  pmuludq xmm1, xmm10
-  pmuludq xmm3, xmm5
-  pmuludq xmm5, XMMWORD PTR [rsp-104]
-  pshufd xmm5, xmm5, 8
-  pshufd xmm8, xmm8, 8
-  pshufd xmm1, xmm1, 8
-  pshufd xmm3, xmm3, 8
-  punpckldq xmm1, xmm5
-  movdqa xmm5, xmm4
-  punpckldq xmm8, xmm3
-  pmuludq xmm5, xmm2
-  movdqa xmm3, xmm12
-  pmuludq xmm3, xmm0
-  pmuludq xmm0, xmm11
-  pshufd xmm0, xmm0, 8
-  pshufd xmm3, xmm3, 8
-  punpckldq xmm0, xmm6
-  movdqa xmm6, xmm13
-  punpckldq xmm3, xmm9
-  paddd xmm0, xmm1
-  movdqa xmm1, xmm7
-  paddd xmm3, xmm8
-  pcmpgtd xmm1, xmm4
-  pmuludq xmm6, xmm4
-  movdqa xmm8, xmm13
-  pmuludq xmm1, xmm2
-  paddq xmm1, xmm6
-  movdqa xmm6, xmm7
-  psllq xmm1, 32
-  paddq xmm5, xmm1
-  movdqa xmm1, xmm4
-  psrlq xmm1, 32
-  pcmpgtd xmm6, xmm1
-  pmuludq xmm8, xmm1
-  pmuludq xmm1, xmm2
-  pmuludq xmm6, xmm2
-  paddq xmm6, xmm8
-  movdqa xmm8, xmm13
-  psllq xmm6, 32
-  paddq xmm1, xmm6
-  movdqa xmm6, xmm13
-  shufps xmm5, xmm1, 221
-  movdqa xmm1, xmm7
-  pmuludq xmm6, xmm3
-  pshufd xmm5, xmm5, 216
-  pcmpgtd xmm1, xmm3
-  paddd xmm5, xmm4
-  movdqa xmm4, xmm3
-  pmuludq xmm4, xmm2
-  psrad xmm5, 7
-  pslld xmm5, 16
-  pmuludq xmm1, xmm2
-  paddq xmm1, xmm6
-  movdqa xmm6, xmm7
-  psllq xmm1, 32
-  paddq xmm4, xmm1
-  movdqa xmm1, xmm3
-  psrlq xmm1, 32
-  pcmpgtd xmm6, xmm1
-  pmuludq xmm8, xmm1
-  pmuludq xmm1, xmm2
-  pmuludq xmm6, xmm2
-  paddq xmm6, xmm8
-  psllq xmm6, 32
-  paddq xmm1, xmm6
-  movdqa xmm6, xmm13
-  shufps xmm4, xmm1, 221
-  pshufd xmm4, xmm4, 216
-  movdqa xmm1, xmm0
-  paddd xmm4, xmm3
-  pmuludq xmm1, xmm2
-  movdqa xmm3, xmm7
-  pcmpgtd xmm3, xmm0
-  psrad xmm4, 7
-  pslld xmm4, 8
-  por xmm4, xmm5
-  movdqa xmm5, xmm13
-  pmuludq xmm5, xmm0
-  pmuludq xmm3, xmm2
-  paddq xmm3, xmm5
-  movdqa xmm5, xmm7
-  psllq xmm3, 32
-  paddq xmm1, xmm3
-  movdqa xmm3, xmm0
-  psrlq xmm3, 32
-  pcmpgtd xmm5, xmm3
-  pmuludq xmm6, xmm3
-  pmuludq xmm3, xmm2
-  pmuludq xmm5, xmm2
-  paddq xmm5, xmm6
-  psllq xmm5, 32
-  paddq xmm3, xmm5
-  shufps xmm1, xmm3, 221
-  pshufd xmm1, xmm1, 216
-  paddd xmm1, xmm0
-  psrad xmm1, 7
-  por xmm4, xmm1
-  movups XMMWORD PTR [rax-16], xmm4
-  cmp rdx, rax
-  jne .L5
-  test bl, 3
-  je .L6
-  mov r11d, DWORD PTR [rsp+52]
+        movdqu  xmm0, XMMWORD PTR [rax]
+        movdqa  xmm3, XMMWORD PTR [rsp-24]
+        add     rax, 16
+        movdqa  xmm2, XMMWORD PTR [rsp-56]
+        movdqu  xmm1, XMMWORD PTR [rax-16]
+        pand    xmm0, xmm15
+        movdqa  xmm6, XMMWORD PTR [rsp-72]
+        movdqa  xmm7, XMMWORD PTR [rsp-8]
+        movdqa  xmm5, xmm0
+        pmuludq xmm3, xmm0
+        pandn   xmm1, xmm15
+        psrlq   xmm5, 32
+        movdqa  xmm4, xmm1
+        pmuludq xmm2, xmm5
+        psrlq   xmm4, 32
+        pmuludq xmm6, xmm4
+        pmuludq xmm7, xmm4
+        pmuludq xmm4, XMMWORD PTR [rsp+24]
+        pshufd  xmm4, xmm4, 8
+        pshufd  xmm3, xmm3, 8
+        pshufd  xmm2, xmm2, 8
+        punpckldq       xmm3, xmm2
+        movdqa  xmm2, XMMWORD PTR [rsp-40]
+        pshufd  xmm6, xmm6, 8
+        pshufd  xmm7, xmm7, 8
+        pmuludq xmm2, xmm1
+        pshufd  xmm2, xmm2, 8
+        punpckldq       xmm2, xmm6
+        movdqa  xmm6, xmm11
+        paddd   xmm3, xmm2
+        movdqa  xmm2, XMMWORD PTR [rsp+8]
+        pmuludq xmm6, xmm0
+        pmuludq xmm0, xmm9
+        pmuludq xmm2, xmm5
+        pmuludq xmm5, XMMWORD PTR [rsp+40]
+        pshufd  xmm5, xmm5, 8
+        pshufd  xmm6, xmm6, 8
+        pshufd  xmm0, xmm0, 8
+        pshufd  xmm2, xmm2, 8
+        punpckldq       xmm0, xmm5
+        movdqa  xmm5, xmm12
+        punpckldq       xmm6, xmm2
+        pmuludq xmm5, xmm3
+        movdqa  xmm2, xmm1
+        pmuludq xmm1, xmm8
+        pmuludq xmm2, xmm10
+        pshufd  xmm1, xmm1, 8
+        pshufd  xmm2, xmm2, 8
+        punpckldq       xmm1, xmm4
+        movdqa  xmm4, xmm3
+        punpckldq       xmm2, xmm7
+        paddd   xmm0, xmm1
+        movdqa  xmm1, xmm14
+        paddd   xmm2, xmm6
+        pcmpgtd xmm1, xmm3
+        pmuludq xmm4, xmm13
+        movdqa  xmm6, xmm12
+        pmuludq xmm1, xmm13
+        paddq   xmm1, xmm5
+        movdqa  xmm5, xmm14
+        psllq   xmm1, 32
+        paddq   xmm4, xmm1
+        movdqa  xmm1, xmm3
+        psrlq   xmm1, 32
+        pcmpgtd xmm5, xmm1
+        pmuludq xmm6, xmm1
+        pmuludq xmm1, xmm13
+        pmuludq xmm5, xmm13
+        paddq   xmm5, xmm6
+        movdqa  xmm6, xmm12
+        psllq   xmm5, 32
+        paddq   xmm1, xmm5
+        movdqa  xmm5, xmm12
+        shufps  xmm4, xmm1, 221
+        movdqa  xmm1, xmm14
+        pmuludq xmm5, xmm2
+        pshufd  xmm4, xmm4, 216
+        pcmpgtd xmm1, xmm2
+        paddd   xmm4, xmm3
+        movdqa  xmm3, xmm2
+        pmuludq xmm3, xmm13
+        psrad   xmm4, 7
+        pslld   xmm4, 16
+        pand    xmm4, XMMWORD PTR .LC2[rip]
+        pmuludq xmm1, xmm13
+        paddq   xmm1, xmm5
+        movdqa  xmm5, xmm14
+        psllq   xmm1, 32
+        paddq   xmm3, xmm1
+        movdqa  xmm1, xmm2
+        psrlq   xmm1, 32
+        pcmpgtd xmm5, xmm1
+        pmuludq xmm6, xmm1
+        pmuludq xmm1, xmm13
+        pmuludq xmm5, xmm13
+        paddq   xmm5, xmm6
+        psllq   xmm5, 32
+        paddq   xmm1, xmm5
+        movdqa  xmm5, xmm12
+        shufps  xmm3, xmm1, 221
+        pshufd  xmm3, xmm3, 216
+        paddd   xmm3, xmm2
+        movdqa  xmm2, xmm0
+        psrad   xmm3, 7
+        pmuludq xmm2, xmm13
+        movdqa  xmm1, xmm3
+        movdqa  xmm3, xmm14
+        pcmpgtd xmm3, xmm0
+        pslld   xmm1, 8
+        pand    xmm1, XMMWORD PTR .LC3[rip]
+        por     xmm1, xmm4
+        movdqa  xmm4, xmm12
+        pmuludq xmm4, xmm0
+        pmuludq xmm3, xmm13
+        paddq   xmm3, xmm4
+        movdqa  xmm4, xmm14
+        psllq   xmm3, 32
+        paddq   xmm2, xmm3
+        movdqa  xmm3, xmm0
+        psrlq   xmm3, 32
+        pcmpgtd xmm4, xmm3
+        pmuludq xmm5, xmm3
+        pmuludq xmm3, xmm13
+        pmuludq xmm4, xmm13
+        paddq   xmm4, xmm5
+        psllq   xmm4, 32
+        paddq   xmm3, xmm4
+        shufps  xmm2, xmm3, 221
+        pshufd  xmm2, xmm2, 216
+        paddd   xmm2, xmm0
+        psrad   xmm2, 7
+        pand    xmm2, xmm15
+        por     xmm1, xmm2
+        movups  XMMWORD PTR [rax-16], xmm1
+        cmp     rax, rdx
+        jne     .L5
+        test    r10b, 3
+        je      .L6
+        mov     r9d, DWORD PTR [rsp-104]
 .L7:
-  mov eax, r11d
-  mov ecx, DWORD PTR [rsp+20]
-  mov r15d, DWORD PTR [rsp+24]
-  mov r10d, 2155905153
-  lea r14, [rdi+rax*4]
-  mov esi, DWORD PTR [r14]
-  movzx edx, sil
-  not esi
-  movzx esi, sil
-  mov eax, edx
-  imul ecx, esi
-  imul eax, r13d
-  imul r15d, esi
-  imul esi, r9d
-  add ecx, eax
-  mov eax, edx
-  imul eax, r12d
-  imul edx, r8d
-  imul rcx, r10
-  add eax, r15d
-  imul rax, r10
-  add edx, esi
-  imul rdx, r10
-  shr rcx, 39
-  sal ecx, 16
-  shr rax, 39
-  sal eax, 8
-  shr rdx, 39
-  or eax, ecx
-  or eax, edx
-  mov DWORD PTR [r14], eax
-  lea eax, [r11+1]
-  cmp eax, ebx
-  jnb .L6
-  lea r14, [rdi+rax*4]
-  mov ecx, DWORD PTR [rsp+20]
-  mov r15d, DWORD PTR [rsp+24]
-  add r11d, 2
-  mov esi, DWORD PTR [r14]
-  movzx edx, sil
-  not esi
-  movzx esi, sil
-  mov eax, edx
-  imul eax, r13d
-  imul ecx, esi
-  imul r15d, esi
-  imul esi, r9d
-  add ecx, eax
-  mov eax, edx
-  imul eax, r12d
-  imul edx, r8d
-  imul rcx, r10
-  add eax, r15d
-  imul rax, r10
-  add edx, esi
-  imul rdx, r10
-  shr rcx, 39
-  sal ecx, 16
-  shr rax, 39
-  sal eax, 8
-  shr rdx, 39
-  or eax, ecx
-  or eax, edx
-  mov DWORD PTR [r14], eax
-  cmp r11d, ebx
-  jnb .L6
-  lea r11, [rdi+r11*4]
-  mov r15d, DWORD PTR [rsp+24]
-  mov edx, DWORD PTR [rsp+20]
-  mov eax, DWORD PTR [r11]
-  movzx esi, al
-  not eax
-  mov r14d, esi
-  movzx eax, al
-  imul r14d, r12d
-  imul r15d, eax
-  imul edx, eax
-  mov ecx, r14d
-  imul eax, r9d
-  mov r14d, esi
-  imul r14d, r13d
-  add ecx, r15d
-  imul esi, r8d
-  imul rcx, r10
-  add edx, r14d
-  imul rdx, r10
-  add eax, esi
-  imul rax, r10
-  shr rcx, 39
-  sal ecx, 8
-  shr rdx, 39
-  sal edx, 16
-  shr rax, 39
-  or edx, ecx
-  or edx, eax
-  mov DWORD PTR [r11], edx
+        mov     eax, r9d
+        mov     ecx, DWORD PTR [rsp-84]
+        mov     esi, 2155905153
+        lea     r14, [rdi+rax*4]
+        mov     eax, DWORD PTR [rsp-80]
+        mov     r13d, DWORD PTR [r14]
+        movzx   edx, r13b
+        not     r13d
+        movzx   r13d, r13b
+        imul    eax, edx
+        mov     r15d, edx
+        imul    ecx, r13d
+        imul    r15d, ebx
+        imul    edx, r8d
+        add     ecx, eax
+        mov     eax, r15d
+        imul    rcx, rsi
+        mov     r15d, r13d
+        imul    r15d, r11d
+        shr     rcx, 39
+        add     eax, r15d
+        mov     r15d, DWORD PTR [rsp-76]
+        sal     ecx, 16
+        imul    rax, rsi
+        and     ecx, 16711680
+        imul    r13d, r15d
+        shr     rax, 39
+        add     edx, r13d
+        sal     eax, 8
+        imul    rdx, rsi
+        movzx   eax, ax
+        or      eax, ecx
+        shr     rdx, 39
+        movzx   edx, dl
+        or      eax, edx
+        mov     DWORD PTR [r14], eax
+        lea     eax, [r9+1]
+        cmp     eax, r10d
+        jnb     .L6
+        lea     r14, [rdi+rax*4]
+        mov     ecx, DWORD PTR [rsp-84]
+        mov     eax, DWORD PTR [rsp-80]
+        add     r9d, 2
+        mov     r13d, DWORD PTR [r14]
+        movzx   edx, r13b
+        not     r13d
+        movzx   r13d, r13b
+        imul    eax, edx
+        imul    ecx, r13d
+        mov     r15d, r13d
+        imul    r15d, r11d
+        add     ecx, eax
+        mov     eax, edx
+        imul    eax, ebx
+        imul    edx, r8d
+        imul    rcx, rsi
+        add     eax, r15d
+        mov     r15d, DWORD PTR [rsp-76]
+        imul    rax, rsi
+        imul    r13d, r15d
+        shr     rcx, 39
+        sal     ecx, 16
+        shr     rax, 39
+        and     ecx, 16711680
+        add     edx, r13d
+        sal     eax, 8
+        imul    rdx, rsi
+        movzx   eax, ax
+        or      eax, ecx
+        shr     rdx, 39
+        movzx   edx, dl
+        or      eax, edx
+        mov     DWORD PTR [r14], eax
+        cmp     r9d, r10d
+        jnb     .L6
+        lea     r13, [rdi+r9*4]
+        mov     r14d, DWORD PTR [rsp-80]
+        mov     eax, DWORD PTR [r13+0]
+        movzx   r9d, al
+        not     eax
+        movzx   eax, al
+        imul    r14d, r9d
+        mov     ecx, r9d
+        mov     edx, eax
+        imul    ecx, ebx
+        imul    edx, r11d
+        imul    r9d, r8d
+        add     ecx, edx
+        mov     edx, DWORD PTR [rsp-84]
+        imul    rcx, rsi
+        imul    edx, eax
+        imul    eax, r15d
+        shr     rcx, 39
+        add     edx, r14d
+        sal     ecx, 8
+        imul    rdx, rsi
+        add     eax, r9d
+        movzx   ecx, cx
+        imul    rax, rsi
+        shr     rdx, 39
+        sal     edx, 16
+        shr     rax, 39
+        and     edx, 16711680
+        movzx   eax, al
+        or      edx, ecx
+        or      edx, eax
+        mov     DWORD PTR [r13+0], edx
 .L6:
-  mov rax, QWORD PTR [rsp+32]
-  add ebp, 1
-  add rdi, rax
-  cmp DWORD PTR [rsp+28], ebp
-  jne .L4
+        mov     rax, QWORD PTR [rsp-96]
+        add     r12d, 1
+        add     rdi, rax
+        cmp     DWORD PTR [rsp-88], r12d
+        jne     .L4
 .L1:
-  add rsp, 64
-  pop rbx
-  pop rbp
-  pop r12
-  pop r13
-  pop r14
-  pop r15
-  ret
+        lea     rsp, [rbp-40]
+        pop     rbx
+        pop     r12
+        pop     r13
+        pop     r14
+        pop     r15
+        pop     rbp
+        ret
 .L24:
-  xor r11d, r11d
-  jmp .L7
+        xor     r9d, r9d
+        jmp     .L7
+
+.balign 16
 .LC0:
-  .long 255
-  .long 255
-  .long 255
-  .long 255
+        .long   255
+        .long   255
+        .long   255
+        .long   255
 .LC1:
-  .long -2139062143
-  .long -2139062143
-  .long -2139062143
-  .long -2139062143
+        .long   -2139062143
+        .long   -2139062143
+        .long   -2139062143
+        .long   -2139062143
+.LC2:
+        .long   16711680
+        .long   16711680
+        .long   16711680
+        .long   16711680
+.LC3:
+        .long   65535
+        .long   65535
+        .long   65535
+        .long   65535
+

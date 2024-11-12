@@ -1,4 +1,7 @@
 # Kernel
+Small kernel built with [Vivid](https://github.com/lehtojo/vivid-2) programming language that aims to be compatible with Linux programs.
+
+https://github.com/user-attachments/assets/63efe5c8-cffd-4d64-897f-17d26b57c33c
 
 ## Getting started
 1. Install the following dependencies:

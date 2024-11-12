@@ -1,15 +1,37 @@
 namespace debug
 
-export write_bytes(memory: link, size: u64) {
-	serial.write(memory, size)
+booted: bool
+
+export write_bytes(data: link, size: u64) {
+	# Redirect to boot console device when it is initialized
+	if not booted and BootConsoleDevice.instance !== none {
+		BootConsoleDevice.instance.write_raw(data, size)
+		#return
+	}
+
+	serial.write(data, size)
 }
 
 export next_line() {
+	# Redirect to boot console device when it is initialized
+	if not booted and BootConsoleDevice.instance !== none {
+		BootConsoleDevice.instance.write_raw('\n', 1)
+		#return
+	}
+
 	serial.put(`\n`)
 }
 
 # Summary: Writes the specified character to the console
 export put(value: char) {
+	# Redirect to boot console device when it is initialized
+	if not booted and BootConsoleDevice.instance !== none {
+		data: char[1]
+		data[] = value
+		BootConsoleDevice.instance.write_raw(data, 1)
+		#return
+	}
+	
 	serial.put(value)
 }
 

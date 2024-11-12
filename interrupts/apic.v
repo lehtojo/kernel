@@ -55,9 +55,114 @@ pack MADT {
 	flags: u32
 }
 
-pack MADTEntryHeader {
+plain MADTEntryHeader {
 	type: u8
 	length: u8
+}
+
+plain LocalApicEntry {
+	inline header: MADTEntryHeader
+	processor_id: u8
+	id: u8
+	flags: u32
+
+	print(): _ {
+		debug.write('Local APIC entry: ')
+		debug.write('processor_id = ') debug.write(processor_id as i64)
+		debug.write(', id = ') debug.write(id as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicEntry {
+	inline header: MADTEntryHeader
+	id: u8
+	reserved: u8
+	address: u32
+	gsi_base: u32
+
+	print(): _ {
+		debug.write('IOAPIC entry: ')
+		debug.write('id = ') debug.write(id as i64)
+		debug.write(', address = ') debug.write_address(address as i64)
+		debug.write(', gsi_base = ') debug.write(gsi_base as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicInterruptSourceOverrideEntry {
+	inline header: MADTEntryHeader
+	bus_source: u8
+	irq_source: u8
+	gsi: u32
+	flags: u16
+
+	print(): _ {
+		debug.write('IOAPIC interrupt source override entry: ')
+		debug.write('bus_source = ') debug.write(bus_source as i64)
+		debug.write(', irq_source = ') debug.write(irq_source as i64)
+		debug.write(', gsi = ') debug.write(gsi as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write_line()
+	}
+}
+
+plain IoApicNonMaskableInterruptSourceEntry {
+	inline header: MADTEntryHeader
+	nmi_source: u8
+	reserved: u8
+	flags: u16
+	global_system_interrupt: u32
+
+	print(): _ {
+		debug.write('IOAPIC NMI source entry: ')
+		debug.write('nmi_source = ') debug.write(nmi_source as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write(', global_system_interrupt = ') debug.write(global_system_interrupt as i64)
+		debug.write_line()
+	}
+}
+
+plain LocalApicNonMaskableInterruptsEntry {
+	inline header: MADTEntryHeader
+	flags: u16
+	lint: u8
+
+	print(): _ {
+		debug.write('Local APIC NMI entry: ')
+		debug.write('flags = ') debug.write_address(flags as i64)
+		debug.write(', lint = ') debug.write(lint as i64)
+		debug.write_line()
+	}
+}
+
+plain LocalApicAddressOverrideEntry {
+	inline header: MADTEntryHeader
+	reserved: u16
+	address: u64
+
+	print(): _ {
+		debug.write('Local APIC address override: ')
+		debug.write('address = ') debug.write_address(address as i64)
+		debug.write_line()
+	}
+}
+
+plain ProcessorLocalX2ApicEntry {
+	inline header: MADTEntryHeader
+	reserved: u16
+	processor_id: u32
+	flags: u32
+	id: u32
+
+	print(): _ {
+		debug.write('Processor local x2 APIC: ')
+		debug.write('processor_id = ') debug.write(processor_id as i64)
+		debug.write(', flags = ') debug.write_address(flags as i64)
+		debug.write(', id = ') debug.write(id as i64)
+		debug.write_line()
+	}
 }
 
 ApicInformation {
@@ -96,21 +201,18 @@ export map_table(physical_address: link): link {
 # Summary:
 # Goes through all the RSDT tables and attempts to return the table with the specified signature.
 # The returned address is a virtual address.
-export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): link {
-	debug.write('APIC: Finding table under RSDT ')
-	debug.write_address(header)
+export find_table_with_signature(tables, table_count: u64, signature: link): link {
+	debug.write('APIC: Finding table with signature starting from ')
+	debug.write_address(tables)
 	debug.write_line()
-
-	# Compute the number of tables in the SDT
-	table_count = (header[].length - sizeof(SDTHeader)) / strideof(u32)
 
 	# Compute the length of the signature to look for
 	signature_length = length_of(signature)
 
-	debug.write('APIC: RSDT table count: ')
+	debug.write('APIC: Number of tables = ')
 	debug.write_line(table_count)
 
-	debug.write('APIC: RSDT tables: ')
+	debug.write_line('APIC: Tables: ')
 
 	# Store the table that has the specified signature
 	result = none as SDTHeader*
@@ -137,23 +239,62 @@ export find_table_from_rsdt(header: SDTHeader*, tables: u32*, signature: link): 
 export find_table(rsdp: RSDPDescriptor20*, signature: link): link {
 	revision = rsdp[].base.revision
 
-	debug.write('APIC: RSDP revision=')
+	debug.write('APIC: RSDP revision = ')
 	debug.write_line(revision as i64)
 
 	if revision === 0 {
-		rsdt: SDTHeader* = map_table(rsdp[].base.rsdt_address as link)
-		tables: u32* = rsdt + sizeof(SDTHeader)
+		rsdt = map_table(rsdp[].base.rsdt_address as link) as SDTHeader*
+		tables: u32* = (rsdt as link) + sizeof(SDTHeader)
+		table_count = (rsdt[].length - sizeof(SDTHeader)) / sizeof(u32)
 
-		return find_table_from_rsdt(rsdt, tables, signature)
+		return find_table_with_signature(tables, table_count, signature)
+	}
+
+	if revision === 2 {
+		xsdt = map_table(rsdp[].xsdt_address as link) as SDTHeader*
+		tables: u64* = (xsdt as link) + sizeof(SDTHeader)
+		table_count = (xsdt[].length - sizeof(SDTHeader)) / sizeof(u64)
+		return find_table_with_signature(tables, table_count, signature)
 	}
 
 	return none as link
 }
 
 # Summary:
+# Attempts to find the RSDP from the specified UEFI information.
+# Panics upon failure.
+export find_root_system_descriptor_table_from_uefi(uefi: UefiInformation) {
+	debug.write_line('APIC: Finding RSDP 2.0 using UEFI information...')
+
+	configuration_table = uefi.system_table.configuration_table
+	number_of_table_entries = uefi.system_table.number_of_table_entries
+
+	debug.write('APIC: Number of configuration table entries = ') debug.write_line(number_of_table_entries)
+
+	rsdp_guid = UefiGuid.new(0x8868e871, 0xe4f1, 0x11d3, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81)
+
+	loop (i = 0, i < number_of_table_entries, i++) {
+		if configuration_table[i].vendor_guid != rsdp_guid continue
+
+		rsdp = configuration_table[i].vendor_table
+		debug.write('APIC: Found RSDP 2.0 at physical address ')
+		debug.write_address(rsdp)
+		debug.write_line()
+
+		return mapper.to_kernel_virtual_address(rsdp)
+	}
+
+	panic('APIC: Failed to find RSDP 2.0')
+}
+
+# Summary:
 # Attempts to find the root system descriptor table from EBDA.
 # Returns none pointer upon failure.
-export find_root_system_descriptor_table() {
+export find_root_system_descriptor_table(uefi: UefiInformation) {
+	if uefi !== none {
+		return find_root_system_descriptor_table_from_uefi(uefi)
+	}
+
 	# EBDA = Extended BIOS Data Area
 	# RSDP = Root system descriptor pointer
 	ebda_segment_pointer = mapper.to_kernel_virtual_address(0x40E) as u16*
@@ -180,31 +321,49 @@ export find_root_system_descriptor_table() {
 export process_madt_entries(madt: MADT*, information: ApicInformation) {
 	# Compute the end address of the specified table, so we know when to stop
 	end = madt + madt[].header.length
-	entry = (madt + sizeof(MADT)) as MADTEntryHeader*
+	entry = (madt + sizeof(MADT)) as MADTEntryHeader
 
 	loop (entry < end) {
 		# Load the type of the current entry
-		type = entry[].type
+		type = entry.type
 
 		if type == 0 {
+			local_apic_entry = entry as LocalApicEntry
+			# local_apic_entry.print() # Todo: Enable
+
 			# Single logical processor with a local apic
-			information.local_apic_ids[information.local_apic_count] = entry.(u8*)[3]
+			information.local_apic_ids[information.local_apic_count] = local_apic_entry.id
 			information.local_apic_count++
 		} else type == 1 {
-			# Address of ioapic
-			ioapic_registers_physical_address = (entry + 4).(u32*)[] as link
-			ioapic_gsi_base = (entry + 8).(u32*)[]
-			debug.write('IOAPIC: GSI base: ') debug.write_line(ioapic_gsi_base)
-			information.ioapic_registers = mapper.map_kernel_page(ioapic_registers_physical_address, MAP_NO_CACHE)
+			ioapic_entry = entry as IoApicEntry
+			ioapic_entry.print()
+
+			# Todo: Support multiple IOAPICs as you can not do everything with one
+			if information.ioapic_registers === none {
+				information.ioapic_registers = mapper.map_kernel_page(ioapic_entry.address as link, MAP_NO_CACHE)
+			}
+		} else type == 2 {
+			ioapic_interrupt_source_override_entry = entry as IoApicInterruptSourceOverrideEntry
+			ioapic_interrupt_source_override_entry.print()
+		} else type == 3 {
+			ioapic_nmi_source_entry = entry as IoApicNonMaskableInterruptSourceEntry
+			# ioapic_nmi_source_entry.print() # Todo: Enable
+		} else type == 4 {
+			local_apic_nmi_entry = entry as LocalApicNonMaskableInterruptsEntry
+			# local_apic_nmi_entry.print() # Todo: Enable
 		} else type == 5 {
-			# Address of the local apic (64-bit system version)
-			information.local_apic_registers_physical_address = (entry + 4).(u64*)[] as link
-			debug.write('IOAPIC: Local apic registers: ') debug.write_address(local_apic_registers_physical_address) debug.write_line()
-			information.local_apic_registers = mapper.map_kernel_page(local_apic_registers_physical_address, MAP_NO_CACHE)
+			local_apic_address_override_entry = entry as LocalApicAddressOverrideEntry
+			local_apic_address_override_entry.print()
+	
+			information.local_apic_registers_physical_address = local_apic_address_override_entry.address as link
+			information.local_apic_registers = mapper.map_kernel_page(information.local_apic_registers_physical_address, MAP_NO_CACHE)
+		} else type == 9 {
+			processor_local_x2apic_entry = entry as ProcessorLocalX2ApicEntry
+			processor_local_x2apic_entry.print()
 		}
 
 		# Move to the next entry
-		entry += entry[].length
+		entry += entry.length
 	}
 }
 
@@ -225,9 +384,11 @@ export enable() {
 	# mov al, 0xff
 	# out 0xa1, al
 	# out 0x21, al
+	debug.write_line('APIC: Disabling 8259 PIC...')
 	ports.write_u8(0xa1, 0xff)
 	ports.write_u8(0x21, 0xff)
 
+	debug.write_line('APIC: Enabling IOAPIC...')
 	base = get_apic_base()
 	mapper.map_kernel_page(base as link, MAP_NO_CACHE)
 	set_apic_base(base)
@@ -235,8 +396,12 @@ export enable() {
 
 export enable_interrupts(registers: u32*) {
 	# Spurious Interrupt Vector Register: "Spurious interrupt usually means an interrupt whose origin is unknown"
-	value = (registers + 0xF0)[]
-	(registers + 0xF0)[] = value | 0x100
+	spurious_interrupt = 0xff
+
+	value = (registers + 0xf0)[]
+	value |= spurious_interrupt # Map spurious interrupts
+	value |= 0x100 # Enable APIC
+	(registers + 0xf0)[] = value
 }
 
 # Summary:
@@ -255,11 +420,11 @@ export max_redirection(registers: u32*) {
 	return result |> 16
 }
 
-export initialize(allocator: Allocator) {
+export initialize(allocator: Allocator, uefi: UefiInformation) {
 	debug.write_line('APIC: Finding root system descriptor table')
 
 	# Find the root system descriptor table, so that we can use the hardware
-	rsdp = apic.find_root_system_descriptor_table()
+	rsdp = find_root_system_descriptor_table(uefi)
 	debug.write('APIC: RSDP=')
 	debug.write_address(rsdp as u64)
 	debug.write_line()
@@ -268,19 +433,27 @@ export initialize(allocator: Allocator) {
 
 	# Find the MADT table under RSDP
 	apic_table = find_table(rsdp, 'APIC') as MADT*
-	debug.write('APIC: MADT=')
+	require(apic_table !== none, 'Failed to find MADT')
+
+	debug.write('APIC: MADT = ')
 	debug.write_address(apic_table as u64)
 	debug.write_line()
 
-	debug.write('APIC: Has legacy APIC: ')
+	debug.write('APIC: 8259 PIC = ')
 	debug.write_line((apic_table[].flags & 1) != 0)
 
 	information = ApicInformation()
-	information.local_apic_registers = mapper.map_kernel_page(apic_table[].local_apic_address as link, MAP_NO_CACHE)
+	information.ioapic_registers = none as link
+	information.local_apic_registers_physical_address = apic_table[].local_apic_address as link
+	information.local_apic_registers = mapper.map_kernel_page(information.local_apic_registers_physical_address, MAP_NO_CACHE)
 	process_madt_entries(apic_table, information)
 
 	local_apic_registers_physical_address = information.local_apic_registers_physical_address
 	local_apic_registers = information.local_apic_registers
+
+	debug.write('APIC: Local APIC registers physical address = ')
+	debug.write_address(information.local_apic_registers_physical_address)
+	debug.write_line()
 
 	debug.write('APIC: Local APIC Registers = ')
 	debug.write_address(information.local_apic_registers)
@@ -306,12 +479,16 @@ export initialize(allocator: Allocator) {
 	enable_interrupts(information.local_apic_registers)
 
 	ioapic.initialize(information.ioapic_registers)
-	ioapic.redirect(1, 83)
-	ioapic.redirect(3, 83)
-	ioapic.redirect(4, 83)
+
+	# Enable PS/2 keyboard
+	ioapic.redirect(1, 0) # Todo: CPU id?
+
+	# Todo: Remove
+	# ioapic.redirect(3, 0)
+	# ioapic.redirect(4, 0)
 
 	hpet_table = find_table(rsdp, 'HPET') as hpet.HPETHeader*
-	debug.write('APIC: HPET=')
+	debug.write('APIC: HPET = ')
 	debug.write_address(hpet_table as u64)
 	debug.write_line()
 
@@ -320,15 +497,15 @@ export initialize(allocator: Allocator) {
 	}
 
 	fadt_table = find_table(rsdp, 'FACP') as acpi.FADT
-	debug.write('APIC: FADT=') debug.write_address(fadt_table as u64) debug.write_line()
+	debug.write('APIC: FADT = ') debug.write_address(fadt_table as u64) debug.write_line()
 	require(fadt_table !== none, 'Failed to initialize ACPI')
 
 	mcfg_table = find_table(rsdp, 'MCFG') as acpi.MCFG
-	debug.write('APIC: MCFG=') debug.write_address(mcfg_table as u64) debug.write_line()
+	debug.write('APIC: MCFG = ') debug.write_address(mcfg_table as u64) debug.write_line()
 	require(mcfg_table !== none, 'Failed to initialize MCFG')
 
 	pci.initialize()
 	acpi.Parser.initialize(allocator, fadt_table, mcfg_table)
 
-	ahci.initialize(acpi.Parser.instance)
+	# ahci.initialize(acpi.Parser.instance)
 }

@@ -15,6 +15,7 @@ constant ENXIO = -6
 constant ENOEXEC = -8
 constant EBADF = -9
 constant ECHILD = -10
+constant EAGAIN = -11
 constant ENOMEM = -12
 constant EFAULT = -14
 constant EBUSY = -16
@@ -23,6 +24,8 @@ constant ENOTTY = -25
 constant ESPIPE = -29
 constant ENOTDIR = -20
 constant ERANGE = -34
+constant ENAMETOOLONG = -36
+constant ENOSYS = -38
 constant EOVERFLOW = -75
 
 # These error codes are not in the standard:
@@ -52,6 +55,9 @@ constant MSR_SFMASK = 0xc0000084
 constant PATH_MAX = 256
 constant MAX_ARGUMENTS = 256
 constant MAX_ENVIRONMENT_VARIABLES = 256
+
+constant MSR_EFER_SYSTEM_CALL_EXTENSIONS = 1
+constant MSR_EFER_NO_EXECUTE_ENABLE = 1 <| 11
 
 # Summary: Returns the process that invoked the current system call
 export get_process(): Process {
@@ -165,8 +171,9 @@ export disable_general_purpose_segment_instructions(): _ {
 export initialize() {
 	debug.write_line('System calls: Initializing system calls')
 
-	# Enable the system call extension
-	write_msr(MSR_EFER, read_msr(MSR_EFER) | 1)
+	# - Enable the system call extensions
+	# - Enable extension for disabling execution in pages
+	write_msr(MSR_EFER, read_msr(MSR_EFER) | MSR_EFER_SYSTEM_CALL_EXTENSIONS | MSR_EFER_NO_EXECUTE_ENABLE)
 
 	# Write code and stack selectors to the STAR MSR.
 	# Bits 32..48: After syscall instruction CS=$value and SS=$value+0x8
@@ -259,7 +266,15 @@ export process(frame: RegisterState*): u64 {
 		result = system_fcntl(frame[].rdi as u32, frame[].rsi as u32, frame[].rdx as u64)
 	} else system_call_number == 0x4f {
 		result = system_getcwd(frame[].rdi as link, frame[].rsi as u64)
-	} else system_call_number == 0x66 {
+	} else system_call_number == 0x50 {
+      result = system_chdir(frame[].rdi as link)
+   } else system_call_number == 0x51 {
+      result = system_fchdir(frame[].rdi as u64)
+   } else system_call_number == 0x59 {
+      result = system_readlink(frame[].rdi as link, frame[].rsi as link, frame[].rdx as u64)
+   } else system_call_number == 0x63 {
+      result = system_sysinfo(frame[].rdi as SystemStatistics)
+   } else system_call_number == 0x66 {
 		result = system_getuid()
 	} else system_call_number == 0x68 {
 		result = system_getgid()
@@ -273,16 +288,30 @@ export process(frame: RegisterState*): u64 {
 		result = system_getppid()
 	} else system_call_number == 0x6f {
 		result = system_getpgrp()
+	} else system_call_number == 0x83 {
+		result = system_sigaltstack(frame[].rdi as StackInformation, frame[].rsi as StackInformation)
 	} else system_call_number == 0x89 {
-		result = system_statfs(frame[].rdi as link, frame[].rsi as link)
+		result = system_statfs(frame[].rdi as link, frame[].rsi as FileSystemInformation)
+	} else system_call_number == 0x70 {
+		result = system_fstatfs(frame[].rdi as i64, frame[].rsi as FileSystemInformation)
 	} else system_call_number == 0x9e {
 		result = system_arch_prctl(frame[].rdi as u32, frame[].rsi as u64)
+	} else system_call_number == 0xca {
+		result = system_futex(frame[].rdi as u32*, frame[].rsi as i32, frame[].rdx as u32, frame[].r10 as u64, frame[].r8 as u32*, frame[].r9 as u32)
+	} else system_call_number == 0xba {
+		result = system_gettid()
+	} else system_call_number == 0xc9 {
+		result = system_time()
+	} else system_call_number == 0xcc {
+		result = system_sched_getaffinity(frame[].rdi as u32, frame[].rsi as u64, frame[].rdx as u64*)
 	} else system_call_number == 0xd9 {
 		result = system_getdents64(frame[].rdi as u32, frame[].rsi as link, frame[].rdx as u64)
 	} else system_call_number == 0xda {
 		result = system_set_tid_address(frame[].rdi as u64)
 	} else system_call_number == 0xdd {
 		result = system_fadvice(frame[].rdi as u32, frame[].rsi as u64, frame[].rdx as u64, frame[].r10 as u32)
+	} else system_call_number == 0xe4 {
+		result = system_clock_getttime(frame[].rdi as u64, frame[].rsi as u64)
 	} else system_call_number == 0xe7 {
 		# System call: exit_group
 	} else system_call_number == 0x101 {
@@ -299,6 +328,8 @@ export process(frame: RegisterState*): u64 {
 		result = system_faccessat(frame[].rdi as u64, frame[].rdi as link, frame[].rdx as u64)
 	} else system_call_number == 0x14c {
 		result = system_statx(frame[].rdi as u32, frame[].rsi as link, frame[].rdx as u32, frame[].r10 as u32, frame[].r8 as link)
+	} else system_call_number == 0x1b3 {
+		result = system_clone3(frame[].rdi as u64, frame[].rsi as u64)
 	} else {
 		# Todo: Handle this error
 		debug.write('System calls: Unsupported system call ')

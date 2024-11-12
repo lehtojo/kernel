@@ -12,6 +12,16 @@ internal_is(a: link, b: link) {
 	return false
 }
 
+internal_init(stack: link) {
+	start(
+		stack.(link*)[],
+		stack.(link*)[1],
+		stack.(link*)[2],
+		stack.(link*)[3],
+		stack.(link*)[4] as kernel.low.UefiInformation,
+	)
+}
+
 init() {}
 
 require(condition: bool, error: link) {
@@ -86,6 +96,12 @@ namespace sorted {
 	}
 }
 
+import 'C' forward_copy(destination: link, source: link, size: u64): _
+import 'C' reverse_copy(destination: link, source: link, size: u64): _
+import 'C' zero(destination: link, size: u64): _
+
+# Todo: Accelerate other memory operations below
+
 # Summary: Returns whether the contents of the specified memory addresses are equal
 compare(a: link, b: link, size: u64): bool {
 	if size === 0 return true
@@ -121,30 +137,24 @@ export reverse(memory: link, size: large) {
 
 copy(destination: link, source: link, size: u64) {
 	if destination <= source {
-		loop (i = 0, i < size, i++) {
-			destination[] = source[]
-			destination++
-			source++
-		}
+		forward_copy(destination, source, size)
 	} else {
 		destination += size - 1
 		source += size - 1
-
-		loop (i = 0, i < size, i++) {
-			destination[] = source[]
-			destination--
-			source--
-		}
+		reverse_copy(destination, source, size)
 	}
 }
 
 copy_into(destination, destination_offset, source, source_offset, size) {
+	# Todo: Add safety checks
 	copy(destination.data + destination_offset, source.data + source_offset, size)
 }
 
-zero(address: link, size: u64) {
+swap(a: link, b: link, size: u64): _ {
 	loop (i = 0, i < size, i++) {
-		address[i] = 0
+		temporary = a[i]
+		a[i] = b[i]
+		b[i] = temporary
 	}
 }
 

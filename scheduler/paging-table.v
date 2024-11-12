@@ -77,14 +77,14 @@ plain PagingTable {
 	# If the entries required to map the address do not exist,
 	# this function allocates them using the specified allocator.
 	map_page(allocator: Allocator, virtual_address: link, physical_address: link, flags: u32) {
+		#debug.write('Mapping virtual page ')
+		#debug.write_address(virtual_address)
+		#debug.write(' to physical page ')
+		#debug.write_address(physical_address)
+		#debug.write_line()
+
 		require((virtual_address % PAGE_SIZE) == 0, 'Virtual address was not aligned correctly')
 		require((physical_address % PAGE_SIZE) == 0, 'Physical address was not aligned correctly')
-
-		debug.write('Mapping virtual page ')
-		debug.write_address(virtual_address)
-		debug.write(' to physical page ')
-		debug.write_address(physical_address)
-		debug.write_line()
 
 		# Virtual address: [L4 9 bits] [L3 9 bits] [L2 9 bits] [L1 9 bits] [Offset 12 bits]
 		l1_index = ((virtual_address |> 12) & 0b111111111) as u32
@@ -177,6 +177,7 @@ plain PagingTable {
 		mapper.set_writable(entry_address)
 		mapper.set_cached(entry_address, not has_flag(flags, MAP_NO_CACHE))
 		mapper.set_accessibility(entry_address, has_flag(flags, MAP_USER))
+		mapper.set_executable(entry_address, has_flag(flags, MAP_EXECUTABLE))
 		mapper.set_present(entry_address)
 
 		if not has_flag(flags, MAP_NO_FLUSH) mapper.flush_tlb()
@@ -365,7 +366,7 @@ plain PagingTable {
 
 			# If we are at the top layer, do not destruct shared kernel paging tables etc.
 			# Todo: Implement this better, use page entry flags such as the required privilege level
-			if layer == 4 and (i == KERNEL_MAP_BASE_L4 or i == mapper.ENTRIES - 1) continue
+			if layer == 4 and i >= KERNEL_MAP_BASE_L4 continue
 
 			# Dispose the table, its tables and so on until the bottom layer is reached 
 			table = mapper.virtual_address_from_page_entry(entry) as PagingTable

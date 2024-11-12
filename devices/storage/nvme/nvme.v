@@ -25,7 +25,8 @@ Device Nvme {
 		pci.enable_bus_mastering(identifier)
 
 		# Map the device registers so we can configure it
-		registers_physical_address: u64 = pci.read_bar(identifier, 0) & pci.BAR_ADDRESS_MASK
+		registers_physical_address: u64 = pci.read_bar_address(identifier, 0)
+		require(registers_physical_address !== none, 'Nvme: Failed to read BAR0')
 		debug.write('Nvme: registers_physical_address=') debug.write_address(registers_physical_address) debug.write_line()
 
 		registers: NvmeRegisters = mapper.map_kernel_region(registers_physical_address as link, sizeof(NvmeRegisters), MAP_NO_CACHE) as NvmeRegisters
@@ -87,7 +88,7 @@ Device Nvme {
 		capabilities.min_host_page = 1 <| (12 + ((capabilities_value |> 48) & 0b1111)) # 2 ^ (12 + MPSMIN)
 		capabilities.supported_command_sets = (capabilities_value |> 37) & 0xff
 		capabilities.doorbell_stride = 1 <| (2 + ((capabilities_value |> 32) & 0b1111)) # 2 ^ (2 + DSTRD)
-		capabilities.ready_timeout = ((capabilities_value |> 24) & 0xff) * 500 # Note: Stored timeout is in 500 ms units
+		capabilities.ready_timeout = math.max(((capabilities_value |> 24) & 0xff) * 500, 500) # Note: Stored timeout is in 500 ms units
 		capabilities.queue_size = (capabilities_value & 0xffff) + 1 # Note: Queue size is zero based (value of 0 means 1 queue entry)
 
 		admin_submission_queue_size = registers.admin_queue_attributes & 0xfff
@@ -124,9 +125,12 @@ Device Nvme {
 		debug.write_line('Nvme: Resetting controller...')
 
 		if (registers.configuration & CONFIGURATION_ENABLED_BIT) != 0 {
+			debug.write_line('Nvme: Controller is already enabled, waiting it to become ready...')
 			# Contoller is already enabled, wait until it becomes ready
 			if not wait_for_ready(true) return ETIMEOUT 
 		}
+
+		debug.write_line('Nvme: Disabling the controller and waiting for it become unready...')
 
 		# Disable the enabled bit
 		registers.configuration &= (!CONFIGURATION_ENABLED_BIT)
@@ -135,6 +139,7 @@ Device Nvme {
 		# Wait until the contoller becomes unready
 		if not wait_for_ready(false) return ETIMEOUT
 
+		debug.write_line('Nvme: Controller became unready')
 		return 0
 	}
 

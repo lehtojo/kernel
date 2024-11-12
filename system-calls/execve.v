@@ -55,7 +55,7 @@ export system_execve(path: String, arguments: List<String>, environment_variable
 	process = get_process()
 
 	# Remove all program allocations such as text and data sections
-	if process.is_sharing_parent_resources {
+	if process.is_borrowing_parent_resources {
 		process.detach_parent_resources(HeapAllocator.instance)
 	} else {
 		process.memory.deallocate_program_allocations()

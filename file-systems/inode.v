@@ -29,6 +29,6 @@ Inode {
 	create_file(name: String): Inode { return create_child(name, S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO, 0) }
 
 	open lookup(name: String): Inode { return none as Inode }
-
 	open load_status(metadata: FileMetadata): u32 { return -1 }
+   open read_link(allocator: Allocator): Result<String, u64>
 }

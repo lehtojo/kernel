@@ -587,6 +587,24 @@ FileSystem Ext2 {
 		return 0
 	}
 
+   override read_link(allocator: Allocator, base: Custody, path: String) {
+      custody_or_error = open_path(allocator, base, path, CREATE_OPTION_NONE)
+
+      if custody_or_error.has_error {
+         debug.write_line('Ext2: Failed to open the specified path')
+         return custody_or_error.error
+      }
+
+      # Verify we have an inode
+      inode = custody_or_error.value.inode
+      if inode === none return EINVAL
+
+      # Verify we have a symbolic link
+      if not inode.metadata.is_symbolic_link return EINVAL
+
+      return inode.read_link(allocator)
+   }
+
 	override open_file(base: Custody, path: String, flags: i32, mode: u32) {
 		debug.write('Ext2: Opening file from path ') debug.write_line(path)
 
@@ -701,4 +719,24 @@ FileSystem Ext2 {
 
 		return Results.new<Custody, u32>(container)
 	}
+
+   override load_information(information: FileSystemInformation) {
+      debug.write_line('Ext2: Loading file system information')
+
+      information.type = SIGNATURE
+      information.block_size = get_block_size()
+      information.blocks = superblock.block_count
+      information.free_blocks = superblock.unallocated_block_count
+      information.free_blocks_unprivileged_user = superblock.unallocated_block_count
+      # Todo: Figure out what to with the superuser reserved blocks
+      information.inodes = superblock.inode_count
+      information.free_inodes = superblock.unallocated_inode_count
+      information.file_system_id = id
+      information.name_length = 50
+      # Todo: Figure out the max name length
+      information.fragment_size = fragment_size
+      information.flags = 0
+
+      return 0
+   }
 }

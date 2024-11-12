@@ -5,15 +5,17 @@ constant MSR_GS_BASE = 0xc0000101
 plain Processor {
 	shared count: u32
 
-	padding: link
+	temporary: link
 	kernel_stack_pointer: link
-	user_stack_pointer: link
+	padding: link
 	general_kernel_stack_pointer: link
 	gdtr_physical_address: link
 	index: u32
 
 	shared initialize(kernel_stack_pointer: link, gdtr_physical_address: link, index: u32) {
 		processor = Processor() using KernelHeap
+		debug.write('Processor: Address = ') debug.write_address(processor as link) debug.write_line()
+
 		processor.kernel_stack_pointer = kernel_stack_pointer
 		processor.general_kernel_stack_pointer = kernel_stack_pointer
 		processor.gdtr_physical_address = gdtr_physical_address

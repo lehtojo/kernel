@@ -6,6 +6,43 @@ import kernel.devices.console
 
 constant RFLAGS_INTERRUPT_FLAG = 1 <| 9
 
+constant CLONE_VM = 1 <| 8
+constant CLONE_FILES = 1 <| 10
+constant CLONE_VFORK = 1 <| 14
+constant CLONE_PARENT = 1 <| 15
+constant CLONE_THREAD = 1 <| 16
+constant CLONE_SETTLS = 1 <| 19
+constant CLONE_PARENT_SETTID = 1 <| 20
+constant CLONE_CHILD_CLEARTID = 1 <| 21
+constant CLONE_CHILD_SETTID = 1 <| 24
+constant CLONE_NEWPID = 1 <| 29
+
+plain CloneArguments {
+	flags: u64
+	pid_file_descriptor: u64
+	child_tid: u64
+	parent_tid: u64
+	exit_signal: u64
+	stack: u64
+	stack_size: u64
+	tls: u64
+	set_tid: u64
+	set_tid_size: u64
+	control_group: u64
+}
+
+pack ThreadEvents {
+	set_child_tid: u32*
+	clear_child_tid: u32*
+
+	shared new(): ThreadEvents {
+		return pack {
+			set_child_tid: none as u32*,
+			clear_child_tid: none as u32*
+		} as ThreadEvents
+	}
+}
+
 Process {
 	constant NORMAL_PRIORITY = 50
 
@@ -33,12 +70,18 @@ Process {
 		loop (i = 0, i < allocations.size, i++) {
 			allocation = allocations[i]
 
+			options = ProcessMemoryRegionOptions.new()
+
+			if allocation.type == PROCESS_ALLOCATION_PROGRAM_TEXT {
+				options.flags |= REGION_EXECUTABLE
+			}
+
 			# Reserve the allocation from the process memory
 			# When the process is destroyed, the allocation list is used to deallocate the memory.
-			memory.add_allocation(allocation.type, ProcessMemoryRegion.new(allocation))
+			memory.add_allocation(allocation.type, ProcessMemoryRegion.new(allocation, options))
 
 			# Set the program break after all loaded segments
-			memory.break = math.max(memory.break, allocation.end as u64)
+			memory.state.break = math.max(memory.state.break, allocation.end as u64)
 		}
 	}
 
@@ -145,6 +188,9 @@ Process {
 		user_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
 		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
 		kernel_fpu_state: RegisterState* = allocator.allocate(PAGE_SIZE)
+		global.memory.zero(user_fpu_state, PAGE_SIZE)
+		global.memory.zero(kernel_fpu_state, PAGE_SIZE)
+
 		configure_process_before_startup(allocator, user_frame, memory, load_information, arguments, environment_variables)
 
 		# Attach the standard files for the new process
@@ -157,7 +203,8 @@ Process {
 		return process
 	}
 
-	id: u64
+	pid: u64
+	tid: u64
 	priority: u16 = NORMAL_PRIORITY
 
 	# Summary: Stores the register state of userspace
@@ -171,17 +218,20 @@ Process {
 	# Summary: Tells how many register states has been saved
 	private frame_count: u8 = 1
 
+	# Stores which CPUs are allowed to execute this process
+	affinity: u64
 	fs: u64 = 0 # Todo: Group with registers?
 	memory: ProcessMemory
 	file_descriptors: ProcessFileDescriptors
 	working_directory: String
 	credentials: Credentials
 	blocker: Blocker
+	events: ThreadEvents
 	readable state: u32
 	parent: Process = none as Process
 	childs: List<Process>
 	is_kernel_process: bool = false
-	is_sharing_parent_resources: bool = false
+	is_borrowing_parent_resources: bool = false
 	subscribers: Subscribers
 
 	is_running => state == THREAD_STATE_RUNNING
@@ -192,11 +242,14 @@ Process {
 	registers => user_frame
 
 	init(user_frame: RegisterState*, user_fpu_state: link, kernel_frame: RegisterState*, kernel_fpu_state: link, memory: ProcessMemory, file_descriptors: ProcessFileDescriptors) {
-		this.id = 0
+		this.pid = 0
+		this.tid = 0
 		this.user_frame = user_frame
 		this.user_fpu_state = user_fpu_state
 		this.kernel_frame = kernel_frame
 		this.kernel_fpu_state = kernel_fpu_state
+		# Todo: We're don't support SMP yet
+		this.affinity = 1
 		this.memory = memory
 		this.file_descriptors = file_descriptors
 		this.working_directory = String.empty
@@ -219,15 +272,17 @@ Process {
 			require(is_kernel_space, 'Attempted to save userspace frame twice')
 
 			# Save the kernel frame
-			debug.write('Process: Saving kernel frame of process ') debug.write_line(id)
 			kernel_frame[] = frame[]
 			save_fpu_state(kernel_fpu_state)
+
+			debug.write('Process: Saved kernel frame of process ') debug.write_line(tid)
 			return kernel_frame
 		}
 
-		debug.write('Process: Saving user frame of process ') debug.write_line(id)
 		user_frame[] = frame[]
 		save_fpu_state(user_fpu_state)
+
+		debug.write('Process: Saved user frame of process ') debug.write_line(tid)
 		return user_frame
 	}
 
@@ -237,7 +292,8 @@ Process {
 
 		if frame_count-- == 2 {
 			# Load the kernel frame into the specified frame
-			debug.write('Process: Loading kernel frame of process ') debug.write_line(id)
+			debug.write('Process: Loading kernel frame of process ') debug.write(tid)
+			debug.write(' (rip=') debug.write_address(kernel_frame[].rip) debug.write_line(')')
 
 			frame[] = kernel_frame[]
 			load_fpu_state(kernel_fpu_state)
@@ -245,7 +301,9 @@ Process {
 		}
 
 		# Load the user frame into the specified frame
-		debug.write('Process: Loading user frame of process ') debug.write_line(id)
+		debug.write('Process: Loading user frame of process ') debug.write(tid)
+		debug.write(' (rip=') debug.write_address(user_frame[].rip) debug.write_line(')')
+
 		frame[] = user_frame[]
 		load_fpu_state(user_fpu_state)
 	}
@@ -316,6 +374,109 @@ Process {
 		subscribers.update()
 	}
 
+	clone(allocator: Allocator, arguments: CloneArguments): Result<Process, i64> {
+		# Clone the registers from this process
+		user_frame: RegisterState* = allocator.allocate<RegisterState>()
+		user_fpu_state: link = allocator.allocate(PAGE_SIZE)
+		kernel_frame: RegisterState* = allocator.allocate<RegisterState>()
+		kernel_fpu_state: link = allocator.allocate(PAGE_SIZE)
+		user_frame[] = this.user_frame[]
+		global.memory.copy(user_fpu_state, this.user_fpu_state, PAGE_SIZE)
+		global.memory.zero(kernel_fpu_state, PAGE_SIZE)
+
+		# Stack:
+		if arguments.stack !== none {
+			debug.write_line('Process: Clone: Using a separate stack')
+
+			stack_address = arguments.stack
+
+			debug.write('Process: Using stack at address ') debug.write_address(stack_address)
+			debug.write(' with size of ') debug.write(arguments.stack_size) debug.write_line(' bytes')
+
+			# Verify the stack is correctly aligned
+			if not global.memory.is_aligned(stack_address, 16) {
+				debug.write_line('Process: Clone: Stack is not aligned correctly')
+				return Results.error<Process, i64>(EINVAL)
+			}
+
+			user_frame[].userspace_rsp = stack_address + PAGE_SIZE
+			# Todo: Once we have proper stack support, take the stack size into account
+		}
+
+		# Memory:
+		child_memory = none as ProcessMemory
+
+		if has_flag(arguments.flags, CLONE_VM) {
+			child_memory = ProcessMemory(memory) using allocator
+			allocate_kernel_stack(child_memory)
+		} else {
+			debug.write_line('Process: Clone: Cloning with out CLONE_VM flag is not supported')
+			return Results.error<Process, u64>(ENOTSUP)
+		}
+
+		# File descriptors:
+		# Todo: As with other process resources, we need reference counting, because exiting threads can not just deallocate shared resources
+		child_file_descriptors = file_descriptors
+
+		if not has_flag(arguments.flags, CLONE_FILES) {
+			debug.write_line('Process: Clone: Copying file descriptors')
+			child_file_descriptors = ProcessFileDescriptors(file_descriptors) using allocator
+		}
+
+		# Create a new child process with the same resources and state
+		child = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, child_memory, child_file_descriptors) using allocator
+		child.fs = fs
+		child.priority = priority
+		child.working_directory = working_directory
+		child.credentials = credentials
+
+		# Determine the parent of the new process
+		if has_flag(arguments.flags, CLONE_PARENT) {
+			debug.write_line('Process: Clone: Using parent of calling process as the parent of the new process')
+
+			if parent === none {
+				debug.write_line('Process: Clone: Can not create two root processes')
+				return Results.error<Process, u64>(EINVAL)
+			}
+
+			child.parent = parent
+			parent.childs.add(child)
+		} else {
+			child.parent = this
+			childs.add(child)
+		}
+
+		# TLS:
+		if has_flag(arguments.flags, CLONE_SETTLS) {
+			debug.write('Process: Clone: Setting TLS to ') debug.write_address(arguments.tls) debug.write_line()
+			child.fs = arguments.tls
+		}
+
+		# PID:
+		if has_flag(arguments.flags, CLONE_NEWPID) {
+			if has_flag(arguments.flags, CLONE_THREAD) or has_flag(arguments.flags, CLONE_PARENT) {
+				debug.write_line('Process: Clone: Can not assign a new pid when CLONE_THREAD or CLONE_PARENT is set')
+			}
+		} else {
+			child.pid = child.parent.pid
+		}
+
+		if has_flag(arguments.flags, CLONE_VFORK) {
+			debug.write_line('Process: Clone: Borrowing parent resources (vfork)')
+			child.is_borrowing_parent_resources = true
+		}
+
+		if has_flag(arguments.flags, CLONE_CHILD_CLEARTID) {
+			debug.write('Process: Clone: Clear child TID = ')
+			debug.write_address(arguments.child_tid)
+			debug.write_line()
+
+			child.events.clear_child_tid = arguments.child_tid as u32*
+		}
+
+		return Results.new<Process, u64>(child)
+	}
+
 	# Summary: Creates a child process that shares the resources of this process
 	create_child_with_shared_resources(allocator: Allocator): Process {
 		# Clone the registers from this process
@@ -325,6 +486,7 @@ Process {
 		kernel_fpu_state: link = allocator.allocate(PAGE_SIZE)
 		user_frame[] = this.user_frame[]
 		global.memory.copy(user_fpu_state, this.user_fpu_state, PAGE_SIZE)
+		global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 		# Clone the parent memory for sharing, but use a separate kernel stack
 		child_memory = ProcessMemory(memory) using allocator
@@ -332,13 +494,14 @@ Process {
 
 		# Create a new child process with the same resources and state
 		child = Process(user_frame, user_fpu_state, kernel_frame, kernel_fpu_state, child_memory, file_descriptors) using allocator
+		child.fs = fs
 		child.priority = priority
 		child.working_directory = working_directory
 		child.credentials = credentials
 
 		# Set the parent of the child process
 		child.parent = this
-		child.is_sharing_parent_resources = true
+		child.is_borrowing_parent_resources = true
 
 		# Add the new process to the list of child processes
 		childs.add(child)
@@ -356,11 +519,22 @@ Process {
 		file_descriptors = file_descriptors.clone()
 
 		# Now we no longer use the parent resources
-		is_sharing_parent_resources = false
+		is_borrowing_parent_resources = false
 		subscribers.update()
 	}
 
+	execute_destruct_events(): _ {
+		if events.clear_child_tid !== none and 
+			is_valid_region(this, events.clear_child_tid, sizeof(u32), true) {
+
+			events.clear_child_tid[] = 0
+			Futexes.wake(events.clear_child_tid as u64)
+		}
+	}
+
 	destruct(allocator: Allocator): _ {
+		execute_destruct_events()
+
 		# Remove the process from the list of child processes
 		if parent !== none {
 			parent.childs.remove(this)

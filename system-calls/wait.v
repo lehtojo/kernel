@@ -20,7 +20,7 @@ wait_for_any_child_process(process: Process, out_status: u32*, options: u32): u6
 				if child.state != THREAD_STATE_TERMINATED continue
 
 				# Return the child process pid as the result
-				blocker.set_system_call_result(child.id)
+				blocker.set_system_call_result(child.pid)
 				return true
 			}
 
@@ -45,7 +45,7 @@ wait_for_child_process(process: Process, pid: u32, out_status: u32*, options: u3
 			if target.state != THREAD_STATE_TERMINATED return false
 
 			# Return the target process pid as the result
-			blocker.set_system_call_result(target.id)
+			blocker.set_system_call_result(target.pid)
 			return true
 		})
 	)

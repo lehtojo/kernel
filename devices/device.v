@@ -10,7 +10,7 @@ File Device {
 	readable gid: u32 = 0
 	readable subscribers: Subscribers
 
-	inode: InodeIdentifier
+	inode: InodeIdentifier = InodeIdentifier.new(0, 0)
 
 	# Summary: Combines the specified device major and minor numbers into an identifier
 	shared get_identifier(major: u32, minor: u32): u64 {

@@ -483,7 +483,7 @@ PhysicalMemoryManager {
 		# If this point is reached, there is no continuous slab available that could hold the specified amount of memory.
 		# However, we can still try using multiple slabs to hold specified amount of memory since we are using virtual addresses.
 		# In addition, the size of the allocation might be problematic to determine upon deallocation.
-		panic('Out of memory')
+		panic('Physical memory manager: Out of memory')
 	}
 
 	# Summary:
@@ -559,6 +559,7 @@ PhysicalMemoryManager {
 	# Deallocates the specified physical region while allowing fragmentation.
 	# Fragmentation means that part of a large slab can be deallocated.
 	# In this case, the remaining regions remain allocated with the help of smaller slabs.
+	###
 	deallocate_fragment(physical_region: Segment): _ {
 		# Verify the specified physical region is valid
 		require(memory.is_aligned(physical_region.start, L7_SIZE), 'Physical memory region was not aligned')
@@ -578,7 +579,7 @@ PhysicalMemoryManager {
 			containing_slab = Segment.new(containing_slab_start, containing_slab_end)
 
 			# Stop if this layer owns the physical region			
-			if layer.owns(containing_slab_start) stop
+			if layer.owns(containing_slab_start as link) stop
 		}
 
 		# Panic if the physical region is not even allocated
@@ -598,4 +599,5 @@ PhysicalMemoryManager {
 		# Deallocate all slabs inside the deallocated region
 		iterate_region_with_largest_slabs<PhysicalMemoryManager>(physical_region, this, (slab: Segment, manager: PhysicalMemoryManager) -> manager.deallocate(slab))
 	}
+	###
 }

@@ -101,12 +101,56 @@ enable_bus_mastering(identifier: DeviceIdentifier): _ {
 	write_u16(identifier, REGISTER_COMMAND, value)
 }
 
+disable_bus_mastering(identifier: DeviceIdentifier): _ {
+	debug.write('PCI: Disabling bus mastering for ') debug.write_address(identifier.address.value) debug.write_line()
+
+	value = read_u16(identifier, REGISTER_COMMAND)
+	value &= !0b101
+	write_u16(identifier, REGISTER_COMMAND, value)
+}
+
 enable_memory_space(identifier: DeviceIdentifier): _ {
 	debug.write('PCI: Enabling memory space for ') debug.write_address(identifier.address.value) debug.write_line()
 
 	value = read_u16(identifier, REGISTER_COMMAND)
 	value |= 0b10
 	write_u16(identifier, REGISTER_COMMAND, value)
+}
+
+disable_memory_space(identifier: DeviceIdentifier): _ {
+	debug.write('PCI: Disabling memory space for ') debug.write_address(identifier.address.value) debug.write_line()
+
+	value = read_u16(identifier, REGISTER_COMMAND)
+	value &= !0b10
+	write_u16(identifier, REGISTER_COMMAND, value)
+}
+
+read_bar_address(identifier: DeviceIdentifier, bar: u8): u64 {
+	require(bar >= 0 and bar <= 5, 'Invalid PCI BAR')
+
+	bar_value = read_bar(identifier, bar) as u64
+	bar_address = bar_value & BAR_ADDRESS_MASK
+	bar_space_type = get_bar_space_type(bar_value)
+
+	if bar_space_type == BAR_SPACE_TYPE_64_BIT {
+		if bar == 5 {
+			debug.write_line('PCI: Warning: Reading address of BAR5 with 64-bit memory space')
+		}
+
+		next_bar_value = read_bar(identifier, bar + 1) as u64
+		bar_address |= (next_bar_value <| 32)
+
+	} else bar_space_type == BAR_SPACE_TYPE_32_BIT {
+		bar_address &= 0xfffffff0
+
+	} else bar_space_type == BAR_SPACE_TYPE_16_BIT {
+		bar_address &= 0xfff0
+
+	} else bar_space_type == BAR_SPACE_TYPE_IO_SPACE {
+		panic('PCI: IO space BARs are not supported')
+	}
+
+	return bar_address
 }
 
 create_io_window_for_pci_device_bar(identifier: DeviceIdentifier, bar: u8, size: u64): Result<link, u64> {

@@ -7,5 +7,5 @@ export system_getppid(): u32 {
 	process = get_process()
 
 	if process.parent === none return 0
-	return process.parent.id
+	return process.parent.pid
 }

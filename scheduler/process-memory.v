@@ -6,6 +6,8 @@ constant PROCESS_ALLOCATION_PROGRAM_TEXT = 1
 constant PROCESS_ALLOCATION_PROGRAM_DATA = 2
 constant PROCESS_ALLOCATION_RUNTIME_DATA = 4
 
+constant REGION_EXECUTABLE = 1
+
 # Summary: Stores all processes that share the memory region
 plain MemoryRegionOwners {
 	# Summary: Stores the process ids that own this memory region
@@ -21,6 +23,8 @@ plain MemoryRegionOwners {
 }
 
 pack ProcessMemoryRegionOptions {
+	flags: u64
+
 	# Summary: Stores an inode if this region is mapped to an inode
 	inode: Optional<Inode>
 
@@ -32,6 +36,7 @@ pack ProcessMemoryRegionOptions {
 
 	shared new(): ProcessMemoryRegionOptions {
 		return pack {
+			flags: 0,
 			inode: Optionals.empty<Inode>(),
 			device: Optionals.empty<Device>(),
 			offset: 0 as u64
@@ -40,6 +45,8 @@ pack ProcessMemoryRegionOptions {
 }
 
 pack ProcessMemoryRegion {
+	flags: u64
+
 	# Summary: Stores the virtual address region of this memory region
 	region: Segment
 
@@ -56,8 +63,9 @@ pack ProcessMemoryRegion {
 	owners: MemoryRegionOwners
 
 	# Summary: Returns a process memory region mapped to the specified inode
-	shared new(region: Segment, inode: Optional<Inode>, device: Optional<Device>, offset: u64): ProcessMemoryRegion {
+	shared new(flags: u64, region: Segment, inode: Optional<Inode>, device: Optional<Device>, offset: u64): ProcessMemoryRegion {
 		return pack {
+			flags: flags,
 			region: region,
 			inode: inode,
 			device: device,
@@ -69,6 +77,7 @@ pack ProcessMemoryRegion {
 	# Summary: Returns a normal process memory region
 	shared new(region: Segment): ProcessMemoryRegion {
 		return pack {
+			flags: 0,
 			region: region,
 			inode: Optionals.empty<Inode>(),
 			device: Optionals.empty<Device>(),
@@ -80,6 +89,7 @@ pack ProcessMemoryRegion {
 	# Summary: Returns a process memory region based on the specified options
 	shared new(region: Segment, options: ProcessMemoryRegionOptions): ProcessMemoryRegion {
 		return pack {
+			flags: options.flags,
 			region: region,
 			inode: options.inode,
 			device: options.device,
@@ -95,7 +105,7 @@ pack ProcessMemoryRegion {
 		require(slice.start <= slice.end, 'Slice start must be less than slice end')
 
 		internal_offset = (slice.start - region.start) as u64
-		return ProcessMemoryRegion.new(slice, inode, device, offset + internal_offset)
+		return ProcessMemoryRegion.new(flags, slice, inode, device, offset + internal_offset)
 	}
 
 	# Summary: Returns a slice of this region
@@ -105,6 +115,9 @@ pack ProcessMemoryRegion {
 
 	# Summary: Returns whether this region can be merged with the specified region
 	can_merge(other: ProcessMemoryRegion): bool {
+		# Regions can not be merged if they have different flags
+		if not (flags == other.flags) return false
+
 		# Regions can not be merged if they have different inodes
 		if not (inode == other.inode) return false
 
@@ -129,6 +142,19 @@ pack ProcessMemoryRegion {
 	}
 }
 
+plain ProcessMemoryState {
+	usages: u32 = 1
+
+	# Summary: Minimum address that automatic memory mapping may return
+	min_memory_map_address: u64 = DEFAULT_MIN_MEMORY_MAP_ADDRESS
+
+	# Summary: Stores the current program break address that the process can adjust
+	break: u64 = 0
+
+	# Summary: Stores the maximum allowed value for the program break
+	max_break: u64 = mapper.PAGE_MAP_VIRTUAL_BASE
+}
+
 plain ProcessMemory {
 	# Summary: Stores the pid of the process that owns this memory
 	pid: u32
@@ -148,36 +174,26 @@ plain ProcessMemory {
 	# Summary: Stores the kernel stack pointer
 	kernel_stack_pointer: u64
 
-	# Todo: Consider moving the members below into an object (name might be limits?)
-
-	# Summary: Minimum address that automatic memory mapping may return
-	min_memory_map_address: u64
-
-	# Summary: Stores the current program break address that the process can adjust
-	break: u64
-
-	# Summary: Stores the maximum allowed value for the program break
-	max_break: u64
+	# Summary: Stores the memory state and configuration
+	state: ProcessMemoryState
 
 	init(allocator: Allocator) {
 		this.allocator = allocator
 		this.allocations = List<ProcessMemoryRegion>(allocator) using allocator
 		this.available_regions_by_address = List<Segment>(allocator) using allocator
 		this.paging_table = PagingTable() using allocator
-		this.min_memory_map_address = DEFAULT_MIN_MEMORY_MAP_ADDRESS
-		this.break = 0
-		this.max_break = mapper.PAGE_MAP_VIRTUAL_BASE
+		this.state = ProcessMemoryState() using allocator
 
 		# Kernel regions must be mapped to every process, so that the kernel does not need to 
 		# change the paging tables during system calls in order to access the kernel memory.
-		mapper.map_kernel_entry(paging_table as u64*)
+		mapper.map_kernel(paging_table as u64*)
 
 		# Map the GDT as well
 		paging_table.map_gdt(allocator, Processor.current.gdtr_physical_address)
 
 		# Add available address regions
-		available_regions_by_address.add(Segment.new(0 as link, min_memory_map_address as link))
-		available_regions_by_address.add(Segment.new(min_memory_map_address as link, mapper.PAGE_MAP_VIRTUAL_BASE as link))
+		available_regions_by_address.add(Segment.new(0 as link, state.min_memory_map_address as link))
+		available_regions_by_address.add(Segment.new(state.min_memory_map_address as link, state.max_break as link))
 
 		# Reserve the GDTR page
 		remove_intersecting_available_regions(ProcessMemoryRegion.new(Segment.new(GDTR_VIRTUAL_ADDRESS, GDTR_VIRTUAL_ADDRESS + PAGE_SIZE)))
@@ -193,9 +209,10 @@ plain ProcessMemory {
 		this.available_regions_by_address = other.available_regions_by_address
 		this.paging_table = other.paging_table
 		this.kernel_stack_pointer = other.kernel_stack_pointer
-		this.min_memory_map_address = other.min_memory_map_address
-		this.break = other.break
-		this.max_break = other.max_break
+		this.state = other.state
+
+		# Increment the number of usages of the specified process memory as we use its resources
+		state.usages++
 	}
 
 	# Summary:
@@ -258,6 +275,8 @@ plain ProcessMemory {
 					require(paging_table.set_page_configuration(virtual_page, 0), 'Failed to reset page configuration')
 					PhysicalMemoryManager.instance.deallocate_all(physical_page)
 				}
+
+				mapper.flush_tlb()
 			}
 
 			# Subtract the allocation region from the current region
@@ -414,7 +433,7 @@ plain ProcessMemory {
 			address_list_region = available_regions_by_address[i]
 
 			# Skip regions that are below the minimum address
-			if address_list_region.start < min_memory_map_address continue
+			if address_list_region.start < state.min_memory_map_address continue
 
 			# Skip regions that are not suitable for storing the specified amount of bytes
 			if address_list_region.size < size + alignment continue
@@ -607,11 +626,17 @@ plain ProcessMemory {
 		initialize_physical_page(allocation, virtual_page, physical_page)
 
 		# Map the new physical page to the accessed virtual page and continue as normal
-		if process.is_kernel_process {
-			paging_table.map_page(allocator, virtual_page, physical_page)
-		} else {
-			paging_table.map_page(allocator, virtual_page, physical_page, MAP_USER)
+		mapping_flags = 0
+
+		if has_flag(allocation.flags, REGION_EXECUTABLE) {
+			mapping_flags |= MAP_EXECUTABLE
 		}
+
+		if not process.is_kernel_process {
+			mapping_flags |= MAP_USER
+		}
+
+		paging_table.map_page(allocator, virtual_page, physical_page, mapping_flags)
 
 		return true
 	}
@@ -630,7 +655,7 @@ plain ProcessMemory {
 		}
 
 		# Reset the break as well
-		break = 0
+		state.break = 0
 	}
  
 	# Summary: Deallocates the specified region allowing fragmentation
@@ -690,6 +715,9 @@ plain ProcessMemory {
 	}
 
 	destruct() {
+		# Decrement the number of usages and check if all resources can be released
+		if --state.usages > 0 return
+
 		deallocate()
 
 		# Destruct the lists

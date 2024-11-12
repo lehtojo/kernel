@@ -1,8 +1,11 @@
 namespace kernel.devices.console
 
 import kernel.devices.keyboard
+import kernel.low
 
 ConsoleDevice BootConsoleDevice {
+	shared instance: BootConsoleDevice
+
 	constant MAJOR = 42
 	constant MINOR = 42
 
@@ -11,16 +14,35 @@ ConsoleDevice BootConsoleDevice {
 	init(allocator: Allocator) {
 		ConsoleDevice.init(allocator, MAJOR, MINOR)
 		this.framebuffer = kernel.mapper.map_kernel_page(0xb8000 as link, MAP_NO_CACHE)
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.set_terminal(Terminal.new(cells, width, height, viewport))
+		}
+
 		clear()
 	}
 
 	# Summary: Clears the viewport
 	protected clear() {
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.clear()
+			return
+		}
+
 		loop (i = 0, i < viewport.width * viewport.height, i++) {
 			framebuffer.(u16*)[i] = 0x0020 # Clear with black spaces
 		}
 
 		# Todo: Consider the cursor
+	}
+
+	override write_character(character: u16) {
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.update(cursor_x, cursor_y, Cell.new(character, background, foreground))
+		}
+
+		write_character_default(character)
 	}
 
 	# Summary: Renders the specified viewport line
@@ -57,14 +79,33 @@ ConsoleDevice BootConsoleDevice {
 		if character == BACKSPACE {
 			remove_input_character()
 			input.remove()
+
+		# Todo: Remove
+		} else character == `9` {
+			scroll(1)
+		} else character == `0` {
+			scroll(-1)
 		} else {
 			input.emit(character)
 			write_character(character)
 		}
 
-		render_viewport()
+		# Todo: Figure out what to do with this
+		#render_viewport()
 
 		if character == `\n` { update() }
+	}
+
+	override scroll(lines: i32) {
+		# If we are scrolling up, we can not go past the top
+		lines = math.max(lines as i64, -(viewport.line as i64))
+
+		scroll_default(lines)
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.scroll(lines)
+		}
 	}
 
 	# Summary: Called when the console content is updated

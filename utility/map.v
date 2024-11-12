@@ -22,7 +22,7 @@ export plain Map<K, V> {
 		this.allocator = allocator
 	}
 
-	init(capacity: i64) {
+	init(allocator: Allocator, capacity: i64) {
 		this.allocator = allocator
 		rehash(capacity)
 	}
@@ -67,8 +67,13 @@ export plain Map<K, V> {
 			rehash(capacity * 2)
 		}
 
-		hash = key as i64 
-		if compiles { key.hash() } { hash = key.hash() }
+		hash = 0
+
+		if compiles { key.hash() } {
+			hash = key.hash()
+		} else {
+			hash = key as i64
+		}
 
 		attempt = 0
 
@@ -141,8 +146,13 @@ export plain Map<K, V> {
 		# Just return if the map is empty, this also protects from the situation where the map is not allocated yet
 		if size == 0 return
 
-		hash = key as i64 
-		if compiles { key.hash() } { hash = key.hash() }
+		hash = 0
+
+		if compiles { key.hash() } {
+			hash = key.hash()
+		} else {
+			hash = key as i64
+		}
 
 		attempt = 0
 
@@ -214,8 +224,13 @@ export plain Map<K, V> {
 		# Just return -1 if the map is empty, this also protects from the situation where the map is not allocated yet
 		if size == 0 return -1
 
-		hash = key as i64 
-		if compiles { key.hash() } { hash = key.hash() }
+		hash = 0
+
+		if compiles { key.hash() } {
+			hash = key.hash()
+		} else {
+			hash = key as i64
+		}
 
 		attempt = 0
 

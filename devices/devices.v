@@ -35,7 +35,7 @@ plain Devices {
 
 	# Summary: Destructs this object
 	destruct(): _ {
-		devices.destruct(allocator)
+		devices.destruct()
 		allocator.deallocate(this as link)
 	}
 }

@@ -2,15 +2,20 @@ namespace kernel.devices.console
 
 import kernel.system_calls
 import kernel.file_systems
+import kernel.terminal
 
 pack Cell {
-	value: u8
+	value: u16
+	components: u16
 	background: u32
 	foreground: u32
-	flags: u16
 
-	shared new(value: u8, background: u32, foreground: u32): Cell {
-		return pack { value: value, background: background, foreground: foreground, flags: 0 as u16 } as Cell
+	shared new(value: u16, background: u32, foreground: u32): Cell {
+		return pack { value: value, components: 0 as u16, background: background, foreground: foreground } as Cell
+	}
+
+	shared new(value: u16, components: u16, background: u32, foreground: u32): Cell {
+		return pack { value: value, components: components, background: background, foreground: foreground } as Cell
 	}
 }
 
@@ -28,6 +33,13 @@ pack TerminalInformation {
 	ispeed: u32
 	ospeed: u32
 	characters: u8[NCCS]
+}
+
+plain WindowSize {
+	row: u16
+	column: u16
+	horizontal_size: u16
+	vertical_size: u16
 }
 
 constant CTRL = 0x1f
@@ -76,11 +88,78 @@ constant TERMINAL_DEFAULT_SPEED = B9600
 constant TCGETS = 0x5401
 constant TIOCSPGRP = 0x5410
 constant TIOCGPGRP = 0x540F
+constant TIOCGWINSZ = 0x5413
 
-pack Viewport {
+pack Rect {
+	x: i32
+	y: i32
 	width: u32
 	height: u32
-	line: u32
+
+	left => x
+	top => y
+	right => x + width
+	bottom => y + height
+
+	shared new(): Rect {
+		return pack { x: 0, y: 0, width: 0, height: 0 } as Rect
+	}
+
+	shared new(x: i32, y: i32, width: u32, height: u32): Rect {
+		return pack { x: x, y: y, width: width, height: height } as Rect
+	}
+
+	shared from_sides(left: i32, top: i32, right: i32, bottom: i32): Rect {
+		require(left <= right and top <= bottom, 'Invalid sides')
+		return pack { x: left, y: top, width: right - left, height: bottom - top } as Rect
+	}
+
+	clamp(rect: Rect): Rect {
+		return Rect.from_sides(
+			math.clamp(left, rect.left, rect.right),
+			math.clamp(top, rect.top, rect.bottom),
+			math.clamp(right, rect.left, rect.right),
+			math.clamp(bottom, rect.top, rect.bottom)
+		)
+	}
+
+	print(): _ {
+		debug.put(`[`) debug.write(x) debug.write(', ') debug.write(y) debug.write(', ') debug.write(width) debug.write(', ') debug.write(height) debug.put(`]`)
+	}
+}
+
+plain Viewport {
+	width: u32
+	height: u32
+	line: u32 = 0
+
+	init(width: u32, height: u32) {
+		this.width = width
+		this.height = height
+	}
+}
+
+pack Terminal {
+	cells: Array<Cell>
+	width: u32
+	height: u32
+	viewport: Viewport
+
+	shared new(cells: Array<Cell>, width: u32, height: u32, viewport: Viewport): Terminal {
+		return pack { cells: cells, width: width, height: height, viewport: viewport } as Terminal
+	}
+
+	get(x: u32, y: u32): Cell {
+		x = x % width
+		y = y % height
+		return cells[y * width + x]
+	}
+
+	set(x: u32, y: u32, value: Cell): _ {
+		x = x % width
+		y = y % height
+		cells[y * width + x] = value
+	}
 }
 
 pack ConsoleInputBuffer {
@@ -113,33 +192,80 @@ pack ConsoleInputBuffer {
 	}
 }
 
+terminal.TerminalController DefaultTerminalController {
+	device: ConsoleDevice
+
+	init(device: ConsoleDevice) {
+		this.device = device
+	}
+
+	override write_raw(data: Array<u8>, size: u64) {
+		debug.write_line('Terminal controller: Writing raw bytes...')
+		device.write_raw(data.data, size)
+	}
+
+	override set_background_color(color: u32) {
+		debug.write('Terminal controller: Setting background color to ')
+		debug.write_address(color)
+		debug.write_line()
+		device.background = color
+	}
+
+	override set_foreground_color(color: u32) {
+		debug.write('Terminal controller: Setting foreground color to ')
+		debug.write_address(color)
+		debug.write_line()
+		device.foreground = color
+	}
+
+	override reset_attributes() {
+		debug.write_line('Terminal controller: Resetting attributes')
+		device.background = 0
+		device.foreground = 0xffffff
+	}
+}
+
 CharacterDevice ConsoleDevice {
 	protected constant DEFAULT_WIDTH = 80
-	protected constant DEFAULT_HEIGHT = 25
+	protected constant DEFAULT_HEIGHT = 36
 	protected constant DEFAULT_BUFFER_HEIGHT = 100
 
 	protected width: u32
 	protected height: u32
-	protected cursor: u32
+	protected cursor_x: u32
+	protected cursor_y: u32
 	protected cells: Array<Cell>
 	protected lines: Array<Line>
 	protected input: ConsoleInputBuffer
 
 	protected viewport: Viewport
 
-	protected background: u32
-	protected foreground: u32
+	background: u32 = 0x000000
+	foreground: u32 = 0xffffff
 
 	protected information: TerminalInformation
+	protected interpreter: TerminalInterpreter
 
 	init(allocator: Allocator, major: u32, minor: u32) {
 		CharacterDevice.init(major, minor)
 		this.width = DEFAULT_WIDTH
 		this.height = DEFAULT_BUFFER_HEIGHT
-		this.viewport.width = DEFAULT_WIDTH
-		this.viewport.height = DEFAULT_HEIGHT
+		this.cursor_x = 0
+		this.cursor_y = 0
+		this.viewport = Viewport(DEFAULT_WIDTH, DEFAULT_HEIGHT) using allocator
+
+		controller = DefaultTerminalController(this) using allocator
+		this.interpreter = TerminalInterpreter(allocator, controller) using allocator
+
 		initialize_lines(allocator)
 		initialize_terminal_information()
+	}
+
+	# Summary: Returns the index of the cell that maps to the current cursor position
+	protected cell_index(): u32 {
+		x = cursor_x % viewport.width
+		y = cursor_y % height
+		return y * viewport.width + x
 	}
 
 	# Summary: Creates lines and their cells with the specified allocator
@@ -185,38 +311,49 @@ CharacterDevice ConsoleDevice {
 
 	# Summary: Moves to the next line
 	protected next_line(): _ {
-		new_cursor = (cursor / width + 1) * width
+		# If the cursor is at the last line of the viewport, scroll down the viewport
+		viewport_last_line = viewport.line + viewport.height - 1
+		scroll_down = cursor_y == viewport_last_line
 
-		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_cursor == cells.size { new_cursor = 0 }
+		# Move the start of the next line
+		cursor_x = 0
+		cursor_y++
 
-		# Update the cursor
-		cursor = new_cursor
+		# Reset the new line
+		line_start = cell_index
+
+		loop (i = 0, i < viewport.width, i++) {
+			cells[line_start + i] = Cell.new(0, background, foreground)
+		}
+
+		# Scroll down if needed
+		if scroll_down scroll(1)
 	}
 
-	# Summary: Moves to the next character
-	protected next_character(): _ {
-		new_cursor = cursor + 1
+	# Summary: Moves the cursor to the next character while taking into account line width
+	private next_character(): _ {
+		cursor_x++
 
-		# If we will reach the end of cells, move to the start of the cells, because the cell buffer is cyclic
-		if new_cursor == cells.size { new_cursor = 0 }
-
-		# Update the cursor
-		cursor = new_cursor
+		# If we have gone past the end of the line, move to the next line
+		if cursor_x % viewport.width == 0 next_line()
 	}
 
 	# Summary: Writes the specified character
-	protected write_character(character: u8): _ {
-		cells[cursor] = Cell.new(character, background, foreground)
-
-		# Move over the written character
-		next_character()
-
-		# If we are at start of a line, no need to do anything
-		if cursor % width == 0 return
+	protected write_character_default(character: u16): _ {
+		cells[cell_index] = Cell.new(character, background, foreground)
 
 		# If a line ending was written, move to the next line
-		if character == `\n` next_line()
+		if character == `\n` {
+			next_line()
+			return
+		}
+
+		next_character()
+	}
+
+	# Summary: Writes the specified character
+	open write_character(character: u16): _ {
+		write_character_default(character)
 	}
 
 	# Summary: Removes the character before the cursor
@@ -224,23 +361,90 @@ CharacterDevice ConsoleDevice {
 		if input.size == 0 return
 
 		# Move to the previous character
-		cursor--
+		if cursor_x == 0 {
+			cursor_x = viewport.width - 1
+			cursor_y--
+		} else {
+			cursor_x--
+		}
 
-		# Remove the character
-		cells[cursor] = Cell.new(0, background, foreground)
+		# Write over the character
+		write_character(0)
+
+		# Move to the previous character
+		if cursor_x == 0 {
+			cursor_x = viewport.width - 1
+			cursor_y--
+		} else {
+			cursor_x--
+		}
 	}
 
 	override write(description: OpenFileDescription, data: Array<u8>, offset: u64) {
 		debug.write_line('Console device: Writing bytes...')
 
-		loop (i = 0, i < data.size, i++) {
-			write_character(data[i])	
-		}
+		interpreter.interpret(data)
 
-		description.offset = cursor
+		description.offset = cursor_y * viewport.width + cursor_x
 
 		update()
 		return data.size
+	}
+
+	write_raw(data: link, size: u64): _ {
+		truncated_size = math.min(size, viewport.width - cursor_x)
+
+		loop (i = 0, i < truncated_size, i++) {
+			character = data[i]
+
+			# 7-bit characters characters: 0xxxxxxx
+			if (character & 0b10000000) == 0 {
+				write_character(character)
+				continue
+			}
+
+			# 16-bit characters: 1110zzzz 10yyyyyy 10xxxxxx => zzzzyyyyyyxxxxxx
+			if (character |> 4) == 0b1110 {
+				cells[cell_index] = Cell.new(character & 0b1111, 2, background, foreground)
+				continue
+			}
+
+			# 11-bit characters: 110yyyyy 10xxxxxx => yyyyyxxxxxx
+			if (character |> 5) == 0b110 {
+				cells[cell_index] = Cell.new(character & 0b11111, 1, background, foreground)
+				continue
+			}
+
+			# Character component: 10xxxxxx
+			if (character |> 6) == 0b10 {
+				cell = cells[cell_index]
+				value = character & 0b111111
+
+				if cell.components > 0 {
+					# Add the value of the component to the current cell and 
+					# decrease the number of remaining components it expects
+					cell.value = (cell.value <| 6) | value
+					cell.components--
+
+					# Remember to update the cell
+					cells[cell_index] = cell
+
+					# If there are more components, do not update yet
+					if cell.components != 0 continue
+
+					write_character(cell.value)
+					continue
+				}
+
+				# We have found a rogue component, just write its value as character
+				write_character(value)
+				continue
+			}
+
+			write_character(character)
+		}
+
+		update()
 	}
 
 	override read(description: OpenFileDescription, destination: link, offset: u64, size: u64) {
@@ -280,11 +484,22 @@ CharacterDevice ConsoleDevice {
 		return 0
 	}
 
+	protected get_terminal_window_size(output: WindowSize): i32 {
+		debug.write_line('Console device: Get window size')
+
+		output.row = viewport.height
+		output.column = viewport.width
+		output.horizontal_size = viewport.width
+		output.vertical_size = viewport.height
+		return 0
+	}
+
 	override control(request: u32, argument: u64) {
 		return when (request) {
 			TCGETS => get_terminal_information(argument as link),
 			TIOCSPGRP => set_terminal_process_gid(argument as u32*),
 			TIOCGPGRP => get_terminal_process_gid(argument as u32*),
+			TIOCGWINSZ => get_terminal_window_size(argument as WindowSize),
 			else => {
 				debug.write('Console device: Unsupported control request ')
 				debug.write_line(request)
@@ -299,6 +514,15 @@ CharacterDevice ConsoleDevice {
 
 		input.emit(character)
 		write_character(character)
+		update()
+	}
+
+	scroll_default(lines: i32): _ {
+		viewport.line = math.max(viewport.line + lines, 0)
+	}
+
+	open scroll(lines: i32): _ {
+		scroll_default(lines)
 		update()
 	}
 

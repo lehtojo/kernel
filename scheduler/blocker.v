@@ -104,3 +104,9 @@ Blocker MultiProcessBlocker {
 		subscribed.destruct()
 	}
 }
+
+Blocker FutexBlocker {
+	shared try_create(allocator): FutexBlocker {
+		return FutexBlocker() using allocator
+	}
+}

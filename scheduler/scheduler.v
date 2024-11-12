@@ -11,10 +11,10 @@ pack SchedulerProcesses {
 
 	add(process: Process): _ {
 		if process.state == THREAD_STATE_RUNNING {
-			debug.write('Scheduler: Process ') debug.write(process.id) debug.write_line(' is running')
+			debug.write('Scheduler: Process ') debug.write(process.tid) debug.write_line(' is running')
 			running.add(process)
 		} else process.state == THREAD_STATE_BLOCKED {
-			debug.write('Scheduler: Process ') debug.write(process.id) debug.write_line(' is blocked')
+			debug.write('Scheduler: Process ') debug.write(process.tid) debug.write_line(' is blocked')
 			blocked.add(process)
 		} else {
 			panic('Invalid process state')
@@ -22,18 +22,22 @@ pack SchedulerProcesses {
 	}
 
 	remove(process: Process): bool {
-		debug.write('Scheduler: Removing process ') debug.write_line(process.id)
+		debug.write('Scheduler: Removing process ') debug.write_line(process.tid)
 		return running.remove(process) or blocked.remove(process)
 	}
+
+   size(): u64 {
+      return running.size + blocked.size
+   }
 }
 
 Scheduler {
-	current: Process
+	current: Process = none as Process
 	processes: SchedulerProcesses
-	next_process_id: u32
+	next_id: u32
 
 	init() {
-		this.next_process_id = 1
+		this.next_id = 1
 	}
 
 	initialize_processes() {
@@ -41,8 +45,16 @@ Scheduler {
 		this.processes.blocked = List<Process>(HeapAllocator.instance, 256, false) using KernelHeap
 	}
 
-	add(process: Process) {
-		process.id = next_process_id++
+	# Summary: Adds the specified process to the running process list and gives it a new pid and tid
+	add_process(process: Process) {
+		process.pid = next_id
+		process.tid = next_id++
+		processes.running.add(process)
+	}
+
+	# Summary: Adds the specified process to the running process list and gives it a new tid
+	add_thread(process: Process) {
+		process.tid = next_id++
 		processes.running.add(process)
 	}
 
@@ -50,12 +62,12 @@ Scheduler {
 	find(pid: u32): Optional<Process> {
 		loop (i = 0, i < processes.running.size, i++) {
 			process = processes.running[i]
-			if process.id == pid return Optionals.new<Process>(process)
+			if process.pid == pid and (process.parent === none or process.parent.pid != pid) return Optionals.new<Process>(process)
 		}
 
 		loop (i = 0, i < processes.blocked.size, i++) {
 			process = processes.blocked[i]
-			if process.id == pid return Optionals.new<Process>(process)
+			if process.pid == pid and (process.parent === none or process.parent.pid != pid) return Optionals.new<Process>(process)
 		}
 
 		return Optionals.empty<Process>()
@@ -76,7 +88,7 @@ Scheduler {
 	}
 
 	yield(): _ {
-		debug.write('Scheduler: Yielding process ') debug.write_line(current.id)
+		debug.write('Scheduler: Yielding process ') debug.write_line(current.tid)
 
 		# Save the current state and the next time this thread is ready it will continue from here in kernel mode
 		# System call: sched_yield
@@ -89,7 +101,7 @@ Scheduler {
 
 	switch(frame: RegisterState*, next: Process) {
 		debug.write('Scheduler: Switching to process ')
-		debug.write(next.id)
+		debug.write(next.tid)
 		debug.write(' (rip=')
 		debug.write_address(next.registers[].rip)
 		debug.write_line(')')
@@ -111,7 +123,7 @@ Scheduler {
 
 	enter(frame: RegisterState*, next: Process) {
 		debug.write('Scheduler: Entering to process ')
-		debug.write_line(next.id)
+		debug.write_line(next.tid)
 
 		if current !== next switch(frame, next)
 	}
@@ -136,13 +148,13 @@ Scheduler {
 	}
 
 	exit(frame: RegisterState*, process: Process) {
-		debug.write('Scheduler: Exiting process ') debug.write_line(process.id)
+		debug.write('Scheduler: Exiting process ') debug.write_line(process.tid)
 		process.change_state(THREAD_STATE_TERMINATED)
 
 		# Remove the specified process from the process list
 		require(processes.remove(process), 'Attempted to exit a process that was not in the process list')
 
-		debug.write('Scheduler: Destructing process ') debug.write_line(process.id)
+		debug.write('Scheduler: Destructing process ') debug.write_line(process.tid)
 		process.destruct(HeapAllocator.instance)
 
 		debug.write_line('Scheduler: Picking next process after exiting process')
@@ -157,6 +169,8 @@ create_kernel_thread(rip: u64): Process {
 	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	global.memory.zero(user_fpu_state, PAGE_SIZE)
+	global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
@@ -182,7 +196,7 @@ create_kernel_thread(rip: u64): Process {
 	process.registers[].rip = rip
 	process.registers[].userspace_rsp = (user_stack_pointer + 512 * KiB) as u64
 
-	interrupts.scheduler.add(process)
+	interrupts.scheduler.add_process(process)
 
 	return process
 }
@@ -194,6 +208,8 @@ create_idle_process(): Process {
 	user_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
 	kernel_frame: RegisterState* = KernelHeap.allocate<RegisterState>()
 	kernel_fpu_state: RegisterState* = KernelHeap.allocate(PAGE_SIZE)
+	global.memory.zero(user_fpu_state, PAGE_SIZE)
+	global.memory.zero(kernel_fpu_state, PAGE_SIZE)
 
 	memory = ProcessMemory(HeapAllocator.instance) using KernelHeap
 
@@ -216,7 +232,7 @@ create_idle_process(): Process {
 	mapped_text_section[1] = 0xfe
 
 	# Map the physical memory to the allocated virtual memory
-	memory.paging_table.map_page(HeapAllocator.instance, text_section_virtual_address as link, text_section_physical_address, MAP_USER)
+	memory.paging_table.map_page(HeapAllocator.instance, text_section_virtual_address as link, text_section_physical_address, MAP_USER | MAP_EXECUTABLE)
 
 	# Allocate stacks for the process.
 	# We need to allocate separate kernel stack for each thread as the execution might stop in kernel mode and we need to save the state.
@@ -252,7 +268,7 @@ create_idle_process(): Process {
 	process.registers[].rip = text_section_virtual_address
 	process.registers[].userspace_rsp = (user_stack_bottom + PAGE_SIZE) as u64
 
-	interrupts.scheduler.add(process)
+	interrupts.scheduler.add_process(process)
 
 	return process
 }
@@ -319,5 +335,5 @@ export create_boot_shell_process(allocator: Allocator, boot_console: BootConsole
 
 	debug.write_line('Scheduler: Boot shell process created')
 
-	interrupts.scheduler.add(process)
+	interrupts.scheduler.add_process(process)
 }

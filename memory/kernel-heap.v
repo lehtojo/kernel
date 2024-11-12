@@ -15,7 +15,7 @@ KernelHeap {
 		if bytes <= 256 return heap.s256.allocate()
 
 		address = PhysicalMemoryManager.instance.allocate(bytes)
-		if address == none panic('Out of memory')
+		if address == none panic('Kernel heap: Out of memory')
 
 		return address
 	}
@@ -45,6 +45,7 @@ Allocator HeapAllocator {
 
 	shared initialize(allocator: Allocator) {
 		instance = HeapAllocator() using allocator
+		debug.write('Heap allocator: instance = ') debug.write_address(instance) debug.write_line()
 	}
 
 	override allocate(bytes: u64) {

@@ -1,6 +1,7 @@
 namespace kernel.multiboot
 
 import kernel.elf
+import kernel.low
 
 constant TAG_TYPE_MEMORY_MAP = 6
 constant TAG_TYPE_FRAMEBUFFER = 8
@@ -51,41 +52,6 @@ plain SectionHeaderTableTag {
 }
 
 # Summary:
-# Sort the specified regions so that lower addresses are first.
-# Combine intersection regions as well.
-export process_memory_regions(regions: List<Segment>) {
-	# Sort the regions so that lower addresses are first
-	sort<Segment>(regions, (a: Segment, b: Segment) -> (a.start - b.start) as i64)
-
-	i = 0
-
-	loop (i < regions.size - 1) {
-		current = regions[i]
-		next = regions[i + 1]
-
-		# If the regions intersect, combine them
-		if current.end > next.start and current.start < next.end {
-			current.start = math.min(current.start, next.start)
-			current.end = math.max(current.end, next.end)
-			regions.remove_at(i + 1)
-			continue
-		}
-
-		i++
-	}
-}
-
-# Summary: Returns the size of the physical memory based on the specified memory regions. Panics upon failure.
-export find_physical_memory_size(regions: List<Segment>): u64 {
-	loop (i = regions.size - 1, i >= 0, i--) {
-		region = regions[i]
-		if region.type == REGION_AVAILABLE return region.end as u64
-	}
-
-	panic('Failed to find the physical memory size')
-}
-
-# Summary:
 # Loads all memory regions from the specified tag into the specified region list.
 # Returns the total amount of physical memory in the system based on the regions.
 export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>): u64 {
@@ -103,9 +69,9 @@ export process_memory_map_tag(tag: MemoryMapTag, regions: List<Segment>): u64 {
 	}
 
 	# Sort and combine the regions
-	process_memory_regions(regions)
+	Regions.clean(regions)
 
-	return find_physical_memory_size(regions)
+	return Regions.find_physical_memory_size(regions)
 }
 
 # Summary: Processes framebuffer tags.
@@ -118,39 +84,6 @@ export process_framebuffer_tag(tag: FramebufferTag) {
 	debug.write(tag.framebuffer_height)
 	debug.write(', Bits per pixel = ')
 	debug.write_line(tag.framebuffer_bits_per_pixel)
-}
-
-export insert_region(regions: List<Segment>, region: Segment) {
-	if region.size <= 0 return
-
-	loop (i = 0, i < regions.size, i++) {
-		current = regions[i]
-
-		# Skip the current region if the specified region is not inside it
-		if region.start < current.start or region.end > current.end continue
-
-		# General idea:
-		# current.start    region.start region.end    current.end 
-		#        v               v            v              v     
-		#    ... [    current    |   region   |   fragment   ] ... 
-		fragment = Segment.new(current.type, region.end, current.end)
-		current.end = region.start
-
-		# Add the fragment if it is not empty
-		if fragment.size > 0 regions.insert(i + 1, fragment)
-
-		# Add the region, because it can not be empty
-		regions.insert(i + 1, region)
-
-		# Remove the current region if it has become empty, update it otherwise
-		if current.size > 0 {
-			regions[i] = current
-		} else {
-			regions.remove_at(i)
-		}
-
-		return
-	}
 }
 
 # Summary:
@@ -251,27 +184,6 @@ export load_symbols(sections: List<elf.SectionHeader>, symbols: List<SymbolInfor
 }
 
 # Summary:
-# Finds a suitable region for the specified amount of memory from the specified regions
-# and modifies them so that the region gets reserved. Returns the virtual address to the allocated region.
-# If no suitable region can be found, this function panics.
-export allocate_region(regions: List<Segment>, size: u64): link {
-	size = memory.round_to_page(size)
-
-	loop (i = 0, i < regions.size, i++) {
-		# Find the first available region that can store the specified amount of bytes
-		region = regions[i]
-		if region.type != REGION_AVAILABLE or region.size < size continue
-
-		reservation = Segment.new(REGION_RESERVED, region.start, region.start + size)
-		insert_region(regions, reservation)
-
-		return region.start
-	}
-
-	panic('Failed to find a suitable physical memory region')
-}
-
-# Summary:
 # Finds a suitable region for the physical memory manager from the specified regions
 # and modifies them so that the region gets reserved. Returns the virtual address to the allocated region.
 # If no suitable region can be found, this function panics.
@@ -279,8 +191,10 @@ export allocate_physical_memory_manager(regions: List<Segment>): link {
 	# Compute the memory needed by the physical memory manager
 	size = sizeof(PhysicalMemoryManager) + PhysicalMemoryManager.LAYER_COUNT * sizeof(Layer) + PhysicalMemoryManager.LAYER_STATE_MEMORY_SIZE
 
-	physical_address = allocate_region(regions, size)
+	physical_address = Regions.allocate(regions, size)
 	virtual_address = mapper.map_kernel_region(physical_address, size)
+	memory.zero(virtual_address, size)
+
 	debug.write('Multiboot: Placing the physical memory manager at physical address ') debug.write_address(physical_address) debug.write_line()
 
 	return virtual_address
@@ -294,33 +208,11 @@ export allocate_quickmap_pages(regions: List<Segment>): link {
 	# Allocate quickmap pages for max 512 CPUs
 	size = 512 * PAGE_SIZE
 
-	physical_address = allocate_region(regions, size)
+	physical_address = Regions.allocate(regions, size)
 	mapper.map_kernel_region(physical_address, size)
 	debug.write('Multiboot: Quickmap physical base address ') debug.write_address(physical_address) debug.write_line()
 
 	return physical_address
-}
-
-export find_reserved_physical_regions(regions: List<Segment>, physical_memory_size: u64, reservations: List<Segment>) {
-	start = none as link
-
-	loop (i = 0, i < regions.size, i++) {
-		region = regions[i]
-		if region.type != REGION_AVAILABLE continue
-
-		# Stop after passing the physical memory regions.
-		# It seems that some regions are virtual (memory-mapped devices?)
-		if region.start >= physical_memory_size return
-
-		end = region.start
-		reservation = Segment.new(REGION_RESERVED, start, end)
-
-		# Add the reserved region if it is not empty
-		if reservation.size > 0 reservations.add(reservation)
-
-		# Start the next reserved region after the available region
-		start = region.end
-	}
 }
 
 export initialize(multiboot_information_physical_address: link, memory_information: SystemMemoryInformation) {
@@ -370,14 +262,14 @@ export initialize(multiboot_information_physical_address: link, memory_informati
 
 	require(kernel_region.type !== REGION_UNKNOWN, 'Failed to find kernel region')
 
-	insert_region(regions, kernel_region) # Reserve the region where the kernel is loaded
-	insert_region(regions, mapper.region()) # Memory used by the kernel paging tables must be reserved
+	Regions.insert(regions, kernel_region) # Reserve the region where the kernel is loaded
+	Regions.insert(regions, mapper.region()) # Memory used by the kernel paging tables must be reserved
 
 	# Allocate memory for the physical memory manager and quickmap pages
 	memory_information.physical_memory_manager_virtual_address = allocate_physical_memory_manager(regions)
 	memory_information.quickmap_physical_base = allocate_quickmap_pages(regions)
 
-	find_reserved_physical_regions(regions, memory_information.physical_memory_size, reserved)
+	Regions.find_reserved_physical_regions(regions, memory_information.physical_memory_size, reserved)
 
 	debug.write('Multiboot: Physical memory = ')
 	debug.write(memory_information.physical_memory_size / MiB)

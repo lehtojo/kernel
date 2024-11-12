@@ -186,3 +186,26 @@ export to_decimal(string: link, length: i64, separator: u8) {
 export to_decimal(string: link, length: i64) {
 	return to_decimal(string, length, `.`)
 }
+
+# Summary: Attempts to convert the specified string to an integer
+export as_integer(string: link, length: i64): Optional<i64> {
+	index = 0
+
+	if string[] == `-` or string[] == `+` { index++ }
+
+	loop (index < length, index++) {
+		if not is_digit(string[index]) return Optionals.empty<i64>()
+	}
+
+	return Optionals.new<i64>(to_integer(string, length))
+}
+
+# Summary: Attempts to convert the specified string to an integer
+export as_integer(string: String): Optional<i64> {
+	return as_integer(string.data, string.length)
+}
+
+# Summary: Returns whether the specified character is a digit
+export is_digit(character: u8): bool {
+	return character >= `0`and character <= `9`
+}

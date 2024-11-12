@@ -1,7 +1,8 @@
 constant PAGE_SIZE = 0x1000
 
-constant KiB = 1024
-constant MiB = 1048576
+constant KiB = 0x400
+constant MiB = 0x100000
+constant GiB = 0x40000000
 
 namespace kernel {
 	constant KERNEL_CODE_SELECTOR = 0x8
@@ -105,21 +106,20 @@ import kernel.devices.keyboard
 import kernel.file_systems.memory_file_system
 import kernel.file_systems.ext2
 import kernel.file_systems
+import kernel.low
+
+import kernel.time
 
 export start(
 	multiboot_information: link,
 	interrupt_tables: link,
 	interrupt_stack_pointer: link,
-	gdtr_physical_address: link
+	gdtr_physical_address: link,
+	uefi: UefiInformation
 ) {
 	serial.initialize()
 
 	allocator = BufferAllocator(buffer: u8[0x4000], 0x4000)
-
-	clear_boot_console_with_white()
-
-	interrupts.tables = interrupt_tables
-	interrupts.scheduler = scheduler.Scheduler()
 
 	memory_information = SystemMemoryInformation()
 	SystemMemoryInformation.instance = memory_information
@@ -128,7 +128,17 @@ export start(
 	memory_information.sections = List<elf.SectionHeader>(allocator)
 	memory_information.symbols = List<SymbolInformation>(allocator)
 
-	multiboot.initialize(multiboot_information, memory_information)
+	interrupts.tables = interrupt_tables
+	interrupts.scheduler = scheduler.Scheduler()
+
+	if uefi !== none {
+		uefi.paging_table = read_cr3()
+		mapper.remap(allocator, gdtr_physical_address, memory_information, uefi)
+	} else multiboot_information !== none {
+		multiboot.initialize(multiboot_information, memory_information)
+	}
+
+	clear_boot_console_with_white()
 
 	# Tell the mapper where the quickmap base is, so that quickmapping is possible
 	mapper.quickmap_physical_base = memory_information.quickmap_physical_base
@@ -137,11 +147,30 @@ export start(
 	KernelHeap.initialize()
 	HeapAllocator.initialize(allocator)
 
+	if FramebufferConsole.instance !== none and uefi !== none {
+		# Output console content to the actual framebuffer
+		graphics_information = uefi.graphics_information
+		framebuffer_size = graphics_information.horizontal_stride * graphics_information.height
+		FramebufferConsole.instance.output_framebuffer = mapper.map_kernel_region(graphics_information.framebuffer_physical_address as link, framebuffer_size, MAP_NO_CACHE)
+		FramebufferConsole.instance.output_framebuffer_horizontal_stride = graphics_information.horizontal_stride
+
+		FramebufferConsole.instance.load_font(uefi as UefiInformation)
+	}
+
+	boot_console = BootConsoleDevice(HeapAllocator.instance)
+	BootConsoleDevice.instance = boot_console
+
 	interrupts.scheduler.initialize_processes()
 
 	Processor.count = 1
 	Processor.initialize(interrupt_stack_pointer, gdtr_physical_address, 0)
-	mapper.remap()
+
+	if uefi !== none {
+		Time.initialize(allocator, uefi)
+		Time.instance.output_current_time()
+	} else {
+		mapper.remap()
+	}
 
 	FileSystems.initialize(HeapAllocator.instance)
 
@@ -151,12 +180,16 @@ export start(
 	devices = Devices(HeapAllocator.instance)
 	Devices.instance = devices
 
-	boot_console = BootConsoleDevice(HeapAllocator.instance)
+	if uefi !== none {
+		# Todo: Generalize
+		adapter = kernel.devices.gpu.gop.GraphicsAdapter.create(uefi)
+	}
+
 	devices.add(boot_console)
 
 	scheduler.create_idle_process()
 
-	interrupts.apic.initialize(allocator)
+	interrupts.apic.initialize(HeapAllocator.instance, uefi)
 
 	system_calls.initialize()
 
@@ -174,6 +207,9 @@ export start(
 		scheduler.create_boot_shell_process(HeapAllocator.instance, boot_console)
 
 		debug.write_line('Kernel thread: All done')
+
+		# Do not redirect debug information to boot console anymore
+		debug.booted = true
 
 		# Exit this thread
 		system_call(0x3c, 0, 0, 0, 0, 0, 0)

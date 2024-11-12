@@ -12,7 +12,7 @@ export system_vfork(): i64 {
 	child.registers[].rax = 0
 
 	# Register the child process
-	interrupts.scheduler.add(child)
+	interrupts.scheduler.add_process(child)
 
 	# Parent process must wait until the child process is terminated
 	# Todo: We also need to consider exec() etc.
@@ -21,10 +21,10 @@ export system_vfork(): i64 {
 			child: Process = blocker.subscribed
 
 			# We can let the parent process continue once the child process is terminated or no longer uses parent resources (e.g. exec() system call)
-			if child.state != THREAD_STATE_TERMINATED and child.is_sharing_parent_resources return false
+			if child.state != THREAD_STATE_TERMINATED and child.is_borrowing_parent_resources return false
 
 			# Return the child process pid as the result
-			blocker.set_system_call_result(child.id)
+			blocker.set_system_call_result(child.pid)
 			return true
 		})
 	)

@@ -2,7 +2,8 @@ pack RegisterState {
 	rdi: u64
 	rsi: u64
 	rbp: u64
-	rsp: u64
+	# Todo: What is this?
+	_rsp: u64
 	rbx: u64
 	rdx: u64
 	rcx: u64
@@ -47,6 +48,15 @@ constant PRESENT_BIT = 1 <| 7
 constant GATE_TYPE_INTERRUPT = 0xE
 constant GATE_TYPE_TRAP = 0xF
 
+constant EDGETRIGGER_FLAG = 1 <| 15 
+constant DEASSERT_FLAG = 1 <| 14 
+
+constant INTERRUPT_BASE = 0x20
+constant GENERAL_PROTECTION_FAULT_EXCEPTION = 0x0d
+constant PAGE_FAULT_EXCEPTION = 0x0e
+constant PS2_INTERRUPT = INTERRUPT_BASE + 0x01
+constant HPET_INTERRUPT = INTERRUPT_BASE + 0x10
+
 constant FIRST_ALLOCATED_INTERRUPT = 0x81
 constant LAST_ALLOCATED_INTERRUPT = 0xff
 constant MAX_ALLOCATED_INTERRUPTS = LAST_ALLOCATED_INTERRUPT - FIRST_ALLOCATED_INTERRUPT + 1
@@ -54,6 +64,7 @@ constant MAX_ALLOCATED_INTERRUPTS = LAST_ALLOCATED_INTERRUPT - FIRST_ALLOCATED_I
 tables: link
 scheduler: Scheduler
 allocated_interrupts: u64[MAX_ALLOCATED_INTERRUPTS]
+interrupt_entries: u8[0x2000]
 next_available_interrupt: u32
 
 pack InterruptDescriptor {
@@ -73,11 +84,10 @@ export initialize() {
 	memory.zero(tables + IDT_OFFSET as link, 0x1000)
 
 	interrupt_handler = internal.get_interrupt_handler()
-	entry_address = tables + INTERRUPT_ENTRIES_OFFSET
+	entry_address = memory.round_to_page(interrupt_entries)
 
-	debug.write('Interrupts: Interrupt handler address = ')
-	debug.write_address(interrupt_handler)
-	debug.write_line()
+	debug.write('Interrupts: Interrupt handler address = ') debug.write_address(interrupt_handler) debug.write_line()
+	debug.write('Interrupts: Interrupt entries = ') debug.write_address(entry_address) debug.write_line()
 
 	loop (i = 0, i < INTERRUPT_COUNT, i++) {
 		if i < 0x20 {
@@ -139,6 +149,7 @@ export write_interrupt_entry(address: link, to: link, interrupt: i32) {
 		# Jump to the interrupt handler
 		from = address + strideof(i32) + 1
 		offset = to - from
+		require(math.abs(offset) <= GiB, 'Interrupts: Too large offset to interrupt handler')
 
 		address[0] = 0xe9 # jmp to
 		(address + 1).(i32*)[] = offset as i32
@@ -153,13 +164,14 @@ export write_interrupt_entry(address: link, to: link, interrupt: i32) {
 	address += strideof(i32) + 1
 
 	# Push the interrupt number so that the handler knows which interrupt is being called
-	address[0] = 0x68 # push dword interrupt
+	address[0] = 0x68 # push qword interrupt
 	(address + 1).(i32*)[] = interrupt
 	address += strideof(i32) + 1
 
 	# Jump to the interrupt handler
 	from = address + strideof(i32) + 1
 	offset = to - from
+	require(math.abs(offset) <= GiB, 'Interrupts: Too large offset to interrupt handler')
 
 	address[0] = 0xe9 # jmp to
 	(address + 1).(i32*)[] = offset as i32
@@ -243,19 +255,25 @@ export process(actual_frame: RegisterState*): u64 {
 		frame = process.save(actual_frame)
 	}
 
-	if code == 0x21 {
+	if code == PS2_INTERRUPT {
 		ps2.keyboard.process()
-	} else code == 0x24 {
+	} else code == HPET_INTERRUPT {
 		scheduler.tick(frame)
-	} else code == 0x0e {
-		process_page_fault(frame)
-	} else code == 0x0d {
+
+		# Todo: Generalize
+		if FramebufferConsole.instance !== none {
+			FramebufferConsole.instance.tick()
+		}
+
+	} else code == GENERAL_PROTECTION_FAULT_EXCEPTION {
 		debug.write('General protection fault at ')
 		debug.write_address(frame[].rip)
 		debug.write(' for address ')
 		debug.write_address(read_cr2())
 		debug.write_line()
 		panic('General protection fault')
+	} else code == PAGE_FAULT_EXCEPTION {
+		process_page_fault(frame)
 	} else is_system_call {
 		result = system_calls.process(frame)
 	} else code >= FIRST_ALLOCATED_INTERRUPT and code <= LAST_ALLOCATED_INTERRUPT {
@@ -276,7 +294,7 @@ export process(actual_frame: RegisterState*): u64 {
 	process = scheduler.current
 
 	# If the current process is longer running, let the scheduler decide the next action
-	if process !== none and not process.is_running {
+	if process === none or not process.is_running {
 		scheduler.tick(actual_frame)
 		process = scheduler.current
 	}

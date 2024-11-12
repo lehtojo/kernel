@@ -22,11 +22,14 @@
 				"./devices/",
 				"./devices/console/",
 				"./devices/gpu/",
+				"./devices/gpu/gop/",
 				"./devices/gpu/qemu/",
 				"./devices/keyboard/",
 				"./devices/keyboard/ps2/",
 				"./devices/storage/ata/",
-				"./devices/storage/nvme/"
+				"./devices/storage/nvme/",
+				"./terminal/",
+				"./time/"
 			]
 		}
 	]
